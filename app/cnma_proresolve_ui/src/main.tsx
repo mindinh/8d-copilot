@@ -8,10 +8,14 @@ import App from '@/App';
 import { queryClient } from '@/query-client';
 import { FioriThemeProvider } from '@/contexts/fiori-theme-context';
 import { initFLPMessageListener } from '@/hooks/use-flpsync';
+import { registerAiRegistry } from '@/config/ai-registry';
 
 
 // Initialize FLP postMessage listener for BTP Workzone iframe communication
 initFLPMessageListener();
+
+// Registry AI của CDK là theo từng bundle — bundle UI phải tự đăng ký.
+registerAiRegistry();
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -8,7 +8,8 @@
         "settings": "Settings",
         "admin": "Administrator",
         "user": "User",
-        "logOut": "Log Out"
+        "logOut": "Log Out",
+        "aiSettings": "AI Settings"
     },
     "common": {
         "loading": "Loading...",

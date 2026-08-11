@@ -8,7 +8,8 @@
         "settings": "Einstellungen",
         "admin": "Administrator",
         "user": "Benutzer",
-        "logOut": "Abmelden"
+        "logOut": "Abmelden",
+        "aiSettings": "KI-Einstellungen"
     },
     "common": {
         "loading": "Wird geladen...",

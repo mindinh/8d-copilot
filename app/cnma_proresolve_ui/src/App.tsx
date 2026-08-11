@@ -5,7 +5,7 @@ import { MainLayout } from '@/components/layouts';
 import { ErrorBoundary } from '@/components/common';
 import { useFLPSyncDirect, getInitialFLPRoute } from '@/hooks/use-flpsync';
 
-import { HomePage, OrganizationPage } from '@/pages';
+import { HomePage, OrganizationPage, AiSettingsPage } from '@/pages';
 
 // Sync React Router navigation with parent FLP shell URL
 function ShellSync() {
@@ -43,6 +43,7 @@ export default function App() {
                             {/* ─── Application Routes ─── */}
                             <Route path="/" element={<HomePage />} />
                             <Route path="/organization" element={<OrganizationPage />} />
+                            <Route path="/ai-settings" element={<AiSettingsPage />} />
 
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Route>
