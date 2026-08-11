@@ -12,6 +12,9 @@ using { cnma.identity.SamlGroupMappings } from '@cnma/cap-identity/db/identity';
 // ── @cnma/cap-valuehelp CDS imports ──────────────────────────────────────────
 using { cnma.valuehelp.ValueHelpList }   from '@cnma/cap-valuehelp/db/valuehelp';
 
+// ── Cấu hình AI dùng chung ───────────────────────────────────────────────────
+using from './ai-settings';
+
 // ── Application Entities ──────────────────────────────────────────────────────
 entity SampleEntity : cuid, managed {
     name        : String(255);

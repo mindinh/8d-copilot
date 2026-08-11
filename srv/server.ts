@@ -6,6 +6,12 @@ import dotenv from 'dotenv';
 import { IdentityServiceHandler } from '@cnma/cap-identity/srv';
 import { ValueHelpHandler } from '@cnma/cap-valuehelp/srv';
 
+import { registerAppActivities } from './src/core/ai/activities';
+import { registerAppEmbeddingCorpora } from './src/core/ai/embeddingCorpora';
+import { initEmbeddings } from './src/core/ai/llmClient';
+import { runAiStartupProbes } from './src/core/ai/startupProbes';
+import { registerAiAdminHandlers } from './src/services/aiAdminService';
+
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const logger = cds.log('Bootstrap');
@@ -15,6 +21,13 @@ const logger = cds.log('Bootstrap');
  * Hooks into CDS bootstrap to add middleware, routes, and configuration.
  */
 cds.on('bootstrap', (app: express.Application) => {
+    // ===== SAP AI CORE =====
+    // Registry activity và embedding corpus của CDK là theo từng bundle và khởi
+    // đầu RỖNG. Đăng ký ở đây, trước khi bất kỳ handler nào có thể gọi model.
+    registerAppActivities();
+    registerAppEmbeddingCorpora();
+    initEmbeddings();
+
     // ===== CORS =====
     app.use(cors({
         origin: (origin, callback) => callback(null, true),
@@ -62,6 +75,9 @@ cds.on('serving', (srv) => {
         const handler = new IdentityServiceHandler(srv as cds.ApplicationService);
         handler.register();
     }
+    if (srv.name === 'AiAdminService') {
+        registerAiAdminHandlers(srv);
+    }
     if (srv.name === 'ValueHelpService') {
         new ValueHelpHandler({
             entityName: 'cnma.valuehelp.ValueHelpList',
@@ -76,4 +92,8 @@ cds.on('serving', (srv) => {
 
 cds.on('served', async () => {
     logger.info('All CDS services served successfully');
+
+    // Báo AI Core có thông hay không ngay bây giờ, thay vì để vỡ ở lời gọi model
+    // đầu tiên. Không chặn khởi động.
+    runAiStartupProbes();
 });

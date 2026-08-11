@@ -12,8 +12,28 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),
+
+            // ⚠️ ĐỪNG BỎ DÒNG NÀY.
+            //
+            // react-hook-form phát hành HAI bản: dist/index.esm.mjs cho `import`
+            // và dist/index.cjs.js cho `require`. Code của app là ESM nên lấy bản
+            // .mjs; còn @cnma/sap-aicore-integrate là CommonJS nên esbuild lấy bản
+            // .cjs khi pre-bundle. Hai file khác nhau ⇒ hai module ⇒ HAI React
+            // context khác nhau.
+            //
+            // Hậu quả: AiModelSelection và AiAgentConfigJson gọi useFormContext()
+            // và nhận null, dù đã bọc FormProvider hoàn toàn đúng:
+            //     Cannot destructure property 'watch' of 'useFormContext(...)' as it is null
+            //
+            // `dedupe` KHÔNG sửa được, vì dedupe chỉ gộp các bản trùng đường dẫn —
+            // ở đây hai bên resolve ra hai file khác nhau ngay từ đầu. Alias thẳng
+            // về một file là cách duy nhất buộc cả hai dùng chung một module.
+            'react-hook-form': path.resolve(
+                __dirname,
+                './node_modules/react-hook-form/dist/index.esm.mjs',
+            ),
         },
-        dedupe: ['react', 'react-dom'],
+        dedupe: ['react', 'react-dom', 'react-hook-form'],
     },
     build: {
         outDir: 'dist',
