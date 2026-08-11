@@ -8,6 +8,9 @@
 @import '@cnma/cap-identity/react/identity.css';
 @import '@cnma/cap-valuehelp/react/valuehelp.css';
 
+@source "../../node_modules/@cnma/cap-identity";
+@source "../../node_modules/@cnma/cap-valuehelp";
+
 
 /* ═══════════════════════════════════════════════════════════
    APP-LEVEL OVERRIDES & EXTENSIONS
