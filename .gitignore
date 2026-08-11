@@ -1,0 +1,43 @@
+# Node.js dependencies
+node_modules/
+**/node_modules/
+
+# CAP & MTA Generated build artifacts
+gen/
+dist/
+**/dist/
+mta_archives/
+ui_resources/
+**/ui_resources/
+.cnma_proresolve_mta_build_tmp/
+Makefile*.mta
+@cds-models/
+
+# Local SQLite databases
+*.db
+*.sqlite
+sqlite.db*
+db.sqlite*
+
+# Environment and credentials
+.env
+.env.local
+.env.*.local
+default-env.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json

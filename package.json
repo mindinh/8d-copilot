@@ -1,0 +1,117 @@
+{
+  "name": "cnma_proresolve",
+  "version": "0.0.1",
+  "description": "CNMA Proresolve CAP Service",
+  "repository": "<config>",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "cds-serve",
+    "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"cds serve\" \"npm run dev --prefix app/cnma_proresolve_ui\"",
+    "dev:backend": "cds serve",
+    "watch": "cds serve",
+    "dev:all": "powershell -ExecutionPolicy Bypass -File .\\start-dev.ps1",
+    "deploy:sqlite": "cds deploy --to sqlite:sqlite.db",
+    "clean": "node -e \"['gen','mta_archives','ui_resources','app/ui_resources','.cnma_proresolve_mta_build_tmp'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch(e){}}); try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
+    "build": "cds build --production",
+    "build:mta": "mbt build --mtar cnma_proresolve_0.0.1.mtar && node -e \"try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
+    "build:cf": "npm run clean && npm run build && npm run build:mta",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@cnma/cap-core": "^1.0.0",
+    "@cnma/cap-identity": "^1.0.25",
+    "@cnma/cap-valuehelp": "^2.7.2",
+    "@cnma/cap-workflow": "^1.7.8",
+    "@sap/cds": "^8.8.0",
+    "@sap/cds-hana": "^2.0.0",
+    "@sap/xsenv": "^5.4.0",
+    "@sap/xssec": "^4.2.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "passport": "^0.7.0",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@cap-js/cds-types": "^0.9.0",
+    "@sap/cds-dk": "^8.9.19",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.10",
+    "concurrently": "^10.0.4",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
+    "typescript": "^5.7.3"
+  },
+  "cds": {
+    "build": {
+      "target": "gen",
+      "tasks": [
+        {
+          "for": "hana",
+          "src": "db"
+        },
+        {
+          "for": "nodejs",
+          "src": "srv"
+        }
+      ]
+    },
+    "watch": {
+      "ignore": [
+        "app/**",
+        "*.md",
+        "resources/**",
+        "dist/**",
+        "sqlite.db*",
+        "db.sqlite*"
+      ]
+    },
+    "requires": {
+      "db": {
+        "[development]": {
+          "kind": "sqlite",
+          "impl": "@sap/cds/libx/_runtime/sqlite/Service.js",
+          "credentials": {
+            "url": "sqlite.db"
+          }
+        },
+        "[production]": {
+          "kind": "hana-cloud"
+        }
+      },
+      "auth": {
+        "[development]": {
+          "kind": "mocked",
+          "users": {
+            "admin": {
+              "password": "123",
+              "roles": [
+                "admin",
+                "Admin",
+                "authenticated-user"
+              ]
+            },
+            "developer": {
+              "password": "123",
+              "roles": [
+                "admin",
+                "Admin",
+                "authenticated-user"
+              ]
+            }
+          }
+        },
+        "[production]": {
+          "kind": "xsuaa"
+        }
+      }
+    }
+  }
+}

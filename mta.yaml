@@ -1,0 +1,200 @@
+_schema-version: '3.1'
+ID: cnma_proresolve
+version: 0.0.1
+description: CNMA Proresolve Multi-Target Application
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm install
+        - npx cds build --production
+
+modules:
+  # --------------------- SERVER MODULE ---------------------
+  - name: cnma_proresolve_srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+      readiness-health-check-type: http
+      readiness-health-check-http-endpoint: /health
+    build-parameters:
+      builder: custom
+      commands: []
+      ignore:
+        - node_modules
+        - default-env.json
+        - mta_archives
+        - db/node_modules
+        - app/node_modules
+        - app/dist
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: cnma_proresolve_db
+      - name: cnma_proresolve_xsuaa
+
+  # ------------------- DATABASE DEPLOYER -------------------
+  - name: cnma_proresolve_db_deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: custom
+      commands: []
+      ignore:
+        - node_modules
+        - default-env.json
+    requires:
+      - name: cnma_proresolve_db
+
+  # -------------------- APPROUTER MODULE -------------------
+  - name: cnma_proresolve_approuter
+    type: approuter.nodejs
+    path: app/approuter
+    parameters:
+      disk-quota: 512M
+      memory: 256M
+    build-parameters:
+      builder: custom
+      commands: []
+      ignore:
+        - node_modules
+        - default-env.json
+    requires:
+      - name: cnma_proresolve_html5_host
+      - name: cnma_proresolve_xsuaa
+      - name: cnma_proresolve_destination
+      - name: srv-api
+        group: destinations
+        properties:
+          name: cnma_proresolve-srv-api
+          url: '~{srv-url}'
+          forwardAuthToken: true
+
+  # ----------------------- UI MODULE -----------------------
+  - name: cnma_proresolve_ui
+    type: html5
+    path: app/cnma_proresolve_ui
+    build-parameters:
+      ignore:
+        - .dev
+        - node_modules
+        - default-env.json
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+      supported-platforms: []
+
+  # -------------------- UI DEPLOYER ------------------------
+  - name: cnma_proresolve_ui_deployer
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: cnma_proresolve_html5_host
+        parameters:
+          content-target: true
+    build-parameters:
+      ignore:
+        - node_modules
+        - default-env.json
+        - gen
+        - app
+        - srv
+        - db
+        - mta_archives
+        - .agent
+        - .claude
+      build-result: ui_resources
+      requires:
+        - artifacts:
+            - cnma_proresolve_ui.zip
+          name: cnma_proresolve_ui
+          target-path: ui_resources/
+
+  # ---------------- DESTINATION CONTENT --------------------
+  - name: cnma_proresolve_destination_content
+    type: com.sap.application.content
+    requires:
+      - name: cnma_proresolve_xsuaa
+        parameters:
+          service-key:
+            name: cnma_proresolve_xsuaa_key
+      - name: cnma_proresolve_html5_host
+        parameters:
+          service-key:
+            name: cnma_proresolve_html5_host_key
+      - name: cnma_proresolve_destination
+        parameters:
+          content-target: true
+    build-parameters:
+      no-source: true
+    parameters:
+      content:
+        instance:
+          existing_destinations_policy: update
+          destinations:
+            - Name: cnma_proresolve_html5_dest
+              ServiceInstanceName: cnma_proresolve_html5_host
+              ServiceKeyName: cnma_proresolve_html5_host_key
+              sap.cloud.service: cnma.proresolve
+            - Name: cnma_proresolve_xsuaa_dest
+              Authentication: OAuth2UserTokenExchange
+              ServiceInstanceName: cnma_proresolve_xsuaa
+              ServiceKeyName: cnma_proresolve_xsuaa_key
+              sap.cloud.service: cnma.proresolve
+
+resources:
+  # ------------------ HDI CONTAINER DB ---------------------
+  - name: cnma_proresolve_db
+    type: com.sap.hana.ondemand-service
+    parameters:
+      service: hana
+      service-plan: hdb
+
+  # ----------------------- XSUAA ---------------------------
+  - name: cnma_proresolve_xsuaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+        tenant-mode: dedicated
+        xsappname: cnma_proresolve-${space}
+      path: ./xs-security.json
+      service: xsuaa
+      service-plan: application
+
+  # ----------------- HTML5 APPS REPO HOST ------------------
+  - name: cnma_proresolve_html5_host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host
+
+  # ------------------ DESTINATION SERVICE -------------------
+  - name: cnma_proresolve_destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+      config:
+        HTML5Runtime_enabled: true
+        init_data:
+          instance:
+            existing_destinations_policy: ignore
+            destinations:
+              - Name: cnma_proresolve-srv-api
+                Description: CNMA Proresolve Backend API
+                Authentication: NoAuthentication
+                ProxyType: Internet
+                Type: HTTP
+                URL: ~{srv-api/srv-url}
+                HTML5.DynamicDestination: true
+                HTML5.ForwardAuthToken: true

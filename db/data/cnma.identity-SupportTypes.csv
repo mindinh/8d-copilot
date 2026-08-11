@@ -1,0 +1,5 @@
+ID;code;name;isEnabled;description;icon;sortOrder
+c1a93e80-1111-4000-8000-000000000001;USER;User;true;Individual user account;person;1
+c1a93e80-1111-4000-8000-000000000002;GROUP;Group;true;Functional group or department;group;2
+c1a93e80-1111-4000-8000-000000000003;TEAM;Team;true;Agile project team;groups;3
+c1a93e80-1111-4000-8000-000000000004;ROLE;Role;true;Organizational role;badge;4

@@ -1,0 +1,12 @@
+{
+  "name": "cnma_proresolve_approuter",
+  "version": "0.0.1",
+  "description": "CNMA Proresolve AppRouter",
+  "private": true,
+  "scripts": {
+    "start": "node node_modules/@sap/approuter/approuter.js"
+  },
+  "dependencies": {
+    "@sap/approuter": "^16.0.0"
+  }
+}

@@ -1,0 +1,50 @@
+{
+    "name": "cnma_proresolve-ui",
+    "private": true,
+    "version": "0.0.1",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc -b && vite build",
+        "lint": "eslint .",
+        "preview": "vite preview",
+        "zip": "cd dist && bestzip cnma_proresolve_ui.zip * && node -e \"const p=require('path'); const fs=require('fs'); const root=p.resolve('../../..'); fs.rmSync(p.join(root,'app/ui_resources'),{recursive:true,force:true}); const dest=p.join(root,'ui_resources'); fs.mkdirSync(dest,{recursive:true}); fs.copyFileSync('cnma_proresolve_ui.zip',p.join(dest,'cnma_proresolve_ui.zip'))\"",
+        "build:cf": "npm run build && npm run zip"
+    },
+    "dependencies": {
+        "@cnma/cap-identity": "^1.0.25",
+        "@cnma/cap-valuehelp": "^2.7.2",
+        "@cnma/react-ui": "^1.1.4",
+        "@radix-ui/react-aspect-ratio": "^1.1.15",
+        "@tanstack/react-query": "^5.90.21",
+        "@tanstack/react-table": "^9.1.2",
+        "axios": "^1.9.0",
+        "i18next": "^25.2.0",
+        "i18next-browser-languagedetector": "^8.2.0",
+        "lucide-react": "^0.477.0",
+        "radix-ui": "^1.6.7",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "react-i18next": "^16.5.0",
+        "react-router-dom": "^7.5.0",
+        "recharts": "^3.10.1",
+        "sonner": "^2.0.3"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.21.0",
+        "@tailwindcss/vite": "^4.1.3",
+        "@types/node": "^22.13.10",
+        "@types/react": "^19.0.10",
+        "@types/react-dom": "^19.0.4",
+        "@vitejs/plugin-react": "^4.3.4",
+        "bestzip": "^2.2.1",
+        "eslint": "^9.21.0",
+        "eslint-plugin-react-hooks": "^5.1.0",
+        "eslint-plugin-react-refresh": "^0.4.19",
+        "globals": "^15.15.0",
+        "tailwindcss": "^4.1.3",
+        "typescript": "~5.7.2",
+        "typescript-eslint": "^8.25.0",
+        "vite": "^6.2.2"
+    }
+}

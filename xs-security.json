@@ -1,0 +1,36 @@
+{
+  "xsappname": "cnma_proresolve",
+  "tenant-mode": "dedicated",
+  "description": "Security configuration for CNMA Proresolve Application",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.admin",
+      "description": "Identity Admin Scope"
+    },
+    {
+      "name": "$XSAPPNAME.Admin",
+      "description": "Admin Scope"
+    },
+    {
+      "name": "$XSAPPNAME.User",
+      "description": "User Scope"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "Admin",
+      "description": "Admin Role with full identity management access",
+      "scope-references": [
+        "$XSAPPNAME.admin",
+        "$XSAPPNAME.Admin"
+      ]
+    },
+    {
+      "name": "User",
+      "description": "Standard User Role",
+      "scope-references": [
+        "$XSAPPNAME.User"
+      ]
+    }
+  ]
+}

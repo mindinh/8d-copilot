@@ -1,0 +1,32 @@
+{
+  "requires": {
+    "db": {
+      "kind": "sqlite",
+      "impl": "@sap/cds/libx/_runtime/sqlite/Service.js",
+      "credentials": {
+        "url": "sqlite.db"
+      }
+    },
+    "auth": {
+      "kind": "mocked",
+      "users": {
+        "admin": {
+          "password": "123",
+          "roles": [
+            "admin",
+            "Admin",
+            "authenticated-user"
+          ]
+        },
+        "developer": {
+          "password": "123",
+          "roles": [
+            "admin",
+            "Admin",
+            "authenticated-user"
+          ]
+        }
+      }
+    }
+  }
+}
