@@ -41,3 +41,7 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Python bytecode (mock-data generator)
+__pycache__/
+*.pyc

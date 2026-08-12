@@ -15,6 +15,9 @@ using { cnma.valuehelp.ValueHelpList }   from '@cnma/cap-valuehelp/db/valuehelp'
 // ── Cấu hình AI dùng chung ───────────────────────────────────────────────────
 using from './ai-settings';
 
+// ── Mô hình báo cáo 8D ───────────────────────────────────────────────────────
+using from './eight-d';
+
 // ── Application Entities ──────────────────────────────────────────────────────
 entity SampleEntity : cuid, managed {
     name        : String(255);

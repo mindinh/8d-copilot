@@ -11,9 +11,14 @@
     "outDir": "./dist",
     "rootDir": "./",
     "resolveJsonModule": true,
+    "isolatedModules": true,
     "sourceMap": true,
-    "declaration": true
+    "declaration": true,
+    // Không có dòng này thì `@sap/cds` không có khai báo kiểu và các global của
+    // CAP (SELECT / INSERT / UPDATE / DELETE) không tồn tại với TypeScript —
+    // `npm run typecheck` fail ngay ở node_modules và mất tác dụng làm lưới an toàn.
+    "types": ["node", "jest", "@cap-js/cds-types"]
   },
-  "include": ["srv/**/*"],
+  "include": ["srv/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist", "app"]
 }

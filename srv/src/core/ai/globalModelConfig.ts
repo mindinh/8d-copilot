@@ -15,8 +15,21 @@ export const GLOBAL_SETTINGS_ID = 'GLOBAL';
 
 const ENTITY = 'cnma.proresolve.AiSettings';
 
-/** TTL cache. Đủ ngắn để admin không phải khởi động lại, đủ dài để không đập DB. */
-const CACHE_TTL_MS = 60 * 1000;
+/**
+ * TTL cache.
+ *
+ * TTL ở đây chỉ là lưới dự phòng, KHÔNG phải cơ chế làm mới chính: mỗi lần admin
+ * lưu cấu hình, `saveGlobalAiConfig` gọi thẳng `clearGlobalModelCache()`, nên
+ * thay đổi có hiệu lực ngay lập tức bất kể TTL dài bao nhiêu.
+ *
+ * Để 5 phút thay vì 1 phút vì pipeline 8D chạy ở nền mất 60-75 giây và gọi hàm
+ * này nhiều lần trong suốt lượt chạy. Với TTL 60 giây, lần gọi cuối rơi vào sau
+ * khi cache hết hạn và phải đọc DB — mà driver SQLite chỉ có một connection,
+ * nên lần đọc đó mở transaction của job nền và giữ connection đến hết job, chặn
+ * mọi request khác. Cache đủ dài để phủ trọn một lượt chạy thì job nền không
+ * chạm DB lần nào cho tới lúc ghi kết quả.
+ */
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cached: Record<string, unknown> | null = null;
 let cachedAt = 0;

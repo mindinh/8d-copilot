@@ -1,6 +1,7 @@
 using from './ProresolveService';
 using from './ValueHelpService';
 using from './AiAdminService';
+using from './EightDService';
 
 // Import @cnma/cap-identity backend services & database models
 using from '@cnma/cap-identity/db/identity.cds';
