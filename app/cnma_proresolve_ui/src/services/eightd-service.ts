@@ -1,0 +1,241 @@
+import { BaseODataService } from './core/base-service';
+import { ODataQueryBuilder } from './core/odata-helper';
+import axiosInstance from './core/axios-instance';
+
+/**
+ * Truy cập EightDService.
+ *
+ * ── Vòng đời một report ──
+ * `analyzeFromJson` trả về NGAY với ID của một report ở trạng thái `Analyzing`;
+ * pipeline AI chạy ở nền trên server và mất 60-90 giây. Client phải theo dõi
+ * qua trường `status`, không có cách nào chờ đồng bộ.
+ *
+ * Sở dĩ vậy vì driver SQLite của CAP chỉ có một connection: bọc lời gọi AI
+ * trong một transaction đang mở sẽ khoá toàn bộ DB suốt thời gian đó, kể cả
+ * chính request đi hỏi tiến độ.
+ */
+
+export type ReportStatus = 'Draft' | 'Analyzing' | 'Analyzed' | 'Failed' | 'Closed';
+
+export interface Discipline8D {
+    ID: string;
+    code: string;
+    sequence: number;
+    title: string;
+    summary: string;
+    content: string;
+    /** Chuỗi JSON — dùng `parseList()` để đọc. */
+    actionItems: string | null;
+    /** Chuỗi JSON các đường dẫn về CaseContext. */
+    sources: string | null;
+    confidence: number;
+    /** false = không có dữ liệu nguồn, AI suy luận ra. D6 luôn false. */
+    dataBacked: boolean;
+    aiGenerated: boolean;
+}
+
+/** Một bước trong chuỗi 5-Why do AI tự dựng khi chưa thấy đáp án. */
+export interface DerivedWhyStep {
+    stepNo: number;
+    question: string;
+    answer: string;
+    evidence: string;
+}
+
+export interface IndependentFinding {
+    rootCauseCategory: string;
+    rootCauseStatement: string;
+    derivedFiveWhy: DerivedWhyStep[];
+    ruledOut: Array<{ category: string; reason: string }>;
+    runnerUpCategory: string | null;
+    runnerUpReason: string | null;
+    confidence: number;
+    evidenceGaps: string[];
+}
+
+export interface IndependentAnalysis {
+    finding: IndependentFinding;
+    verdict: {
+        recordedCategory: string | null;
+        aiCategory: string;
+        agrees: boolean;
+        aiStepCount: number;
+        recordedStepCount: number;
+    };
+    /** Chỗ rò đáp án phát hiện lúc kiểm tra. Rỗng là sạch. */
+    leaks: string[];
+}
+
+export interface Report8D {
+    ID: string;
+    notificationId: string;
+    origin: string;
+    symptomShortText: string;
+    sapStatus: string;
+    foundDate: string | null;
+    completionDate: string | null;
+    quantityExtent: string;
+    teamSize: number | null;
+
+    materialId: string;
+    materialDesc: string;
+    batchId: string;
+    defectCode: string;
+    defectText: string;
+    workCenterId: string;
+    workCenterDesc: string;
+
+    copqEur: number | null;
+    rootCauseCategory: string | null;
+    fmeaId: string | null;
+
+    internalSummary: string | null;
+    customerSummary: string | null;
+
+    // ── Chẩn đoán độc lập ──
+    /** JSON `IndependentAnalysis` — dùng `parseFinding()` để đọc. */
+    aiFinding: string | null;
+    aiRootCause: string | null;
+    /** true = AI kết luận trùng kỹ sư mà không hề thấy đáp án. */
+    aiAgreesWithRecord: boolean | null;
+    aiConfidence: number | null;
+
+    status: ReportStatus;
+    sourcePayload?: string;
+    caseContext?: string;
+    aiModelParse: string | null;
+    aiModelAnalyze: string | null;
+    analyzedAt: string | null;
+    tokensUsed: number | null;
+    durationMs: number | null;
+    errorMessage: string | null;
+
+    createdAt?: string;
+    disciplines?: Discipline8D[];
+}
+
+/** Cột đủ cho trang danh sách — đừng kéo về `sourcePayload` 50 KB mỗi dòng. */
+const LIST_COLUMNS = [
+    'ID', 'notificationId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
+    'workCenterId', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
+    'tokensUsed', 'durationMs', 'errorMessage',
+    // Cột chẩn đoán độc lập — nhẹ, và là thứ đáng nhìn nhất ở trang danh sách.
+    'aiRootCause', 'aiAgreesWithRecord', 'aiConfidence',
+];
+
+class EightDService extends BaseODataService<Report8D> {
+    constructor() {
+        super('api/cnma/EIGHTD_SRV', 'Reports');
+    }
+
+    /**
+     * Khoá là Edm.Guid, viết TRẦN chứ không bọc nháy.
+     *
+     * `formatKey` mặc định của lớp cha bọc chuỗi trong dấu nháy đơn — đúng với
+     * khoá kiểu String, nhưng OData v4 quy định Guid literal không có nháy, nên
+     * `Reports('3f2a…')` sẽ trả 400.
+     */
+    protected formatKey(id: string | number): string {
+        return String(id);
+    }
+
+    /** Danh sách, mới nhất trước. */
+    async list() {
+        return this.getList(
+            new ODataQueryBuilder()
+                .select(LIST_COLUMNS)
+                .orderBy('createdAt', 'desc')
+                .count(),
+        );
+    }
+
+    /**
+     * Một report kèm đủ 8 discipline.
+     *
+     * `$orderby=sequence` là BẮT BUỘC — OData không đảm bảo thứ tự nếu không nói
+     * rõ, và một báo cáo 8D hiện lộn xộn D5 trước D2 thì vô nghĩa.
+     */
+    async getWithDisciplines(id: string) {
+        return this.getById(
+            id,
+            new ODataQueryBuilder().expand('disciplines($orderby=sequence)'),
+        );
+    }
+
+    /** Chỉ trạng thái — dùng cho vòng poll, tránh kéo cả báo cáo về mỗi 3 giây. */
+    async getStatus(id: string) {
+        return this.getById(
+            id,
+            new ODataQueryBuilder().select(['ID', 'status', 'errorMessage']),
+        ) as Promise<Pick<Report8D, 'ID' | 'status' | 'errorMessage'>>;
+    }
+
+    /**
+     * Xếp lịch phân tích một Golden Dataset.
+     * @returns ID của report vừa tạo, đang ở trạng thái `Analyzing`
+     */
+    async analyzeFromJson(payload: string, title = ''): Promise<string> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/analyzeFromJson`,
+            { payload, title },
+        );
+        return res.data.value;
+    }
+
+    /** Chạy lại trên payload đã lưu. Ghi đè toàn bộ disciplines cũ. */
+    async reanalyze(reportID: string): Promise<string> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/reanalyze`,
+            { reportID },
+        );
+        return res.data.value;
+    }
+}
+
+export const eightDService = new EightDService();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trợ giúp hiển thị
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Đọc cột chuỗi JSON thành mảng.
+ *
+ * `actionItems` và `sources` lưu dạng chuỗi JSON vì CDS không có kiểu mảng.
+ * Bản ghi cũ hoặc hỏng thì trả mảng rỗng — một trang chi tiết trắng vì
+ * `JSON.parse` ném lỗi thì tệ hơn nhiều so với việc thiếu vài dòng.
+ */
+export function parseList(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Đọc `aiFinding` thành object.
+ *
+ * Trả `null` khi chưa có hoặc hỏng — panel sẽ ẩn đi. Report chạy trước khi có
+ * bước chẩn đoán mù sẽ rơi vào trường hợp này, và đó là hành vi đúng.
+ */
+export function parseFinding(raw: string | null | undefined): IndependentAnalysis | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed?.finding && parsed?.verdict ? (parsed as IndependentAnalysis) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function isCustomerComplaint(origin: string | null | undefined): boolean {
+    return String(origin ?? '').startsWith('Q1');
+}
+
+/** 'Q1 - Customer Complaint' → 'Q1'. Cột danh sách hẹp, tên đầy đủ không vừa. */
+export function originShort(origin: string | null | undefined): string {
+    return String(origin ?? '').split(' ')[0] || '—';
+}

@@ -13,5 +13,7 @@ export type { ODataResponse, ODataSingleResponse, ODataError } from './types/oda
 export { itemsService } from './items-service';
 export type { Item } from './items-service';
 export { identityHttpClient } from './identity-http-client';
+export { eightDService, parseList, isCustomerComplaint, originShort } from './eightd-service';
+export type { Report8D, Discipline8D, ReportStatus } from './eightd-service';
 
 

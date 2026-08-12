@@ -11,6 +11,7 @@ import { registerAppEmbeddingCorpora } from './src/core/ai/embeddingCorpora';
 import { initEmbeddings } from './src/core/ai/llmClient';
 import { runAiStartupProbes } from './src/core/ai/startupProbes';
 import { registerAiAdminHandlers } from './src/services/aiAdminService';
+import { registerEightDHandlers, sweepOnStartup } from './src/services/eightDService';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -78,6 +79,9 @@ cds.on('serving', (srv) => {
     if (srv.name === 'AiAdminService') {
         registerAiAdminHandlers(srv);
     }
+    if (srv.name === 'EightDService') {
+        registerEightDHandlers(srv);
+    }
     if (srv.name === 'ValueHelpService') {
         new ValueHelpHandler({
             entityName: 'cnma.valuehelp.ValueHelpList',
@@ -96,4 +100,8 @@ cds.on('served', async () => {
     // Báo AI Core có thông hay không ngay bây giờ, thay vì để vỡ ở lời gọi model
     // đầu tiên. Không chặn khởi động.
     runAiStartupProbes();
+
+    // Job phân tích 8D sống trong tiến trình này. Server chết giữa chừng thì bản
+    // ghi kẹt ở 'Analyzing' và UI quay vòng mãi không dừng — dọn ngay lúc boot.
+    await sweepOnStartup();
 });

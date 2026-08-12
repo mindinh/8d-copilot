@@ -1,0 +1,237 @@
+/**
+ * Chẩn đoán độc lập — bước khiến pipeline này khác một parser.
+ *
+ * Model chỉ nhận bằng chứng thô (xem `blindEvidence.ts`) và phải TỰ dựng chuỗi
+ * 5-Why, TỰ chọn nhánh Ishikawa là nguyên nhân gốc, TỰ giải thích vì sao loại
+ * năm nhánh còn lại. Chuỗi 5-Why và đáp án của kỹ sư đã bị cắt khỏi input, nên
+ * không có gì để chép.
+ *
+ * Sau đó code đối chiếu kết luận của model với đáp án ghi trong dataset. Kết quả
+ * đối chiếu là thứ chứng minh được: trùng nhau nghĩa là model suy luận đúng chứ
+ * không phải đọc đáp án; lệch nhau lại càng đáng xem, vì khi đó nó phải nêu được
+ * lý do và đôi khi lý do đó có giá trị.
+ */
+
+import { ISHIKAWA_CATEGORIES, type CaseContext } from './types';
+import type { BlindEvidence } from './blindEvidence';
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DerivedWhyStep {
+    stepNo: number;
+    question: string;
+    answer: string;
+    /** Bằng chứng cụ thể trong input chống lưng cho bước này. */
+    evidence: string;
+}
+
+export interface RuledOut {
+    category: string;
+    reason: string;
+}
+
+/** Kết luận model tự rút ra, TRƯỚC khi biết đáp án. */
+export interface IndependentFinding {
+    rootCauseCategory: string;
+    rootCauseStatement: string;
+    derivedFiveWhy: DerivedWhyStep[];
+    ruledOut: RuledOut[];
+    /** Nhánh khả dĩ thứ hai — buộc model cân nhắc thay vì chốt vội. */
+    runnerUpCategory: string | null;
+    runnerUpReason: string | null;
+    confidence: number;
+    /** Dữ liệu model muốn có thêm để chắc chắn hơn. */
+    evidenceGaps: string[];
+}
+
+/** Kết quả đối chiếu với đáp án của kỹ sư — do CODE tính, không hỏi model. */
+export interface AgreementVerdict {
+    recordedCategory: string | null;
+    aiCategory: string;
+    agrees: boolean;
+    /** Số bước trong chuỗi 5-Why model tự dựng, so với chuỗi đã ghi. */
+    aiStepCount: number;
+    recordedStepCount: number;
+}
+
+export interface IndependentAnalysis {
+    finding: IndependentFinding;
+    verdict: AgreementVerdict;
+    /** Chỗ rò đáp án phát hiện lúc kiểm tra bằng chứng mù. Rỗng là sạch. */
+    leaks: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const INDEPENDENT_SCHEMA = {
+    type: 'object',
+    properties: {
+        rootCauseCategory: { type: 'string', enum: [...ISHIKAWA_CATEGORIES] },
+        rootCauseStatement: {
+            type: 'string',
+            description: 'One sentence naming the specific cause, not just the category',
+        },
+        derivedFiveWhy: {
+            type: 'array',
+            minItems: 2,
+            maxItems: 5,
+            items: {
+                type: 'object',
+                properties: {
+                    stepNo: { type: 'integer' },
+                    question: { type: 'string' },
+                    answer: { type: 'string' },
+                    evidence: { type: 'string' },
+                },
+                required: ['stepNo', 'question', 'answer', 'evidence'],
+            },
+        },
+        ruledOut: {
+            type: 'array',
+            minItems: 5,
+            maxItems: 5,
+            items: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', enum: [...ISHIKAWA_CATEGORIES] },
+                    reason: { type: 'string' },
+                },
+                required: ['category', 'reason'],
+            },
+        },
+        runnerUpCategory: { type: 'string', nullable: true, enum: [...ISHIKAWA_CATEGORIES] },
+        runnerUpReason: { type: 'string', nullable: true },
+        confidence: { type: 'number' },
+        evidenceGaps: { type: 'array', items: { type: 'string' } },
+    },
+    required: [
+        'rootCauseCategory', 'rootCauseStatement', 'derivedFiveWhy',
+        'ruledOut', 'confidence', 'evidenceGaps',
+    ],
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const INDEPENDENT_SYSTEM_PROMPT = `
+You are a senior quality engineer performing root cause analysis on a
+manufacturing defect. You are seeing this case for the first time.
+
+You receive the raw investigation evidence: the measurements taken, findings for
+each of the six Ishikawa branches, an Is / Is-Not comparison, and the containment
+actions already in place.
+
+You do NOT receive anyone else's conclusion. There is no answer to copy. Work it
+out from the evidence.
+
+## YOUR TASK
+
+1. Build a 5-Why chain, 2 to 5 steps. Start from the observed defect and drive
+   down until you reach a cause that, if fixed, prevents recurrence. Each step
+   must cite the specific evidence that supports it — a measurement, a finding, a
+   date, a value. A step you cannot evidence is a step you have not earned.
+
+2. Name the root cause branch: exactly one of Man, Machine, Method, Material,
+   Measurement, Environment.
+
+3. Rule out the other five. Give a concrete reason for each, drawn from its
+   finding. "Not relevant" is not a reason. "Spindle runout measured 4um against
+   a 10um limit, so the machine was within tolerance" is a reason.
+
+4. Name the runner-up branch — the one you would investigate next if you turned
+   out to be wrong — and say what would make you switch to it. If the evidence
+   is genuinely unambiguous, set both runner-up fields to null.
+
+5. Report your confidence honestly, and list what further evidence you would ask
+   for.
+
+## HOW TO WEIGH THE EVIDENCE
+
+- A measured value outside its specification is the strongest signal available.
+  Prefer branches whose finding carries a number that breaches a limit.
+- A finding stating something was within limits, unchanged, certified or current
+  is evidence AGAINST that branch.
+- The Is / Is-Not comparison is decisive for scoping: whatever differs between
+  the "is" side and the "is not" side is where the cause lives. If the defect
+  follows a particular gauge, tool or lot rather than a line or a shift, the
+  cause travels with that thing.
+- Dates matter. A defect starting exactly when something changed points at that
+  change.
+- Distinguish the technical cause (the thing that physically went wrong) from
+  the systemic cause (the reason the system allowed it). Drive the chain far
+  enough to reach the systemic one where the evidence supports it.
+
+## RULES
+
+- Never invent a measurement, date, ID or name that is not in the evidence.
+- Do not hedge across several branches. Choose one and defend it.
+- Output valid JSON matching the schema. No prose outside the JSON.
+`.trim();
+
+export function buildIndependentPrompt(evidence: BlindEvidence): string {
+    return [
+        '## DEFECT EVIDENCE',
+        '```json',
+        JSON.stringify(evidence, null, 1),
+        '```',
+        '',
+        'Diagnose the root cause from this evidence alone.',
+    ].join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Đối chiếu kết luận của model với đáp án ghi trong dataset.
+ *
+ * Do CODE tính, KHÔNG hỏi model — bảo chính model tự chấm xem nó có đúng không
+ * là mời nó nói dối, và tệ hơn, là mời nó nhìn thấy đáp án.
+ */
+export function compareWithRecorded(
+    finding: IndependentFinding,
+    context: CaseContext,
+): AgreementVerdict {
+    const recorded = context.rootCause?.category ?? null;
+    return {
+        recordedCategory: recorded,
+        aiCategory: finding.rootCauseCategory,
+        agrees: recorded !== null && recorded === finding.rootCauseCategory,
+        aiStepCount: finding.derivedFiveWhy.length,
+        recordedStepCount: context.fiveWhy.length,
+    };
+}
+
+/**
+ * Chuẩn hoá kết quả model trả về.
+ *
+ * Đặc biệt: model hay quên loại trừ chính nhánh nó đã chọn, hoặc liệt kê thừa.
+ * Sửa im lặng ở đây thì UI hiện ra một danh sách vô lý, nên ta cắt gọn và để
+ * `postProcess` của tầng trên lo phần ghi nhận.
+ */
+export function normalizeFinding(raw: IndependentFinding): IndependentFinding {
+    const chosen = raw.rootCauseCategory;
+
+    const ruledOut = (Array.isArray(raw.ruledOut) ? raw.ruledOut : [])
+        .filter((r) => r && r.category !== chosen)
+        .filter((r, i, arr) => arr.findIndex((x) => x.category === r.category) === i);
+
+    const fiveWhy = (Array.isArray(raw.derivedFiveWhy) ? raw.derivedFiveWhy : [])
+        .slice(0, 5)
+        .map((s, i) => ({ ...s, stepNo: i + 1 }));
+
+    let confidence = Number(raw.confidence);
+    if (!Number.isFinite(confidence)) confidence = 0;
+    confidence = Math.min(1, Math.max(0, confidence));
+
+    // Runner-up trùng lựa chọn chính là vô nghĩa.
+    const runnerUpCategory = raw.runnerUpCategory === chosen ? null : raw.runnerUpCategory ?? null;
+
+    return {
+        ...raw,
+        derivedFiveWhy: fiveWhy,
+        ruledOut,
+        runnerUpCategory,
+        runnerUpReason: runnerUpCategory ? raw.runnerUpReason ?? null : null,
+        confidence,
+        evidenceGaps: Array.isArray(raw.evidenceGaps) ? raw.evidenceGaps : [],
+    };
+}
