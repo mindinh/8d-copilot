@@ -12,5 +12,6 @@ using from '@cnma/cap-identity/srv/identity-admin-service.cds';
 using from '@cnma/cap-valuehelp/db/valuehelp.cds';
 
 // Custom path mapping
-annotate IdentityAdminService with @path: '/api/cnma/IDENTITY_SRV';
+annotate IdentityAdminService with @path: '/api/cnma/IDENTITY_SRV' @requires: ['admin', 'Admin'];
 annotate IdentityService with @path: '/api/cnma/IDENTITY_USER_SRV';
+
