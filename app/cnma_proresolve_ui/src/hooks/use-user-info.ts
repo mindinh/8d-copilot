@@ -45,14 +45,28 @@ export function useUserInfo() {
         queryKey: ['userInfo'],
         queryFn: async () => {
             try {
-                const response = await api.get<UserInfoResponse>('./api/user-info');
-                return response.data;
+                const response = await api.get<any>('/api/cnma/IDENTITY_USER_SRV/me()');
+                const raw = response.data?.value || response.data;
+                if (!raw || typeof raw !== 'object') return {};
+
+                const isAdmin = Boolean(raw.isAdmin);
+                const displayName = raw.displayName ||
+                    (raw.firstName && raw.lastName ? `${raw.firstName} ${raw.lastName}`.trim() : raw.email);
+
+                return {
+                    id: raw.ID || raw.userId || raw.id,
+                    name: displayName,
+                    displayName,
+                    email: raw.email,
+                    roles: isAdmin ? ['admin', 'Admin', 'authenticated-user'] : ['authenticated-user'],
+                };
             } catch {
                 if (isLocal) {
                     return {
                         id: 'developer',
                         name: 'Local Developer',
                         displayName: 'Local Developer',
+                        email: 'developer@local.dev',
                         roles: ['admin', 'Admin', 'authenticated-user'],
                     };
                 }

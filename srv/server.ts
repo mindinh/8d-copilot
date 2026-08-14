@@ -80,6 +80,15 @@ cds.on('serving', (srv) => {
     if (srv.name === 'IdentityService') {
         const handler = new IdentityServiceHandler(srv as cds.ApplicationService);
         handler.register();
+
+        // Ensure isAdmin returns true for both lowercase 'admin' and uppercase 'Admin' XSUAA scopes
+        srv.on('me', async (req, next) => {
+            const res = await next();
+            if (res && typeof res === 'object') {
+                res.isAdmin = req.user.is('admin') || req.user.is('Admin');
+            }
+            return res;
+        });
     }
     if (srv.name === 'AiAdminService') {
         registerAiAdminHandlers(srv);
