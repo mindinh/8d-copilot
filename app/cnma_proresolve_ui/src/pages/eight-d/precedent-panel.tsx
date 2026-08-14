@@ -21,15 +21,15 @@ import { eightDService, type Precedent, type PrecedentResult } from '@/services/
  */
 
 const LEVEL_STYLE: Record<string, string> = {
-    exact: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
-    fallback: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+    exact: 'bg-success/15 text-success border border-success/30',
+    fallback: 'bg-warning/15 text-warning border border-warning/30',
     none: 'bg-muted text-muted-foreground',
 };
 
 const ACTION_STYLE: Record<string, string> = {
-    Containment: 'text-blue-700 dark:text-blue-300',
-    Corrective: 'text-emerald-700 dark:text-emerald-300',
-    Preventive: 'text-violet-700 dark:text-violet-300',
+    Containment: 'text-info',
+    Corrective: 'text-success',
+    Preventive: 'text-primary',
 };
 
 function eur(n: number | null) {
@@ -73,7 +73,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
             <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="font-mono text-xs">#{rank}</Badge>
                 <span className="font-medium">{p.notificationId}</span>
-                <Badge variant="secondary" className="text-[11px]">{p.sapStatus}</Badge>
+                <Badge variant="secondary" className="text-xs">{p.sapStatus}</Badge>
 
                 <span className="ml-auto flex items-baseline gap-1.5">
                     <span className="text-lg font-semibold tabular-nums">{p.score}</span>
@@ -92,7 +92,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
                 {p.breakdown.map((b) => (
                     <span
                         key={b.criterionKey}
-                        className={`rounded px-1.5 py-0.5 text-[11px] ${LEVEL_STYLE[b.level]}`}
+                        className={`rounded px-1.5 py-0.5 text-xs ${LEVEL_STYLE[b.level]}`}
                         title={b.matchedOn ?? 'no match'}
                     >
                         {b.label} +{b.points}
@@ -125,7 +125,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
                     <span className="text-xs text-muted-foreground">Team that solved it</span>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                         {p.team.map((t) => (
-                            <Badge key={t.partnerId} variant="outline" className="text-[11px] font-normal">
+                            <Badge key={t.partnerId} variant="outline" className="text-xs font-normal">
                                 {t.partnerName}
                                 <span className="ml-1 text-muted-foreground">{t.functionTitle}</span>
                                 {t.partnerRole?.includes('Leader') && <span className="ml-1">★</span>}
@@ -184,7 +184,7 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
             <div className="flex flex-wrap items-center gap-2">
                 <GitBranch className="h-4 w-4 text-primary" />
                 <h2 className="font-medium">Similar past cases</h2>
-                <Badge variant="secondary" className="text-[11px]">
+                <Badge variant="secondary" className="text-xs">
                     {data.precedents.length} of {data.candidatesScored} scored
                 </Badge>
                 <span className="ml-auto text-xs text-muted-foreground">
@@ -219,14 +219,14 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
                         <div className="flex items-center gap-2">
                             <Users className="h-4 w-4 text-primary" />
                             <span className="font-medium">Suggested team (D1)</span>
-                            <Badge variant="outline" className="text-[10px]">counted, not generated</Badge>
+                            <Badge variant="outline" className="text-xs">counted, not generated</Badge>
                         </div>
 
                         <div>
                             <span className="text-xs text-muted-foreground">Functions these cases needed</span>
                             <div className="mt-1 flex flex-wrap gap-1.5">
                                 {roles.map(([fn, n]) => (
-                                    <Badge key={fn} variant="secondary" className="text-[11px] font-normal">
+                                    <Badge key={fn} variant="secondary" className="text-xs font-normal">
                                         {fn}{n > 1 && <span className="ml-1 font-medium">×{n}</span>}
                                     </Badge>
                                 ))}
@@ -242,10 +242,10 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
                                     </span>
                                     <span className="font-medium">{p.name}</span>
                                     {p.ledCount > 0 && (
-                                        <Badge variant="outline" className="text-[10px]">led {p.ledCount}</Badge>
+                                        <Badge variant="outline" className="text-xs">led {p.ledCount}</Badge>
                                     )}
                                     <span className="text-muted-foreground">{p.fn}</span>
-                                    <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                                    <span className="ml-auto font-mono text-xs text-muted-foreground">
                                         {p.cases.join(', ')}
                                     </span>
                                 </div>
@@ -265,7 +265,7 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
                             <AccordionItem key={p.notificationId} value={`p${i}`} className="border-none">
                                 <AccordionTrigger className="rounded-lg px-3 py-2 text-sm hover:bg-muted/50 hover:no-underline">
                                     <span className="flex flex-1 items-center gap-2 pr-3 text-left">
-                                        <Badge variant="outline" className="font-mono text-[10px]">#{i + 1}</Badge>
+                                        <Badge variant="outline" className="font-mono text-xs">#{i + 1}</Badge>
                                         <span className="font-medium">{p.notificationId}</span>
                                         <span className="truncate text-muted-foreground">{p.explanation}</span>
                                     </span>

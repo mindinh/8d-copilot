@@ -14,7 +14,7 @@ import {
     TableRow,
     cn,
 } from '@cnma/react-ui';
-import { AlertCircle, Check, ClipboardList, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
+import { Check, ClipboardList, FileSpreadsheet, Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
 import {
     eightDService,
     originShort,
@@ -53,12 +53,12 @@ function formatDateTime(value: string | null): string {
 
 /** Màu theo nhánh Ishikawa — cùng một nguyên nhân gốc luôn cùng màu ở mọi nơi. */
 const ROOT_CAUSE_STYLES: Record<string, string> = {
-    Man: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
-    Machine: 'bg-blue-500/10 text-blue-700 border-blue-500/20',
-    Method: 'bg-violet-500/10 text-violet-700 border-violet-500/20',
-    Material: 'bg-orange-500/10 text-orange-700 border-orange-500/20',
-    Measurement: 'bg-teal-500/10 text-teal-700 border-teal-500/20',
-    Environment: 'bg-lime-500/10 text-lime-700 border-lime-500/20',
+    Man: 'bg-warning/10 text-warning border-warning/20',
+    Machine: 'bg-info/10 text-info border-info/20',
+    Method: 'bg-primary/10 text-primary border-primary/20',
+    Material: 'bg-warning/15 text-warning border-warning/30',
+    Measurement: 'bg-info/15 text-info border-info/30',
+    Environment: 'bg-success/10 text-success border-success/20',
 };
 
 function RootCauseBadge({ category }: { category: string | null }) {
@@ -87,23 +87,23 @@ function AiVerdictCell({ report }: { report: Report8D }) {
     return (
         <div className="flex items-center gap-1.5">
             {agrees ? (
-                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <Check className="w-3.5 h-3.5 text-success shrink-0" />
             ) : (
-                <TriangleAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <TriangleAlert className="w-3.5 h-3.5 text-warning shrink-0" />
             )}
             <Badge
                 variant="outline"
                 className={cn(
-                    'font-medium text-[11px]',
+                    'font-medium text-xs',
                     agrees
                         ? ROOT_CAUSE_STYLES[report.aiRootCause] ?? 'bg-muted'
-                        : 'bg-amber-500/10 text-amber-800 border-amber-500/30',
+                        : 'bg-warning/10 text-warning border-warning/30',
                 )}
             >
                 {report.aiRootCause}
             </Badge>
             {report.aiConfidence != null && (
-                <span className="text-[10px] text-muted-foreground tabular-nums">
+                <span className="text-xs text-muted-foreground tabular-nums">
                     {Math.round(report.aiConfidence * 100)}%
                 </span>
             )}
@@ -129,7 +129,7 @@ export function EightDListPage() {
     const running = reports.filter((r) => r.status === 'Analyzing').length;
 
     return (
-        <div className="p-6 md:p-8 max-w-[1400px] mx-auto space-y-6">
+        <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
 
             {/* ── Header ── */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -158,56 +158,64 @@ export function EightDListPage() {
             </div>
 
             {running > 0 && (
-                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 text-xs text-info bg-info/5 border border-info/20 rounded-lg px-3 py-2">
                     <Spinner className="w-3.5 h-3.5" />
                     {running} analysis running — this page refreshes automatically. Each run takes 60–90 seconds.
                 </div>
             )}
 
-            {/* ── Bảng ── */}
-            <Card className="p-0 overflow-hidden">
-                {isLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-                        <Spinner className="w-4 h-4" /> Loading reports…
+            {/* ── Banner giải thích ── */}
+            <Card className="p-4 bg-muted/40 border border-border/60">
+                <div className="flex items-start gap-3 text-xs text-muted-foreground">
+                    <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div>
+                        <span className="font-semibold text-foreground">Why AI, unaided is highlighted when it disagrees:</span>{' '}
+                        TheCopilot runs an independent diagnosis without seeing the recorded 5-Why chain or root cause flag.
+                        Same conclusion confirms what you know; different conclusion points to a case worth double-checking.
                     </div>
-                ) : isError ? (
-                    <div className="flex flex-col items-center gap-2 py-16 px-6 text-center">
-                        <AlertCircle className="w-8 h-8 text-destructive" />
-                        <p className="text-sm font-medium">Could not load reports</p>
-                        <p className="text-xs text-muted-foreground max-w-md">
-                            {(error as Error)?.message ?? 'Unknown error'}
+                </div>
+            </Card>
+
+            {/* ── Bảng danh sách ── */}
+            {isLoading ? (
+                <Card className="p-12 items-center text-center">
+                    <Spinner className="w-6 h-6 text-muted-foreground mb-2" />
+                    <p className="text-xs text-muted-foreground">Loading cases…</p>
+                </Card>
+            ) : isError ? (
+                <Card className="p-6 border-destructive/50 text-destructive text-sm">
+                    Failed to load 8D cases: {(error as Error)?.message}
+                </Card>
+            ) : reports.length === 0 ? (
+                <Card className="p-12 items-center text-center space-y-3">
+                    <FileSpreadsheet className="w-10 h-10 text-muted-foreground" />
+                    <div>
+                        <p className="text-sm font-medium">No 8D reports yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Click "Analyze new case" to start from an incoming complaint or defect record.
                         </p>
-                        <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
-                            Retry
-                        </Button>
                     </div>
-                ) : reports.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-16 px-6 text-center">
-                        <ClipboardList className="w-8 h-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">No reports yet</p>
-                        <p className="text-xs text-muted-foreground max-w-md">
-                            Paste the JSON of a defect case to generate the eight disciplines.
-                        </p>
-                        <Button size="sm" className="mt-2" onClick={() => setAnalyzeOpen(true)}>
-                            <Sparkles className="w-4 h-4" />
-                            Analyze from JSON
-                        </Button>
-                    </div>
-                ) : (
+                    <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
+                        <Sparkles className="w-4 h-4" />
+                        Analyze new case
+                    </Button>
+                </Card>
+            ) : (
+                <Card className="p-0 overflow-hidden">
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[130px]">Notification</TableHead>
-                                <TableHead className="w-[60px]">Origin</TableHead>
+                                <TableHead className="w-32">Notification</TableHead>
+                                <TableHead className="w-16">Origin</TableHead>
                                 <TableHead>Symptom</TableHead>
-                                <TableHead className="w-[150px]">Material</TableHead>
-                                <TableHead className="w-[120px]">Work Center</TableHead>
-                                <TableHead className="w-[130px]">Root Cause</TableHead>
-                                <TableHead className="w-[150px]">AI, unaided</TableHead>
-                                <TableHead className="w-[100px] text-right">CoPQ</TableHead>
-                                <TableHead className="w-[110px]">Status</TableHead>
-                                <TableHead className="w-[140px]">AI Models</TableHead>
-                                <TableHead className="w-[130px]">Analyzed</TableHead>
+                                <TableHead className="w-36">Material</TableHead>
+                                <TableHead className="w-32">Work Center</TableHead>
+                                <TableHead className="w-32">Root Cause</TableHead>
+                                <TableHead className="w-36">AI, unaided</TableHead>
+                                <TableHead className="w-24 text-right">CoPQ</TableHead>
+                                <TableHead className="w-28">Status</TableHead>
+                                <TableHead className="w-36">AI Models</TableHead>
+                                <TableHead className="w-32">Analyzed</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -226,17 +234,17 @@ export function EightDListPage() {
                                         <Badge
                                             variant="outline"
                                             className={cn(
-                                                'font-mono text-[10px]',
+                                                'font-mono text-xs',
                                                 originShort(r.origin) === 'Q1'
-                                                    ? 'bg-rose-500/10 text-rose-700 border-rose-500/20'
-                                                    : 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+                                                    ? 'bg-destructive/10 text-destructive border-destructive/20'
+                                                    : 'bg-muted text-muted-foreground border-border',
                                             )}
                                         >
                                             {originShort(r.origin)}
                                         </Badge>
                                     </TableCell>
 
-                                    <TableCell className="max-w-[320px]">
+                                    <TableCell className="max-w-xs">
                                         <div className="truncate text-sm">{r.symptomShortText}</div>
                                         {r.status === 'Failed' && r.errorMessage && (
                                             <div className="truncate text-xs text-destructive mt-0.5">
@@ -258,7 +266,6 @@ export function EightDListPage() {
                                         <RootCauseBadge category={r.rootCauseCategory} />
                                     </TableCell>
 
-                                    {/* Chẩn đoán mù: AI chọn gì khi không thấy đáp án. */}
                                     <TableCell>
                                         <AiVerdictCell report={r} />
                                     </TableCell>
@@ -273,17 +280,17 @@ export function EightDListPage() {
 
                                     <TableCell>
                                         {r.aiModelAnalyze ? (
-                                            <div className="flex flex-col gap-0.5 max-w-[130px]">
+                                            <div className="flex flex-col gap-0.5 max-w-xs">
                                                 <Badge
                                                     variant="secondary"
-                                                    className="font-mono text-[10px] truncate justify-start"
+                                                    className="font-mono text-xs truncate justify-start"
                                                     title={`Analyze: ${r.aiModelAnalyze}`}
                                                 >
                                                     {r.aiModelAnalyze}
                                                 </Badge>
                                                 {r.aiModelParse && r.aiModelParse !== r.aiModelAnalyze && (
                                                     <span
-                                                        className="text-[9px] text-muted-foreground font-mono truncate"
+                                                        className="text-xs text-muted-foreground font-mono truncate"
                                                         title={`Parse: ${r.aiModelParse}`}
                                                     >
                                                         P: {r.aiModelParse}
@@ -298,7 +305,7 @@ export function EightDListPage() {
                                     <TableCell className="text-xs text-muted-foreground">
                                         {formatDateTime(r.analyzedAt)}
                                         {r.durationMs != null && (
-                                            <div className="text-[10px] opacity-70">
+                                            <div className="text-xs opacity-70">
                                                 {(r.durationMs / 1000).toFixed(0)}s
                                                 {r.tokensUsed != null &&
                                                     ` · ${(r.tokensUsed / 1000).toFixed(1)}k tok`}
@@ -309,13 +316,7 @@ export function EightDListPage() {
                             ))}
                         </TableBody>
                     </Table>
-                )}
-            </Card>
-
-            {reports.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                    {reports.length} report{reports.length === 1 ? '' : 's'}
-                </p>
+                </Card>
             )}
 
             <AnalyzeDialog

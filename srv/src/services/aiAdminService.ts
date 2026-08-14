@@ -133,32 +133,40 @@ async function syncModels(): Promise<string> {
   }
 
   const discovery = await getDiscovery();
-  let added = 0;
+  const existingModels: Record<string, any>[] = await db.run(
+    SELECT.from(ENTITIES.AI_MODELS).columns('modelId'),
+  );
+  const existingSet = new Set(existingModels.map((m) => m.modelId));
+
+  const updates: { modelId: string; patch: Record<string, unknown> }[] = [];
+  const newEntries: Record<string, unknown>[] = [];
 
   for (const item of discovered) {
     const modelId = item.model;
     if (!modelId) continue;
 
     const patch = buildDiscoveryPatch(item, discovery.classifyModel(modelId));
-    const existing = await db.run(
-      SELECT.one.from(ENTITIES.AI_MODELS).where({ modelId }),
-    );
-
-    if (existing) {
-      await db.run(UPDATE(ENTITIES.AI_MODELS).set(patch).where({ modelId }));
+    if (existingSet.has(modelId)) {
+      updates.push({ modelId, patch });
     } else {
-      await db.run(
-        INSERT.into(ENTITIES.AI_MODELS).entries({
-          modelId,
-          active: true,
-          suitableActivities: null,
-          ...patch,
-        }),
-      );
-      added++;
+      newEntries.push({
+        modelId,
+        active: true,
+        suitableActivities: null,
+        ...patch,
+      });
     }
   }
 
+  for (const { modelId, patch } of updates) {
+    await db.run(UPDATE(ENTITIES.AI_MODELS).set(patch).where({ modelId }));
+  }
+
+  if (newEntries.length > 0) {
+    await db.run(INSERT.into(ENTITIES.AI_MODELS).entries(newEntries));
+  }
+
+  const added = newEntries.length;
   LOG.info(`Đã đồng bộ ${discovered.length} model (${added} mới)`);
   return JSON.stringify({
     synced: discovered.length,

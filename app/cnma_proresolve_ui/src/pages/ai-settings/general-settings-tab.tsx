@@ -80,46 +80,47 @@ export function GeneralSettingsTab() {
 
     return (
         <FormProvider {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Model per processing step</CardTitle>
-                        <CardDescription>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-4xl mx-auto space-y-4">
+                <Card className="p-1">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold">Model per processing step</CardTitle>
+                        <CardDescription className="text-xs">
                             Each step can run on a different model. Leave a step empty to inherit
                             the default on the first row. With nothing configured, everything runs
                             on <span className="font-mono">gemini-2.5-pro</span>.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-0">
                         <AiModelSelection api={aiModelApi} />
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Raw configuration (JSON)</CardTitle>
-                        <CardDescription>
+                <Card className="p-1">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold">Raw configuration (JSON)</CardTitle>
+                        <CardDescription className="text-xs">
                             For keys that have no dedicated field above — for example{' '}
                             <span className="font-mono">maxIterations</span> or{' '}
                             <span className="font-mono">&lt;activity&gt;ThinkingBudget</span>.
                             Editing here and editing above change the same data.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <AiAgentConfigJson rows={12} />
+                    <CardContent className="pt-0">
+                        <AiAgentConfigJson rows={6} />
                     </CardContent>
                 </Card>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-1">
                     <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         disabled={saving}
                         onClick={() => form.reset()}
                     >
                         Discard
                     </Button>
-                    <Button type="submit" disabled={saving}>
+                    <Button type="submit" size="sm" disabled={saving}>
                         {saving ? 'Saving…' : 'Save configuration'}
                     </Button>
                 </div>

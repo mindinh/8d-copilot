@@ -22,9 +22,9 @@ import {
  */
 
 const METHOD_STYLE: Record<string, string> = {
-    exact: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300',
-    keyword: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300',
-    cosine: 'bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300',
+    exact: 'bg-success/15 text-success border-success/30',
+    keyword: 'bg-warning/15 text-warning border-warning/30',
+    cosine: 'bg-primary/15 text-primary border-primary/30',
 };
 
 /** Phương pháp có mức dự phòng. Cosine thì không — nó đã cho điểm liên tục rồi. */
@@ -101,7 +101,7 @@ export function CriterionStepCard({
                             ...(v === 'cosine' ? { fallbackMatch: null, fallbackField: null, fallbackWeight: null } : {}),
                         })}
                     >
-                        <SelectTrigger className="h-8 w-[118px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             {MATCH_METHODS.map((m) => (
                                 <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -188,8 +188,8 @@ export function CriterionStepCard({
 
                 {/* ── Riêng cho vector ── */}
                 {isVector && (
-                    <div className="space-y-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
-                        <Label className="flex items-center gap-1.5 text-xs uppercase text-violet-700 dark:text-violet-300">
+                    <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                        <Label className="flex items-center gap-1.5 text-xs uppercase text-primary font-semibold">
                             <Search size={12} />
                             Semantic threshold
                         </Label>
@@ -211,7 +211,7 @@ export function CriterionStepCard({
                                 Two unrelated manufacturing write-ups already sit around 0.60 — they are
                                 all English defect narratives. A floor below that scores every pair and
                                 lets the baseline decide the ranking. Measure before changing it:
-                                <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                                <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
                                     npx tsx scripts/measure-similarity.mjs
                                 </code>
                             </p>

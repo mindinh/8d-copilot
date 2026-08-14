@@ -25,7 +25,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
             out.push(<strong key={key} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>);
         } else if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
             out.push(
-                <code key={key} className="px-1 py-0.5 rounded bg-muted font-mono text-[0.85em]">
+                <code key={key} className="px-1 py-0.5 rounded bg-muted font-mono text-xs">
                     {part.slice(1, -1)}
                 </code>,
             );
