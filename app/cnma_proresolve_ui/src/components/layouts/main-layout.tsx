@@ -81,9 +81,8 @@ function NavLeafItem({
                 isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                isCollapsed ? 'justify-center px-2' : 'px-3',
+                isCollapsed ? 'justify-center px-2' : depth === 0 ? 'px-3' : depth === 1 ? 'pl-6 pr-3' : 'pl-9 pr-3',
             )}
-            style={!isCollapsed ? { paddingLeft: `${12 + depth * 12}px` } : undefined}
         >
             <Icon
                 size={depth > 0 ? 16 : 18}
@@ -121,16 +120,15 @@ function NavGroupItem({ entry, isCollapsed, depth = 0, onLeafClick }: {
 
     return (
         <div>
-            <button
+            <Button
                 type="button"
+                variant="ghost"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen((prev) => !prev); }}
                 className={cn(
-                    'w-full flex items-center gap-2.5 py-1.5 rounded-lg transition-all duration-200 text-sm cursor-pointer',
-                    hasActiveChild
-                        ? 'text-sidebar-foreground font-semibold'
-                        : 'text-sidebar-foreground font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    'w-full flex items-center justify-between gap-2.5 py-1.5 h-auto rounded-lg transition-all duration-200 text-sm cursor-pointer font-normal hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    depth === 0 ? 'px-3' : depth === 1 ? 'pl-6 pr-3' : 'pl-9 pr-3',
+                    hasActiveChild ? 'text-sidebar-foreground font-semibold' : 'text-sidebar-foreground',
                 )}
-                style={{ paddingLeft: `${12 + depth * 12}px`, paddingRight: '12px' }}
             >
                 <Icon size={depth > 0 ? 16 : 18} className="shrink-0 text-sidebar-foreground" />
                 <span className="flex-1 text-left whitespace-nowrap overflow-hidden truncate">{entry.label}</span>
@@ -138,7 +136,7 @@ function NavGroupItem({ entry, isCollapsed, depth = 0, onLeafClick }: {
                     size={14}
                     className={cn('shrink-0 transition-transform duration-200', isOpen ? '' : '-rotate-90')}
                 />
-            </button>
+            </Button>
 
             {isOpen && (
                 <div className="space-y-0.5 mt-0.5">
@@ -222,12 +220,15 @@ export function MainLayout() {
                         )}
 
                         {/* Mobile close */}
-                        <button
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setIsMobileOpen(false)}
-                            className="lg:hidden text-sidebar-foreground p-1 hover:bg-sidebar-accent rounded-md"
+                            className="lg:hidden text-sidebar-foreground hover:bg-sidebar-accent rounded-md"
                         >
                             <X size={20} />
-                        </button>
+                        </Button>
                     </div>
                 )}
 
@@ -256,11 +257,12 @@ export function MainLayout() {
                 {!isInWorkZone && (
                     <div className={cn('mt-auto border-t border-sidebar-border p-3', isCollapsed ? 'items-center' : '')}>
                         <div className={cn('flex items-center gap-2', isCollapsed ? 'flex-col justify-center' : '')}>
-                            <button
+                            <Button
                                 type="button"
+                                variant="ghost"
                                 onClick={() => setIsPreferencesOpen(true)}
                                 className={cn(
-                                    'flex items-center gap-3 flex-1 text-left rounded-lg p-1.5 hover:bg-sidebar-accent transition-colors group cursor-pointer overflow-hidden',
+                                    'flex items-center justify-start gap-3 flex-1 text-left rounded-lg p-1.5 h-auto hover:bg-sidebar-accent transition-colors group cursor-pointer overflow-hidden',
                                     isCollapsed ? 'justify-center p-2' : ''
                                 )}
                                 title="User Preferences"
@@ -275,8 +277,11 @@ export function MainLayout() {
                                         </p>
                                     </div>
                                 )}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => { window.location.href = '/do/logout'; }}
                                 className={cn(
                                     'p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors shrink-0',
@@ -285,18 +290,21 @@ export function MainLayout() {
                                 title={t('nav.logOut')}
                             >
                                 <LogOut size={16} />
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
 
                 {/* Desktop collapse toggle */}
-                <button
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
                     onClick={() => setIsCollapsed(!isCollapsed)}
                     className="absolute -right-3 top-20 hidden lg:flex h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm hover:bg-sidebar-accent"
                 >
                     {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-                </button>
+                </Button>
             </aside>
 
             {/* Main content */}

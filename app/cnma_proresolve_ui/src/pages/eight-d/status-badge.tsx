@@ -12,10 +12,10 @@ import type { ReportStatus } from '@/services/eightd-service';
 
 const STYLES: Record<ReportStatus, string> = {
     Draft: 'bg-muted text-muted-foreground border-border',
-    Analyzing: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-    Analyzed: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    Analyzing: 'bg-info/10 text-info border-info/20',
+    Analyzed: 'bg-success/10 text-success border-success/20',
     Failed: 'bg-destructive/10 text-destructive border-destructive/20',
-    Closed: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+    Closed: 'bg-muted text-muted-foreground border-border',
 };
 
 export function ReportStatusBadge({

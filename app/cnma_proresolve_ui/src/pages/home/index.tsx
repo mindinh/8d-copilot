@@ -24,7 +24,7 @@ export function HomePage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-success/10 text-success border border-success/20">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         CAP Backend Connected
                     </span>

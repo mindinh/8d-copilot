@@ -108,24 +108,25 @@ export function StepPromptsTab() {
                     {prompts.map((p) => {
                         const configured = Boolean(p.systemPrompt || p.userTemplate);
                         return (
-                            <button
+                            <Button
                                 key={p.stepCode}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => select(p)}
-                                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors
+                                className={`flex w-full items-center justify-start gap-2 rounded-md px-2.5 py-2 text-left text-sm h-auto transition-colors
                                     ${p.stepCode === active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}
                             >
                                 <span className="w-7 shrink-0 font-mono text-xs text-muted-foreground">
                                     {p.stepCode}
                                 </span>
-                                <span className="flex-1 truncate">{p.label}</span>
+                                <span className="flex-1 truncate text-left">{p.label}</span>
                                 {configured && (
                                     <span
                                         className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
                                         title="Custom prompt configured"
                                     />
                                 )}
-                            </button>
+                            </Button>
                         );
                     })}
                 </CardContent>
@@ -139,9 +140,9 @@ export function StepPromptsTab() {
                                 <CardTitle className="flex items-center gap-2">
                                     {current.stepCode} — {current.label}
                                     {!current.systemPrompt && (
-                                        <Badge variant="secondary" className="text-[10px]">empty — using code default</Badge>
+                                        <Badge variant="secondary" className="text-xs">empty — using code default</Badge>
                                     )}
-                                    <Badge variant="outline" className="text-[10px]">v{current.version}</Badge>
+                                    <Badge variant="outline" className="text-xs">v{current.version}</Badge>
                                 </CardTitle>
                                 <CardDescription className="mt-1">{current.description}</CardDescription>
                             </div>

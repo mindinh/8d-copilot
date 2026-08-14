@@ -7,6 +7,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    Input,
     Spinner,
     Textarea,
 } from '@cnma/react-ui';
@@ -193,7 +194,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
 
                 <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <input
+                        <Input
                             ref={fileRef}
                             type="file"
                             accept="application/json,.json"
@@ -221,7 +222,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                         )}
 
                         {check?.ok && (
-                            <span className="text-xs text-emerald-600 ml-auto">
+                            <span className="text-xs text-success ml-auto">
                                 Case {check.caseId} · {(text.length / 1024).toFixed(0)} KB
                             </span>
                         )}
@@ -236,25 +237,26 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                             </p>
                             <div className="mt-2 space-y-1">
                                 {samples.map((s) => (
-                                    <button
+                                    <Button
                                         key={s.file}
                                         type="button"
+                                        variant="ghost"
                                         disabled={busy}
                                         onClick={() => void loadSample(s)}
-                                        className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                                        className="flex w-full items-start justify-start gap-2 rounded-md px-2 py-1.5 h-auto text-left transition-colors hover:bg-muted disabled:opacity-50"
                                     >
-                                        <span className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                                        <span className="mt-0.5 font-mono text-xs text-muted-foreground">
                                             {s.notificationId}
                                         </span>
-                                        <span className="flex-1">
-                                            <span className="block text-xs">{s.symptom}</span>
-                                            <span className="block text-[11px] text-muted-foreground">
+                                        <span className="flex-1 text-left">
+                                            <span className="block text-xs font-normal text-foreground">{s.symptom}</span>
+                                            <span className="block text-xs font-normal text-muted-foreground">
                                                 {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
                                                 {s.workCenter && ` · ${s.workCenter}`}
                                                 {s.material && ` · ${s.material}`}
                                             </span>
                                         </span>
-                                    </button>
+                                    </Button>
                                 ))}
                             </div>
                         </div>

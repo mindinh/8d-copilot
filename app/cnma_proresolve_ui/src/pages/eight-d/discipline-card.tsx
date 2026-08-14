@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Card, cn } from '@cnma/react-ui';
+import { Badge, Button, Card, cn } from '@cnma/react-ui';
 import { ChevronDown, TriangleAlert } from 'lucide-react';
 import { parseList, type Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
@@ -17,8 +17,8 @@ import { Markdown } from './markdown';
  */
 
 function confidenceStyle(score: number): string {
-    if (score >= 0.8) return 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20';
-    if (score >= 0.5) return 'bg-amber-500/10 text-amber-700 border-amber-500/20';
+    if (score >= 0.8) return 'bg-success/10 text-success border-success/20';
+    if (score >= 0.5) return 'bg-warning/10 text-warning border-warning/20';
     return 'bg-destructive/10 text-destructive border-destructive/20';
 }
 
@@ -33,33 +33,34 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
         <Card
             className={cn(
                 'p-0 overflow-hidden transition-colors',
-                inferred && 'border-amber-500/40 bg-amber-500/[0.02]',
+                inferred && 'border-warning/40 bg-warning/[0.02]',
             )}
         >
-            <button
+            <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setOpen((v) => !v)}
-                className="w-full text-left p-4 flex items-start gap-3 hover:bg-muted/40 transition-colors"
+                className="w-full text-left p-4 h-auto flex items-start justify-start gap-3 hover:bg-muted/40 transition-colors"
             >
                 {/* Mã discipline */}
                 <div
                     className={cn(
                         'shrink-0 w-11 h-11 rounded-lg flex items-center justify-center font-bold text-sm',
                         inferred
-                            ? 'bg-amber-500/15 text-amber-700'
+                            ? 'bg-warning/15 text-warning'
                             : 'bg-primary/10 text-primary',
                     )}
                 >
                     {discipline.code}
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm text-foreground">{discipline.title}</h3>
 
                         <Badge
                             variant="outline"
-                            className={cn('text-[10px] tabular-nums', confidenceStyle(discipline.confidence))}
+                            className={cn('text-xs tabular-nums', confidenceStyle(discipline.confidence))}
                         >
                             {Math.round(discipline.confidence * 100)}%
                         </Badge>
@@ -67,7 +68,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                         {inferred && (
                             <Badge
                                 variant="outline"
-                                className="text-[10px] gap-1 bg-amber-500/10 text-amber-700 border-amber-500/30"
+                                className="text-xs gap-1 bg-warning/10 text-warning border-warning/30"
                             >
                                 <TriangleAlert className="w-3 h-3" />
                                 No source data
@@ -75,12 +76,12 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                         )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed font-normal">
                         {discipline.summary}
                     </p>
 
                     {inferred && (
-                        <p className="text-[11px] text-amber-700/90 mt-1.5">
+                        <p className="text-xs text-warning mt-1.5 font-normal">
                             Proposed by AI — the dataset holds no evidence for this discipline.
                         </p>
                     )}
@@ -92,7 +93,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                         open && 'rotate-180',
                     )}
                 />
-            </button>
+            </Button>
 
             {open && (
                 <div className="px-4 pb-4 pt-0 space-y-4 border-t border-border/60">
@@ -135,7 +136,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                                 {sources.map((s, i) => (
                                     <code
                                         key={i}
-                                        className="px-2 py-0.5 rounded bg-muted text-[11px] font-mono text-muted-foreground"
+                                        className="px-2 py-0.5 rounded bg-muted text-xs font-mono text-muted-foreground"
                                     >
                                         {s}
                                     </code>

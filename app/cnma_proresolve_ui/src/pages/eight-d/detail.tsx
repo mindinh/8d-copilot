@@ -45,7 +45,7 @@ const POLL_INTERVAL_MS = 4_000;
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
             <div className="text-sm mt-0.5">{children ?? '—'}</div>
         </div>
     );
@@ -156,7 +156,7 @@ export function EightDDetailPage() {
 
             {/* ── Đang chạy ── */}
             {running && (
-                <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-500/5 border border-blue-500/20 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-info bg-info/5 border border-info/20 rounded-lg px-4 py-3">
                     <Spinner className="w-4 h-4" />
                     Analysis in progress — extracting facts, then drafting the eight disciplines.
                     This page updates automatically.
@@ -255,7 +255,7 @@ export function EightDDetailPage() {
                         </h2>
 
                         {inferredCount > 0 && (
-                            <span className="flex items-center gap-1.5 text-xs text-amber-700">
+                            <span className="flex items-center gap-1.5 text-xs text-warning">
                                 <TriangleAlert className="w-3.5 h-3.5" />
                                 {inferredCount} of {disciplines.length} have no source data in the dataset
                             </span>
@@ -278,20 +278,20 @@ export function EightDDetailPage() {
                                 AI Models Used:
                             </span>
                             {report.aiModelParse && (
-                                <Badge variant="secondary" className="font-mono text-[11px] gap-1">
-                                    <span className="text-[10px] text-muted-foreground font-sans">Parse:</span>
+                                <Badge variant="secondary" className="font-mono text-xs gap-1">
+                                    <span className="text-xs text-muted-foreground font-sans">Parse:</span>
                                     {report.aiModelParse}
                                 </Badge>
                             )}
                             {report.aiModelAnalyze && (
-                                <Badge variant="secondary" className="font-mono text-[11px] gap-1">
-                                    <span className="text-[10px] text-muted-foreground font-sans">Analyze:</span>
+                                <Badge variant="secondary" className="font-mono text-xs gap-1">
+                                    <span className="text-xs text-muted-foreground font-sans">Analyze:</span>
                                     {report.aiModelAnalyze}
                                 </Badge>
                             )}
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0 text-[11px]">
+                        <div className="flex items-center gap-3 shrink-0 text-xs">
                             <span>Generated: <strong className="font-normal text-foreground">{new Date(report.analyzedAt).toLocaleString('en-GB')}</strong></span>
                             <span>·</span>
                             <span>Tokens: <strong className="font-normal text-foreground">{report.tokensUsed?.toLocaleString()}</strong></span>
@@ -348,7 +348,7 @@ function PayloadViewer({ reportID }: { reportID: string }) {
     }
 
     return (
-        <pre className="text-[11px] font-mono bg-muted rounded-lg p-4 overflow-auto max-h-[65vh]">
+        <pre className="text-xs font-mono bg-muted rounded-lg p-4 overflow-auto max-h-[65vh]">
             {pretty}
         </pre>
     );

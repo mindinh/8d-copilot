@@ -30,8 +30,8 @@ import { CriterionStepCard } from './criterion-step-card';
  */
 
 const LEVEL_STYLE: Record<string, string> = {
-    exact: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-    fallback: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    exact: 'bg-success/15 text-success border border-success/30',
+    fallback: 'bg-warning/15 text-warning border border-warning/30',
     none: 'bg-muted text-muted-foreground',
 };
 
@@ -322,12 +322,12 @@ export function SimilarityTab() {
                             </div>
 
                             {notEmbedded > 0 && vectorSteps.length > 0 && (
-                                <Badge variant="destructive" className="text-[11px]">
+                                <Badge variant="destructive" className="text-xs">
                                     {notEmbedded} case{notEmbedded === 1 ? '' : 's'} cannot be matched by the vector step
                                 </Badge>
                             )}
                             {vectorSteps.length === 0 && (
-                                <Badge variant="secondary" className="text-[11px]">
+                                <Badge variant="secondary" className="text-xs">
                                     No vector step enabled — embeddings are not used right now
                                 </Badge>
                             )}
@@ -456,7 +456,7 @@ export function SimilarityTab() {
                                                 <TableRow key={b.criterionKey}>
                                                     <TableCell>{b.label}</TableCell>
                                                     <TableCell>
-                                                        <span className={`rounded px-1.5 py-0.5 text-[11px] ${LEVEL_STYLE[b.level]}`}>
+                                                        <span className={`rounded px-1.5 py-0.5 text-xs ${LEVEL_STYLE[b.level]}`}>
                                                             {b.level}
                                                         </span>
                                                     </TableCell>

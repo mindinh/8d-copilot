@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from '@cnma/react-ui';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -41,12 +42,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                     <p className="text-muted-foreground max-w-md text-sm">
                         {this.state.error?.message ?? 'An unexpected error occurred. Please refresh the page.'}
                     </p>
-                    <button
+                    <Button
                         onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
                     >
                         Refresh Page
-                    </button>
+                    </Button>
                 </div>
             );
         }

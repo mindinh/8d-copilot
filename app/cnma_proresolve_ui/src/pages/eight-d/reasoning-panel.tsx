@@ -22,12 +22,12 @@ import type { IndependentAnalysis } from '@/services/eightd-service';
  */
 
 const CATEGORY_STYLES: Record<string, string> = {
-    Man: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
-    Machine: 'bg-blue-500/10 text-blue-700 border-blue-500/20',
-    Method: 'bg-violet-500/10 text-violet-700 border-violet-500/20',
-    Material: 'bg-orange-500/10 text-orange-700 border-orange-500/20',
-    Measurement: 'bg-teal-500/10 text-teal-700 border-teal-500/20',
-    Environment: 'bg-lime-500/10 text-lime-700 border-lime-500/20',
+    Man: 'bg-warning/10 text-warning border-warning/20',
+    Machine: 'bg-info/10 text-info border-info/20',
+    Method: 'bg-primary/10 text-primary border-primary/20',
+    Material: 'bg-warning/15 text-warning border-warning/30',
+    Measurement: 'bg-info/15 text-info border-info/30',
+    Environment: 'bg-success/10 text-success border-success/20',
 };
 
 function CategoryChip({ category, className }: { category: string | null; className?: string }) {
@@ -55,16 +55,16 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
         <Card
             className={cn(
                 'p-0 overflow-hidden border-2',
-                agrees ? 'border-emerald-500/30' : 'border-amber-500/50',
+                agrees ? 'border-success/30' : 'border-warning/50',
             )}
         >
             {/* ── Đầu panel ── */}
-            <div className={cn('px-5 py-4', agrees ? 'bg-emerald-500/[0.04]' : 'bg-amber-500/[0.06]')}>
+            <div className={cn('px-5 py-4', agrees ? 'bg-success/[0.04]' : 'bg-warning/[0.06]')}>
                 <div className="flex items-start gap-3">
                     <div
                         className={cn(
                             'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-                            agrees ? 'bg-emerald-500/15 text-emerald-700' : 'bg-amber-500/15 text-amber-700',
+                            agrees ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning',
                         )}
                     >
                         <Brain className="w-5 h-5" />
@@ -73,7 +73,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             <h2 className="font-semibold text-sm">Independent diagnosis</h2>
-                            <Badge variant="outline" className="text-[10px] font-normal">
+                            <Badge variant="outline" className="text-xs font-normal">
                                 answer withheld from the model
                             </Badge>
                         </div>
@@ -88,7 +88,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 {/* ── Đối chiếu ── */}
                 <div className="flex items-center gap-3 md:gap-5 mt-4 flex-wrap">
                     <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
                             Quality engineer
                         </div>
                         <CategoryChip category={verdict.recordedCategory} />
@@ -98,8 +98,8 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                         className={cn(
                             'flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                             agrees
-                                ? 'bg-emerald-500/10 text-emerald-700'
-                                : 'bg-amber-500/15 text-amber-800',
+                                ? 'bg-success/10 text-success'
+                                : 'bg-warning/15 text-warning',
                         )}
                     >
                         {agrees ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
@@ -107,7 +107,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                     </div>
 
                     <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
                             AI, unaided
                         </div>
                         <CategoryChip category={finding.rootCauseCategory} />
@@ -133,7 +133,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 <p className="text-sm mt-3 leading-relaxed">{finding.rootCauseStatement}</p>
 
                 {!agrees && (
-                    <div className="flex items-start gap-2 mt-3 text-xs text-amber-800 bg-amber-500/10 rounded-lg px-3 py-2">
+                    <div className="flex items-start gap-2 mt-3 text-xs text-warning bg-warning/10 rounded-lg px-3 py-2">
                         <Scale className="w-4 h-4 shrink-0 mt-px" />
                         <span>
                             A disagreement is not proof that either side is wrong. Read the reasoning below and
