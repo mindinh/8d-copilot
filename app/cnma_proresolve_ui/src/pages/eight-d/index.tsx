@@ -186,7 +186,7 @@ export function EightDListPage() {
                         <ClipboardList className="w-8 h-8 text-muted-foreground" />
                         <p className="text-sm font-medium">No reports yet</p>
                         <p className="text-xs text-muted-foreground max-w-md">
-                            Paste a Golden Dataset JSON to generate the eight disciplines from a defect case.
+                            Paste the JSON of a defect case to generate the eight disciplines.
                         </p>
                         <Button size="sm" className="mt-2" onClick={() => setAnalyzeOpen(true)}>
                             <Sparkles className="w-4 h-4" />
@@ -206,6 +206,7 @@ export function EightDListPage() {
                                 <TableHead className="w-[150px]">AI, unaided</TableHead>
                                 <TableHead className="w-[100px] text-right">CoPQ</TableHead>
                                 <TableHead className="w-[110px]">Status</TableHead>
+                                <TableHead className="w-[140px]">AI Models</TableHead>
                                 <TableHead className="w-[130px]">Analyzed</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -268,6 +269,30 @@ export function EightDListPage() {
 
                                     <TableCell>
                                         <ReportStatusBadge status={r.status} />
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {r.aiModelAnalyze ? (
+                                            <div className="flex flex-col gap-0.5 max-w-[130px]">
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="font-mono text-[10px] truncate justify-start"
+                                                    title={`Analyze: ${r.aiModelAnalyze}`}
+                                                >
+                                                    {r.aiModelAnalyze}
+                                                </Badge>
+                                                {r.aiModelParse && r.aiModelParse !== r.aiModelAnalyze && (
+                                                    <span
+                                                        className="text-[9px] text-muted-foreground font-mono truncate"
+                                                        title={`Parse: ${r.aiModelParse}`}
+                                                    >
+                                                        P: {r.aiModelParse}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted-foreground text-xs">—</span>
+                                        )}
                                     </TableCell>
 
                                     <TableCell className="text-xs text-muted-foreground">

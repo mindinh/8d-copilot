@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+    Badge,
     Button,
     Card,
     Dialog,
@@ -15,8 +16,9 @@ import {
     TabsTrigger,
     cn,
 } from '@cnma/react-ui';
+
 import {
-    AlertCircle, ArrowLeft, Braces, RefreshCw, TriangleAlert,
+    AlertCircle, ArrowLeft, Braces, Cpu, RefreshCw, TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -28,6 +30,7 @@ import {
 import { DisciplineCard } from './discipline-card';
 import { ReportStatusBadge } from './status-badge';
 import { ReasoningPanel } from './reasoning-panel';
+import { PrecedentPanel } from './precedent-panel';
 
 /**
  * Chi tiết một báo cáo 8D.
@@ -171,6 +174,14 @@ export function EightDDetailPage() {
                 </div>
             )}
 
+            {/* ── Case tiền lệ ──
+                Đặt NGAY ĐẦU, trên cả chẩn đoán độc lập. Với một sự vụ vừa được
+                ghi nhận thì đây là phần duy nhất dựa trên dữ liệu có thật — mọi
+                thứ khác trên trang lúc đó đều là suy luận.
+                Nó cũng có sớm nhất: khoảng hai giây, trong khi báo cáo mất hơn
+                một phút. */}
+            <PrecedentPanel reportID={report.ID} />
+
             {/* ── Chẩn đoán độc lập ──
                 Đặt TRÊN thông tin case có chủ đích: đây là thứ phân biệt công cụ
                 này với một trình định dạng dữ liệu, nên nó phải là điều đầu tiên
@@ -257,14 +268,42 @@ export function EightDDetailPage() {
                 </div>
             )}
 
-            {/* ── Vết chạy ── */}
+            {/* ── Vết chạy & Model AI ── */}
             {report.analyzedAt && (
-                <p className="text-xs text-muted-foreground">
-                    Generated {new Date(report.analyzedAt).toLocaleString('en-GB')} ·{' '}
-                    {report.aiModelAnalyze} ·{' '}
-                    {report.tokensUsed?.toLocaleString()} tokens ·{' '}
-                    {report.durationMs != null && `${(report.durationMs / 1000).toFixed(0)}s`}
-                </p>
+                <Card className="p-4 bg-muted/30 border border-border/60">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-foreground flex items-center gap-1.5">
+                                <Cpu className="w-3.5 h-3.5 text-primary" />
+                                AI Models Used:
+                            </span>
+                            {report.aiModelParse && (
+                                <Badge variant="secondary" className="font-mono text-[11px] gap-1">
+                                    <span className="text-[10px] text-muted-foreground font-sans">Parse:</span>
+                                    {report.aiModelParse}
+                                </Badge>
+                            )}
+                            {report.aiModelAnalyze && (
+                                <Badge variant="secondary" className="font-mono text-[11px] gap-1">
+                                    <span className="text-[10px] text-muted-foreground font-sans">Analyze:</span>
+                                    {report.aiModelAnalyze}
+                                </Badge>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 text-[11px]">
+                            <span>Generated: <strong className="font-normal text-foreground">{new Date(report.analyzedAt).toLocaleString('en-GB')}</strong></span>
+                            <span>·</span>
+                            <span>Tokens: <strong className="font-normal text-foreground">{report.tokensUsed?.toLocaleString()}</strong></span>
+                            {report.durationMs != null && (
+                                <>
+                                    <span>·</span>
+                                    <span>Duration: <strong className="font-normal text-foreground">{(report.durationMs / 1000).toFixed(0)}s</strong></span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </Card>
             )}
 
             {/* ── JSON gốc ── */}

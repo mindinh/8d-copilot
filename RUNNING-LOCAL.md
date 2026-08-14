@@ -49,8 +49,8 @@ Một lệnh, chạy cả hai:
 | | Địa chỉ |
 |---|---|
 | Backend (CAP) | http://localhost:4004 |
-| Giao diện (Vite) | http://localhost:5173 |
-| **Trang cấu hình AI** | **http://localhost:5173/#/ai-settings** |
+| Giao diện (Vite) | http://localhost:5544 |
+| **Trang cấu hình AI** | **http://localhost:5544/#/ai-settings** |
 
 Muốn chạy riêng từng bên:
 
@@ -176,7 +176,7 @@ Cách 2 hợp khi dữ liệu mock có cấu trúc lồng nhau, thứ CSV diễn
 | Danh sách model rỗng dù đã Sync | Chưa điền `.env`, hoặc credential sai | Xem dòng `[ai-startup]` trong log |
 | Ô chọn model trống trơn | Registry của bundle UI chưa đăng ký | Kiểm tra `src/config/ai-registry.ts` có được gọi trong `main.tsx` |
 | `403` khi bấm Sync trên môi trường deploy | Thiếu CSRF token | Phải dùng `services/ai-model-service.ts`, không dùng `createAiModelApi()` của CDK |
-| Cổng 4004 hoặc 5173 bị chiếm | Còn tiến trình cũ | Tắt terminal cũ, hoặc kill process giữ cổng |
+| Cổng 4004 hoặc 5544 bị chiếm | Còn tiến trình cũ | Tắt terminal cũ, hoặc kill process giữ cổng |
 | `npm install` báo lỗi peer dependency | Thiếu cờ | `.npmrc` đã có `legacy-peer-deps=true`, kiểm tra file còn nguyên không |
 
 ---

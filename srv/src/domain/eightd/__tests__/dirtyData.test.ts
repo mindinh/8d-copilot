@@ -19,7 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { classifyAction, mapCase, normalizeDate } from '../caseMapper';
+import { classifyAction, extractDeepCase, mapCase, normalizeDate } from '../caseMapper';
 import { blockingIssues, qualityIssues, validateDataset } from '../datasetValidator';
 import { auditBlindEvidence, buildBlindEvidence } from '../blindEvidence';
 
@@ -29,6 +29,15 @@ const DIRTY = path.join(MOCK, 'dirty');
 
 const load = (dir: string, f: string) =>
     JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+
+/**
+ * Hình dạng đã chuẩn hoá của một file, dùng khi test cần soi vào dữ liệu THÔ.
+ *
+ * Đọc thẳng `raw.data.…` hay `raw.material.…` là buộc test vào một định dạng cụ
+ * thể — đúng thứ đã hỏng khi mock data chuyển sang Deep Structure. Đi qua
+ * `extractDeepCase` thì test nói về nội dung, không nói về định dạng.
+ */
+const loadRows = (dir: string, f: string) => extractDeepCase(load(dir, f))!;
 const listCases = (dir: string) =>
     fs.readdirSync(dir).filter((f) => f.startsWith('case-') && f.endsWith('.json')).sort();
 
@@ -75,7 +84,7 @@ describe('mapper đọc được dữ liệu bẩn', () => {
 
     it.each(DIRTY_CASES)('%s — mã đã được cắt khoảng trắng', (f) => {
         const ctx = mapCase(load(DIRTY, f));
-        const raw = load(DIRTY, f).data.materials[0].material_id;
+        const raw = loadRows(DIRTY, f).materials[0].material_id;
 
         expect(raw).toMatch(/^\s|\s$/);              // dữ liệu gốc có dính
         expect(ctx.product.materialId).toBe(raw.trim());
@@ -92,11 +101,10 @@ describe('mapper đọc được dữ liệu bẩn', () => {
     });
 
     it.each(DIRTY_CASES)('%s — cờ root cause: hiểu được thì khớp, mất thì null', (f) => {
-        const raw = load(DIRTY, f);
-        const ctx = mapCase(raw);
+        const ctx = mapCase(load(DIRTY, f));
         const clean = mapCase(load(CLEAN, f.replace('8D-9', '8D-1')));
 
-        const anyFlag = raw.data.causes_ishikawa.some((r: any) =>
+        const anyFlag = loadRows(DIRTY, f).causes_ishikawa.some((r: any) =>
             ['y', 'x', 'ja', 'yes'].includes(String(r.is_root_cause ?? '').trim().toLowerCase()));
 
         if (anyFlag) {

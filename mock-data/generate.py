@@ -52,6 +52,17 @@ Q3 = "Q3 - Internal Defect"
 # Đọc case gốc của nhóm ra cùng hình dạng với các case viết tay
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Nhóm vật tư của case gốc.
+#
+# Mười một case viết tay khai `material_group` ngay trong `cases_clean.py`. Case
+# gốc thì đọc từ `beta/case-8D-10048412.json`, mà file đó ĐÓNG BĂNG có chủ đích —
+# không sửa được. Nên nhóm của nó khai ở đây.
+#
+# Thiếu dòng này thì tiêu chí "cùng họ vật tư: +1" chết lặng đúng ở case dùng để
+# demo: không báo lỗi, chỉ đơn giản là không bao giờ ăn điểm.
+TEMPLATE_MATERIAL_GROUP = "MG-HOUSING"   # MAT-10247 Bracket Housing X240
+
+
 def case_from_template(doc: dict) -> dict:
     """
     Bóc `data` của file gốc thành dict case, để nó đi qua đúng đường ống như 11
@@ -72,7 +83,7 @@ def case_from_template(doc: dict) -> dict:
 
     return {
         "notification_id": note["notification_id"],
-        "material": d["materials"][0],
+        "material": {"material_group": TEMPLATE_MATERIAL_GROUP, **d["materials"][0]},
         "batch": {"batch_id": d["batches"][0]["batch_id"]},
         "defect": d["defect_catalog"][0],
         "work_center": d["work_centers"][0],
@@ -289,16 +300,70 @@ def describe_dirt(clean: dict, dirty: dict) -> str:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-def write_case(case: dict, template: dict, out_dir: Path) -> Path:
-    doc = copy.deepcopy(template)
-    doc["data"] = build_data(case)
-    doc["nested_case_view"] = build_nested(case, template["nested_case_view"])
-    doc["integrity"]["validation_result_for_this_file"] = {
-        "case_count": 1,
-        "origin": case["header"]["origin"],
-        "all_constraints_checked": out_dir.name == "clean",
-        "violations": [],
+def build_deep_structure(case: dict) -> dict:
+    nid = case["notification_id"]
+    h = case["header"]
+
+    def camel_key(k: str) -> str:
+        parts = k.split("_")
+        return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+    def convert_row(row: dict) -> dict:
+        out = {}
+        for k, v in row.items():
+            if k == "notification_id":
+                continue
+            out[camel_key(k)] = v
+        return out
+
+    def convert_rows(rows: list) -> list:
+        return [convert_row(r) for r in rows]
+
+    fmea = case.get("fmea_link")
+    cost = case.get("cost_copq")
+
+    return {
+        "notificationId": nid,
+        "origin": h["origin"],
+        "symptomShortText": h["symptom_short_text"],
+        "status": h["status"],
+        "foundDate": h.get("found_date"),
+        "completionDate": h.get("completion_date"),
+        "quantityExtent": h.get("quantity_extent"),
+        "teamSize": h.get("team_size"),
+        "material": {
+            "materialId": case["material"]["material_id"],
+            "description": case["material"]["description"],
+            # Nhóm vật tư (MATKL) — tiêu chí "cùng họ vật tư: +1" khi tìm tiền lệ.
+            "materialGroup": case["material"].get("material_group"),
+        },
+        "batch": {
+            "batchId": case["batch"]["batch_id"],
+            "materialId": case["material"]["material_id"]
+        },
+        "defect": {
+            "defectCode": case["defect"]["defect_code"],
+            "defectText": case["defect"]["defect_text"]
+        },
+        "workCenter": {
+            "workCenterId": case["work_center"]["work_center_id"],
+            "description": case["work_center"]["description"]
+        },
+        "inspections": convert_rows(case.get("inspections", [])),
+        "causesIshikawa": convert_rows(case.get("causes_ishikawa", [])),
+        "fiveWhyChain": convert_rows(case.get("five_why_chain", [])),
+        "actions": convert_rows(case.get("actions", [])),
+        "teamAssignments": convert_rows(case.get("team_assignments", [])),
+        "fmeaLink": convert_row(fmea) if fmea else None,
+        "costCopq": {"costOfPoorQualityEur": cost} if cost is not None else None,
+        "lessonsLearned": convert_row(case.get("lessons_learned", {})) if case.get("lessons_learned") else None,
+        "isIsNot": convert_row(case.get("is_is_not", {})) if case.get("is_is_not") else None,
+        "customerReference": convert_row(case.get("customer_reference", {})) if case.get("customer_reference") else None
     }
+
+
+def write_case(case: dict, template: dict, out_dir: Path) -> Path:
+    doc = build_deep_structure(case)
     path = out_dir / f"case-{case['notification_id']}.json"
     path.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

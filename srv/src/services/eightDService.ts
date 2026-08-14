@@ -40,7 +40,9 @@ import {
     saveResult,
     sweepStuckAnalyzing,
 } from '../domain/eightd/eightDRepository';
-import { PipelineError } from '../domain/eightd/types';
+import { PipelineError, type CaseContext } from '../domain/eightd/types';
+import { findPrecedents } from '../domain/eightd/precedent/findPrecedents';
+import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
 
 const LOG = cds.log('eightd-service');
 
@@ -170,6 +172,64 @@ export function registerEightDHandlers(srv: any): void {
         LOG.info(`Report ${reportID} (case ${row.notificationId}) đã xếp lịch chạy lại`);
         return reportID;
     });
+
+    // ── findPrecedents ───────────────────────────────────────────────────────
+    srv.on('findPrecedents', async (req: any) => {
+        const reportID = req.data?.reportID;
+        if (typeof reportID !== 'string' || !reportID.trim()) {
+            return req.error(400, 'reportID là bắt buộc.');
+        }
+
+        const db = await cds.connect.to('db');
+        const row = await db.run(
+            SELECT.one.from('cnma.proresolve.Reports')
+                .columns('ID', 'notificationId', 'caseContext', 'sourcePayload')
+                .where({ ID: reportID }),
+        );
+        if (!row) return req.error(404, `Không tìm thấy report ${reportID}.`);
+
+        // `caseContext` được ghi lúc tạo bản ghi, nên có sẵn kể cả khi pipeline AI
+        // chưa chạy xong. Rơi về `sourcePayload` phòng bản ghi cũ chưa có cột này.
+        let context: CaseContext;
+        try {
+            context = row.caseContext
+                ? (JSON.parse(row.caseContext) as CaseContext)
+                : mapCase(JSON.parse(row.sourcePayload));
+        } catch (e: any) {
+            return req.error(422, `Report ${reportID} không dựng lại được case context: ${e.message}`);
+        }
+
+        return JSON.stringify(await findPrecedents(context));
+    });
+
+    // ── seedCaseLibrary ──────────────────────────────────────────────────────
+    srv.on('seedCaseLibrary', async (req: any) => {
+        const payload = req.data?.payload;
+        if (typeof payload !== 'string' || !payload.trim()) {
+            return req.error(400, 'payload là bắt buộc và phải là chuỗi JSON.');
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(payload);
+        } catch (e: any) {
+            return req.error(400, `payload không phải JSON hợp lệ: ${e.message}`);
+        }
+
+        // Nhận cả một case đơn lẻ lẫn cả mẻ — người gọi không phải bọc mảng chỉ
+        // để nạp một file.
+        const cases = Array.isArray(parsed) ? parsed : [parsed];
+        if (!cases.length) return req.error(400, 'payload rỗng, không có case nào để nạp.');
+
+        return JSON.stringify(await seedLibrary(cases));
+    });
+
+    // ── clearCaseLibrary ─────────────────────────────────────────────────────
+    srv.on('clearCaseLibrary', async () => JSON.stringify({ deleted: await clearLibrary() }));
+
+    // ── embedCaseLibrary ─────────────────────────────────────────────────────
+    srv.on('embedCaseLibrary', async (req: any) =>
+        JSON.stringify(await embedLibrary(req.data?.force === true)));
 
     LOG.info('Đã gắn handler EightDService');
 }

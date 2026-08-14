@@ -25,11 +25,13 @@ import {
     type ContextEnrichment,
 } from './schemas';
 import {
-    EIGHT_D_SYSTEM_PROMPT,
     ENRICHMENT_SYSTEM_PROMPT,
     buildEightDPrompt,
+    buildEightDSystemPrompt,
     buildEnrichmentPrompt,
 } from './prompts';
+import { getDisciplineGuide } from './precedent/configRepository';
+import { findPrecedents, type Precedent } from './precedent/findPrecedents';
 import { callAndParse } from './jsonExtract';
 import { postProcess } from './postProcess';
 import { auditBlindEvidence, buildBlindEvidence } from './blindEvidence';
@@ -161,18 +163,23 @@ async function generateReport(
     context: CaseContext,
     enrichment: ContextEnrichment,
     independent: IndependentAnalysis,
+    precedents: Precedent[],
 ): Promise<{ result: EightDResult; tokens: number }> {
     let tokens = 0;
+
+    // Hướng dẫn từng discipline admin chỉnh trên UI. Bảng rỗng ⇒ dùng hằng số
+    // trong `prompts.ts`, tức là prompt y như cũ.
+    const systemPrompt = buildEightDSystemPrompt(await getDisciplineGuide());
 
     const { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
         const res = await complete(
             [
-                { role: 'system', content: EIGHT_D_SYSTEM_PROMPT },
+                { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
                     content: repairHint
-                        ? `${buildEightDPrompt(context, enrichment, independent)}\n\n## CORRECTION\n${repairHint}`
-                        : buildEightDPrompt(context, enrichment, independent),
+                        ? `${buildEightDPrompt(context, enrichment, independent, precedents)}\n\n## CORRECTION\n${repairHint}`
+                        : buildEightDPrompt(context, enrichment, independent, precedents),
                 },
             ],
             {
@@ -242,11 +249,31 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
     // án. Kết luận của nó được đưa vào bước sau để D4 nêu được cả hai góc nhìn.
     const { analysis: independent, tokens: diagnoseTokens } = await diagnoseIndependently(context);
 
+    // ── Tiền lệ ──
+    // Chạy TRƯỚC bước viết báo cáo và độc lập với nó: đây là 100% code, và khi
+    // case mới chưa có điều tra gì thì nó là nguồn duy nhất để D1/D3/D5/D7 dựa
+    // vào thay vì nói chung chung.
+    //
+    // Hỏng thì đi tiếp với danh sách rỗng — mất phần gợi ý theo tiền lệ vẫn còn
+    // cả báo cáo, đổi cả lượt phân tích lấy một sự cố truy vấn là quá đắt.
+    let precedents: Precedent[] = [];
+    try {
+        const found = await findPrecedents(context);
+        precedents = found.precedents;
+        LOG.info(
+            found.precedents.length
+                ? `Tiền lệ: ${found.precedents.map((p) => `${p.notificationId} ${p.score}/${p.maxScore}`).join(', ')}`
+                : `Không có tiền lệ — ${found.reason}`,
+        );
+    } catch (e: any) {
+        LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
+    }
+
     const { result: rawResult, tokens: analyzeTokens } =
-        await generateReport(context, enrichment, independent);
+        await generateReport(context, enrichment, independent, precedents);
 
     // ── Lưới an toàn ──
-    const { result, repairs } = postProcess(rawResult, context, enrichment, independent);
+    const { result, repairs } = postProcess(rawResult, context, enrichment, independent, precedents);
     if (repairs.length) LOG.warn(`postProcess phải chữa ${repairs.length} chỗ:`, repairs);
 
     const [parseModel, analyzeModel] = await Promise.all([

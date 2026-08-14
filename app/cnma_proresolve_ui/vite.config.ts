@@ -41,6 +41,7 @@ export default defineConfig({
         sourcemap: false,
     },
     server: {
+        port: 5544,
         proxy: {
             '/odata': {
                 target: 'http://127.0.0.1:4004',

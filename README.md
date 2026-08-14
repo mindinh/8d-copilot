@@ -29,10 +29,10 @@ npm run deploy:sqlite
 ```
 
 ### 4. Run Full-Stack Locally
-Run the combined CAP Backend (`http://localhost:4004`) and React Frontend (`http://localhost:5173`):
+Run the combined CAP Backend (`http://localhost:4004`) and React Frontend (`http://localhost:5544`):
 
 ```bash
-# Recommended (cleans old port bindings on 4004 & 5173, then starts dev servers)
+# Recommended (cleans old port bindings on 4004 & 5544, then starts dev servers)
 npm run dev:all
 ```
 
@@ -42,7 +42,7 @@ npm run dev
 ```
 
 #### Development URLs & Login Info:
-- **React Frontend**: `http://localhost:5173`
+- **React Frontend**: `http://localhost:5544`
 - **CAP Backend Service**: `http://localhost:4004`
 - **Local Dev User**: `Local Developer` (Admin role enabled automatically)
 
@@ -52,7 +52,7 @@ npm run dev
 
 | Command | Description |
 |:---|:---|
-| `npm run dev:all` | Auto-cleans ports 4004/5173 & launches Backend + Frontend concurrently |
+| `npm run dev:all` | Auto-cleans ports 4004/5544 & launches Backend + Frontend concurrently |
 | `npm run dev:backend` | Starts only CAP Backend (`cds serve`) |
 | `npm run dev --prefix app/cnma_proresolve_ui` | Starts only React Frontend (`vite`) |
 | `npm run deploy:sqlite` | Deploys schema to local SQLite database (`sqlite.db`) |

@@ -97,6 +97,15 @@ export interface CaseContext {
     product: {
         materialId: string;
         materialDesc: string;
+        /**
+         * Nhóm vật tư (MATKL của SAP). Dùng cho tiêu chí "cùng họ vật tư: +1"
+         * khi tìm tiền lệ.
+         *
+         * Chuỗi rỗng khi nguồn không khai nhóm — khi đó tiêu chí đó không bao
+         * giờ ăn điểm. Cố ý không suy ra từ tiền tố mã vật tư: `MAT-10247` và
+         * `MAT-10318` giống nhau bốn ký tự đầu mà chẳng liên quan gì nhau.
+         */
+        materialGroup: string;
         batchId: string;
         defectCode: string;
         defectText: string;

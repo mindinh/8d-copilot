@@ -184,4 +184,19 @@ export function initEmbeddings(): void {
   console.log(`[ai/llmClient] Embedding: "${active.model}" (${active.dim} chiều)`);
 }
 
+/**
+ * Model embedding đang có hiệu lực.
+ *
+ * Phải ghi kèm MỖI vector: vector của hai model khác nhau không so sánh được, và
+ * nếu không lưu lại thì sau này không có cách nào biết vector nào sinh bằng gì.
+ */
+export function currentEmbeddingModel(): string {
+  return getEmbeddingSettings().model;
+}
+
+/** Số chiều đang có hiệu lực — dùng để chặn ghi vector sai kích thước. */
+export function currentEmbeddingDim(): number {
+  return getEmbeddingSettings().dim;
+}
+
 export { resolveModel };

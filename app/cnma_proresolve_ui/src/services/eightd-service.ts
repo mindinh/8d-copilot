@@ -66,6 +66,64 @@ export interface IndependentAnalysis {
     leaks: string[];
 }
 
+/** Một tiêu chí đã chấm, kèm lý do ăn hay không ăn điểm. */
+export interface PrecedentBreakdown {
+    criterionKey: string;
+    label: string;
+    level: 'exact' | 'fallback' | 'none';
+    matchedOn: string | null;
+    points: number;
+    maxPoints: number;
+}
+
+export interface PrecedentTeamMember {
+    partnerId: string;
+    partnerName: string;
+    functionTitle: string;
+    partnerRole: string;
+}
+
+export interface PrecedentAction {
+    lineNo: number;
+    actionType: string;
+    actionText: string;
+    status: string;
+}
+
+export interface Precedent {
+    notificationId: string;
+    score: number;
+    maxScore: number;
+    breakdown: PrecedentBreakdown[];
+    explanation: string;
+    symptomShortText: string | null;
+    sapStatus: string | null;
+    completionDate: string | null;
+    quantityExtent: string | null;
+    workCenterId: string | null;
+    workCenterDesc: string | null;
+    defectCode: string | null;
+    defectText: string | null;
+    materialId: string | null;
+    materialDesc: string | null;
+    rootCauseCategory: string | null;
+    copqEur: number | null;
+    fmeaId: string | null;
+    team: PrecedentTeamMember[];
+    actions: PrecedentAction[];
+}
+
+export interface PrecedentResult {
+    precedents: Precedent[];
+    /** Vì sao rỗng. Null khi có tiền lệ. */
+    reason: string | null;
+    maxScore: number;
+    settings: { minScore: number; topN: number; closedOnly: boolean };
+    libraryCount: number;
+    candidatesScored: number;
+    semanticUsed: boolean;
+}
+
 export interface Report8D {
     ID: string;
     notificationId: string;
@@ -119,6 +177,7 @@ const LIST_COLUMNS = [
     'ID', 'notificationId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
     'workCenterId', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
     'tokensUsed', 'durationMs', 'errorMessage',
+    'aiModelParse', 'aiModelAnalyze',
     // Cột chẩn đoán độc lập — nhẹ, và là thứ đáng nhìn nhất ở trang danh sách.
     'aiRootCause', 'aiAgreesWithRecord', 'aiConfidence',
 ];
@@ -189,6 +248,20 @@ class EightDService extends BaseODataService<Report8D> {
             { reportID },
         );
         return res.data.value;
+    }
+
+    /**
+     * Case tiền lệ của một report, kèm điểm và diễn giải từng tiêu chí.
+     *
+     * Gọi được ngay khi report vừa tạo — nó chỉ cần `caseContext`, không chờ AI.
+     * Nhờ vậy panel tiền lệ hiện trong khoảng 2 giây trong khi báo cáo còn đang
+     * chạy 100 giây ở nền.
+     */
+    async findPrecedents(reportID: string): Promise<PrecedentResult> {
+        const res = await axiosInstance.get<{ value: string }>(
+            `${this.serviceName}/findPrecedents(reportID='${encodeURIComponent(reportID)}')`,
+        );
+        return JSON.parse(res.data.value) as PrecedentResult;
     }
 }
 

@@ -15,7 +15,7 @@
  * lại true là dấu hiệu model đang bịa.
  */
 
-import type { CaseContext } from './types';
+import { DISCIPLINE_CODES, DISCIPLINE_TITLES, type CaseContext, type DisciplineCode } from './types';
 import type { ContextEnrichment } from './schemas';
 import type { IndependentAnalysis } from './independentAnalysis';
 
@@ -91,7 +91,96 @@ export function buildEnrichmentPrompt(raw: unknown, context: CaseContext): strin
 // Bước 2 — sinh báo cáo 8D
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const EIGHT_D_SYSTEM_PROMPT = `
+/**
+ * Hướng dẫn riêng cho từng discipline — phần DUY NHẤT của prompt sinh báo cáo
+ * mà admin sửa được trên UI.
+ *
+ * ── Vì sao tách ra khỏi phần còn lại ──
+ * Phần luật ở trên (grounding, sources, honesty về gaps, D6 luôn dataBacked =
+ * false) là thứ giữ cho model không bịa. Cho sửa nó trên UI nghĩa là cho phép
+ * tắt cơ chế chống bịa bằng vài cú gõ, và không ai đọc lại diff.
+ *
+ * Còn "D4 nên nhấn cái gì", "D8 nên tóm tắt thế nào" thì là quyết định nghiệp vụ
+ * và thay đổi theo nhà máy. Đó mới là phần đáng đưa vào DB.
+ *
+ * Text ở đây được seed thẳng vào bảng `StepPrompts` để admin nhìn thấy và sửa
+ * từ bản đang chạy, thay vì phải đi tìm trong code rồi chép sang.
+ */
+export const DEFAULT_DISCIPLINE_GUIDE: Record<DisciplineCode, string> = {
+    D1: `Name the leader and members with their functions. Explain in one or two
+    sentences why this mix of skills suits this specific defect.
+
+    When no team is recorded on this case, do NOT fall back to generic job
+    titles. Propose the actual people from the precedent teams, by name and
+    function, and say how many of the precedent cases each one worked. Rank them
+    by that count. Cite precedents#N for each name. If there are no precedents,
+    say a team must be assigned manually — that is the honest answer, and it is
+    better than a plausible list of invented roles.`,
+
+    D2: `Write 5W2H: what, where, when, who, why it matters, how, how many. Quantify
+    with measured vs specification values and the extent affected. Use the
+    Is / Is-Not comparison to bound the problem — state explicitly what the
+    defect is NOT, since that is what narrows the cause.`,
+
+    D3: `Report the containment actions on record with their status. Explain what
+    each one protects and what residual exposure remains. If the case is a
+    customer complaint, address material already at the customer.
+
+    When nothing is on record, propose what the precedents actually contained —
+    quote the action, name the case it came from, and adapt the batch and
+    quantity to this case. Cite precedents#N.`,
+
+    D4: `The most important discipline. Walk the 5-Why chain step by step, citing the
+    evidence at each step. Then state the confirmed Ishikawa category and why
+    the other five categories were ruled out — the CaseContext gives you a row
+    for each of the six. Distinguish the technical root cause from the systemic
+    one where the chain reveals both.
+
+    You are also given INDEPENDENT DIAGNOSIS: a conclusion reached by a separate
+    analysis that saw ONLY the raw evidence, with the recorded 5-Why chain, the
+    root cause flag, the corrective actions and the FMEA link all withheld.
+
+    Close D4 with a short paragraph headed "Independent verification":
+      - When it agrees with the recorded root cause, say so and note that the
+        conclusion was reached from the evidence alone, without access to the
+        recorded answer. That is corroboration, so state it plainly and briefly.
+      - When it disagrees, say so openly. Report which branch it chose and its
+        reasoning, then weigh that against the recorded conclusion. Do not
+        silently side with the recorded answer because it is the recorded
+        answer — if the independent reasoning is better supported by the
+        measurements, say that.
+      - Mention its confidence and any evidence gaps it flagged.
+    Cite "independent" in this discipline's sources.
+
+    When this case has no 5-Why chain of its own, the precedents' confirmed root
+    causes are the strongest leads available. List them with the case they come
+    from, and for each one name the single piece of evidence that would confirm
+    or kill it here. Keep them clearly marked as hypotheses to check — a
+    precedent's root cause is a finding about ANOTHER case. Cite precedents#N.`,
+
+    D5: `Report the corrective actions on record. For each, state explicitly which
+    step of the D4 chain it addresses. Flag any part of the root cause that no
+    corrective action currently covers.
+
+    When nothing is on record, propose the precedents' corrective actions and
+    tie each to the hypothesis it would fix. Cite precedents#N.`,
+
+    D6: `No data. Write the verification plan as described in rule 4.`,
+
+    D7: `Report the preventive actions on record and how the FMEA entry should be
+    updated. Where the dataset has no preventive action or no FMEA link, say so
+    and propose what a systemic fix would need to cover.
+
+    Precedents are especially useful here: a preventive action that already
+    worked on the same line is worth more than a new proposal. Name the FMEA
+    entries the precedents link to. Cite precedents#N.`,
+
+    D8: `Summarise lessons learned, both what worked and what did not. Recognise the
+    team by name. State what remains open if the case is not yet closed.`,
+};
+
+/** Khung prompt sinh báo cáo. `{{DISCIPLINE_GUIDE}}` được thay lúc chạy. */
+const EIGHT_D_RULES = `
 You are a senior quality engineer writing an 8D report for an SAP QM defect case.
 
 You receive a CaseContext of VERIFIED FACTS extracted from the quality system,
@@ -144,62 +233,33 @@ job is to write the 8D narrative. It is not to discover new facts.
    facts. 0.5 to 0.7 when you had to reason across gaps. Below 0.5 when you are
    largely proposing rather than reporting.
 
+6. PRECEDENT CASES. You may be given closed cases scored as similar to this one,
+   each with the score that earned it a place and why. They are the strongest
+   material you have when THIS case has no investigation of its own yet.
+
+   Use them, and use them explicitly:
+     - D1  When no team is recorded, propose the people who actually served on
+           the precedent teams, by name and function. Say how many of the
+           precedent cases each person worked. Never invent a name that is not
+           in a precedent team.
+     - D3  When no containment action is recorded, propose what the precedent
+           contained, and say which case it came from.
+     - D5  Same for corrective actions, D7 for preventive actions and FMEA.
+     - D4  A precedent's confirmed root cause is a HYPOTHESIS for this case, not
+           a finding. Say plainly that it is a lead to check, and name what
+           evidence would confirm or kill it.
+
+   Cite them as precedents#1, precedents#2 — numbered as given, best first.
+   A precedent is evidence about ANOTHER case. Borrowing its conclusion without
+   saying where it came from is the worst failure mode available to you: it
+   reads as a finding about this case and nobody can tell it apart.
+
+   No precedents given means none scored high enough. Do not invent one, and do
+   not treat a low-scoring case as if it qualified.
+
 ## DISCIPLINE GUIDE
 
-D1  Establish the Team
-    Name the leader and members with their functions. Explain in one or two
-    sentences why this mix of skills suits this specific defect.
-
-D2  Describe the Problem
-    Write 5W2H: what, where, when, who, why it matters, how, how many. Quantify
-    with measured vs specification values and the extent affected. Use the
-    Is / Is-Not comparison to bound the problem — state explicitly what the
-    defect is NOT, since that is what narrows the cause.
-
-D3  Interim Containment Actions
-    Report the containment actions on record with their status. Explain what
-    each one protects and what residual exposure remains. If the case is a
-    customer complaint, address material already at the customer.
-
-D4  Root Cause Analysis
-    The most important discipline. Walk the 5-Why chain step by step, citing the
-    evidence at each step. Then state the confirmed Ishikawa category and why
-    the other five categories were ruled out — the CaseContext gives you a row
-    for each of the six. Distinguish the technical root cause from the systemic
-    one where the chain reveals both.
-
-    You are also given INDEPENDENT DIAGNOSIS: a conclusion reached by a separate
-    analysis that saw ONLY the raw evidence, with the recorded 5-Why chain, the
-    root cause flag, the corrective actions and the FMEA link all withheld.
-
-    Close D4 with a short paragraph headed "Independent verification":
-      - When it agrees with the recorded root cause, say so and note that the
-        conclusion was reached from the evidence alone, without access to the
-        recorded answer. That is corroboration, so state it plainly and briefly.
-      - When it disagrees, say so openly. Report which branch it chose and its
-        reasoning, then weigh that against the recorded conclusion. Do not
-        silently side with the recorded answer because it is the recorded
-        answer — if the independent reasoning is better supported by the
-        measurements, say that.
-      - Mention its confidence and any evidence gaps it flagged.
-    Cite "independent" in this discipline's sources.
-
-D5  Permanent Corrective Actions
-    Report the corrective actions on record. For each, state explicitly which
-    step of the D4 chain it addresses. Flag any part of the root cause that no
-    corrective action currently covers.
-
-D6  Verify Effectiveness
-    No data. Write the verification plan as described in rule 4.
-
-D7  Prevent Recurrence
-    Report the preventive actions on record and how the FMEA entry should be
-    updated. Where the dataset has no preventive action or no FMEA link, say so
-    and propose what a systemic fix would need to cover.
-
-D8  Closure and Recognition
-    Summarise lessons learned, both what worked and what did not. Recognise the
-    team by name. State what remains open if the case is not yet closed.
+{{DISCIPLINE_GUIDE}}
 
 ## STYLE
 
@@ -223,10 +283,83 @@ D8  Closure and Recognition
 Output valid JSON matching the schema. No prose outside the JSON.
 `.trim();
 
+/**
+ * Ghép prompt hệ thống cho bước sinh báo cáo.
+ *
+ * @param overrides Hướng dẫn từng bước lấy từ bảng `StepPrompts`. Bước nào không
+ *                  có (hoặc để trống, hoặc bị tắt) thì rơi về
+ *                  `DEFAULT_DISCIPLINE_GUIDE` — nên một bảng rỗng cho ra ĐÚNG
+ *                  prompt như trước khi có tính năng này.
+ */
+export function buildEightDSystemPrompt(
+    overrides?: Partial<Record<DisciplineCode, string>>,
+): string {
+    const guide = DISCIPLINE_CODES.map((code) => {
+        const body = (overrides?.[code] ?? '').trim() || DEFAULT_DISCIPLINE_GUIDE[code];
+        // Thụt lề đúng như bản viết tay để model đọc được ranh giới giữa các bước.
+        const indented = body.split('\n').map((l) => (l.trim() ? `    ${l.trim()}` : '')).join('\n');
+        return `${code}  ${DISCIPLINE_TITLES[code]}\n${indented}`;
+    }).join('\n\n');
+
+    return EIGHT_D_RULES.replace('{{DISCIPLINE_GUIDE}}', guide);
+}
+
+export interface PromptPrecedent {
+    notificationId: string;
+    score: number;
+    maxScore: number;
+    explanation: string;
+    sapStatus: string | null;
+    symptomShortText: string | null;
+    defectText: string | null;
+    workCenterDesc: string | null;
+    materialDesc: string | null;
+    rootCauseCategory: string | null;
+    copqEur: number | null;
+    fmeaId: string | null;
+    team: Array<{ partnerName: string; functionTitle: string; partnerRole: string }>;
+    actions: Array<{ actionType: string; actionText: string; status: string }>;
+}
+
+/**
+ * Rút gọn tiền lệ trước khi đưa vào prompt.
+ *
+ * Bỏ `searchText`, `embedding`, `sourcePayload` — vector 1536 số không nói gì
+ * với model mà chiếm hàng chục nghìn token, và `sourcePayload` là bản sao của
+ * những gì đã có ở các trường trên.
+ */
+function renderPrecedents(precedents: PromptPrecedent[]): string {
+    if (!precedents.length) {
+        return 'None. No closed case scored high enough against this one.\n'
+            + 'Do not borrow from a case that is not listed here.';
+    }
+    return precedents.map((p, i) => {
+        const team = p.team.length
+            ? p.team.map((t) => `${t.partnerName} (${t.functionTitle}${t.partnerRole?.includes('Leader') ? ', led the team' : ''})`).join('; ')
+            : 'not recorded';
+        const actions = p.actions.length
+            ? p.actions.map((a) => `      ${a.actionType}: ${a.actionText} [${a.status}]`).join('\n')
+            : '      none recorded';
+        return [
+            `precedents#${i + 1}  ${p.notificationId}  —  ${p.explanation}`,
+            `      status: ${p.sapStatus ?? '—'}`,
+            `      symptom: ${p.symptomShortText ?? '—'}`,
+            `      defect: ${p.defectText ?? '—'} at ${p.workCenterDesc ?? '—'} on ${p.materialDesc ?? '—'}`,
+            `      confirmed root cause: ${p.rootCauseCategory ?? 'not recorded'}`,
+            `      cost of poor quality: ${p.copqEur == null ? '—' : `EUR ${p.copqEur}`}`,
+            `      FMEA: ${p.fmeaId ?? 'none'}`,
+            `      team: ${team}`,
+            '      actions:',
+            actions,
+        ].join('\n');
+    }).join('\n\n');
+}
+
 export function buildEightDPrompt(
     context: CaseContext,
     enrichment: ContextEnrichment,
     independent: IndependentAnalysis,
+    precedents: PromptPrecedent[] = [],
 ): string {
     const gapNotice = context.gaps.length
         ? [
@@ -266,5 +399,10 @@ export function buildEightDPrompt(
         '```json',
         JSON.stringify(independent.finding),
         '```',
+        '',
+        '## PRECEDENT CASES',
+        'Closed cases scored as similar to this one, best match first. See rule 6.',
+        '',
+        renderPrecedents(precedents),
     ].join('\n');
 }

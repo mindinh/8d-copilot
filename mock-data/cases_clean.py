@@ -22,9 +22,10 @@ ISHIKAWA_ORDER = ["Man", "Machine", "Method", "Material", "Measurement", "Enviro
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048577 = {
     "notification_id": "8D-10048577",
-    "material": {"material_id": "MAT-10318", "description": "Pump Housing P90"},
+    "material": {"material_id": "MAT-10318", "description": "Pump Housing P90",
+                 "material_group": "MG-HOUSING"},
     "batch": {"batch_id": "B-50231"},
-    "defect": {"defect_code": "DEF-0512", "defect_text": "Porosity in sealing surface"},
+    "defect": {"defect_code": "DEF-0512", "defect_text": "Porosity at sealing flange face"},
     "work_center": {"work_center_id": "WC-CAST-03", "description": "Aluminium Die Casting Line 3"},
     "header": {
         "symptom_short_text": "Coolant leak at sealing surface reported by customer",
@@ -115,7 +116,8 @@ CASE_10048577 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048603 = {
     "notification_id": "8D-10048603",
-    "material": {"material_id": "MAT-10402", "description": "Drive Shaft S150"},
+    "material": {"material_id": "MAT-10402", "description": "Drive Shaft S150",
+                 "material_group": "MG-SHAFT"},
     "batch": {"batch_id": "B-51044"},
     "defect": {"defect_code": "DEF-0377", "defect_text": "Shaft diameter below lower tolerance"},
     "work_center": {"work_center_id": "WC-TURN-02", "description": "CNC Turning Cell 2"},
@@ -219,7 +221,8 @@ CASE_10048603 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048651 = {
     "notification_id": "8D-10048651",
-    "material": {"material_id": "MAT-10555", "description": "Housing Cover C80"},
+    "material": {"material_id": "MAT-10555", "description": "Housing Cover C80",
+                 "material_group": "MG-HOUSING"},
     "batch": {"batch_id": "B-51890"},
     "defect": {"defect_code": "DEF-0601", "defect_text": "Coating layer peeling"},
     "work_center": {"work_center_id": "WC-COAT-05", "description": "Powder Coating Line 5"},
@@ -311,7 +314,8 @@ CASE_10048651 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048702 = {
     "notification_id": "8D-10048702",
-    "material": {"material_id": "MAT-10611", "description": "Gearbox End Cap G45"},
+    "material": {"material_id": "MAT-10611", "description": "Gearbox End Cap G45",
+                 "material_group": "MG-GEARBOX"},
     "batch": {"batch_id": "B-52310"},
     "defect": {"defect_code": "DEF-0723", "defect_text": "Bolt torque below specification"},
     "work_center": {"work_center_id": "WC-ASSY-08", "description": "Gearbox Assembly Line 8"},
@@ -396,7 +400,8 @@ CASE_10048702 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048745 = {
     "notification_id": "8D-10048745",
-    "material": {"material_id": "MAT-10744", "description": "Sensor Mount Bracket S22"},
+    "material": {"material_id": "MAT-10744", "description": "Sensor Mount Bracket S22",
+                 "material_group": "MG-BRACKET"},
     "batch": {"batch_id": "B-52688"},
     "defect": {"defect_code": "DEF-0810", "defect_text": "Adhesive bond failure"},
     "work_center": {"work_center_id": "WC-BOND-02", "description": "Structural Bonding Cell 2"},
@@ -488,7 +493,8 @@ CASE_10048745 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048788 = {
     "notification_id": "8D-10048788",
-    "material": {"material_id": "MAT-10820", "description": "Rotor Shaft R60"},
+    "material": {"material_id": "MAT-10820", "description": "Rotor Shaft R60",
+                 "material_group": "MG-SHAFT"},
     "batch": {"batch_id": "B-53001"},
     "defect": {"defect_code": "DEF-0902", "defect_text": "Chatter marks on ground surface"},
     "work_center": {"work_center_id": "WC-GRIND-04", "description": "Cylindrical Grinding Cell 4"},
@@ -569,10 +575,11 @@ CASE_10048788 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048811 = {
     "notification_id": "8D-10048811",
-    "material": {"material_id": "MAT-10905", "description": "Manifold Block M12"},
+    "material": {"material_id": "MAT-10905", "description": "Manifold Block M12",
+                 "material_group": "MG-HOUSING"},
     "batch": {"batch_id": "B-53344"},
     "defect": {"defect_code": "DEF-1015", "defect_text": "Port thread depth insufficient"},
-    "work_center": {"work_center_id": "WC-DRILL-06", "description": "Multi-Spindle Drilling Line 6"},
+    "work_center": {"work_center_id": "WC-MILL-07", "description": "CNC Milling Line 7"},
     "header": {
         "symptom_short_text": "Fittings bottoming out in customer assembly",
         "team_size": 3,
@@ -608,7 +615,7 @@ CASE_10048811 = {
          "evidence_citation": "Inspection lot QALS/QAMR"},
         {"step_no": 2, "question": "Why was the thread only 9.2mm deep?",
          "answer": "The NC program drills to the 9.5mm depth carried on drawing DOC-9930 Rev D",
-         "evidence_citation": "NC program archive WC-DRILL-06"},
+         "evidence_citation": "NC program archive WC-MILL-07"},
         {"step_no": 3, "question": "Why does the drawing still show 9.5mm after the port change?",
          "answer": "The 2026-05 design change to a deeper fitting updated the fitting callout but not the port depth dimension",
          "evidence_citation": "DMS revision history DOC-9930"},
@@ -659,7 +666,8 @@ CASE_10048811 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048834 = {
     "notification_id": "8D-10048834",
-    "material": {"material_id": "MAT-11002", "description": "Spring Retainer SR8"},
+    "material": {"material_id": "MAT-11002", "description": "Spring Retainer SR8",
+                 "material_group": "MG-SPRING"},
     "batch": {"batch_id": "B-53700"},
     "defect": {"defect_code": "DEF-1120", "defect_text": "Retainer cracking during forming"},
     "work_center": {"work_center_id": "WC-PRESS-09", "description": "Progressive Press Line 9"},
@@ -744,7 +752,8 @@ CASE_10048834 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048857 = {
     "notification_id": "8D-10048857",
-    "material": {"material_id": "MAT-11130", "description": "Bearing Cap BC14"},
+    "material": {"material_id": "MAT-11130", "description": "Bearing Cap BC14",
+                 "material_group": "MG-HOUSING"},
     "batch": {"batch_id": "B-54012"},
     "defect": {"defect_code": "DEF-1233", "defect_text": "Bore position out of true position"},
     "work_center": {"work_center_id": "WC-MILL-11", "description": "CNC Milling Line 11"},
@@ -838,12 +847,13 @@ CASE_10048857 = {
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048880 = {
     "notification_id": "8D-10048880",
-    "material": {"material_id": "MAT-11244", "description": "Valve Body V30"},
+    "material": {"material_id": "MAT-10247", "description": "Bracket Housing X240",
+                 "material_group": "MG-HOUSING"},
     "batch": {"batch_id": "B-54390"},
     "defect": {"defect_code": "DEF-1340", "defect_text": "Pocket depth inconsistent across units"},
-    "work_center": {"work_center_id": "WC-MILL-14", "description": "CNC Milling Line 14"},
+    "work_center": {"work_center_id": "WC-MILL-07", "description": "CNC Milling Line 7"},
     "header": {
-        "symptom_short_text": "Valve body pocket depth varying unit to unit",
+        "symptom_short_text": "Bracket housing pocket depth varying unit to unit",
         "team_size": 3,
         "origin": "Q3 - Internal Defect",
         "customer_facing_summary": None,
@@ -877,16 +887,16 @@ CASE_10048880 = {
          "evidence_citation": "Inspection lot QALS/QAMR"},
         {"step_no": 2, "question": "Why was the depth wrong and inconsistent? (root cause)",
          "answer": "The operator is believed to have loaded a superseded NC program at shift start",
-         "evidence_citation": "Shift handover note WC-MILL-14"},
+         "evidence_citation": "Shift handover note WC-MILL-07"},
     ],
     "is_is_not": {
-        "is_where_when_it_happens": "V30 pockets milled on WC-MILL-14 across all three shifts from 2026-07-17",
-        "is_not_where_when_it_doesnt": "V30 milled on WC-MILL-09 - same program revision, same castings, same operators rotating through",
-        "notes": "Defect appears on every shift at WC-MILL-14, not only on Shift C",
+        "is_where_when_it_happens": "X240 pockets milled on WC-MILL-07 across all three shifts from 2026-07-17",
+        "is_not_where_when_it_doesnt": "X240 milled on WC-MILL-09 - same program revision, same castings, same operators rotating through",
+        "notes": "Defect appears on every shift at WC-MILL-07, not only on Shift C",
     },
     "actions": [
         {"line_no": 1, "action_type": "Containment", "status": "Done",
-         "action_text": "Quarantine batch B-54390 and gauge pocket depth on 100% of V30 stock"},
+         "action_text": "Quarantine batch B-54390 and gauge pocket depth on 100% of X240 stock"},
         {"line_no": 2, "action_type": "Corrective", "status": "Done",
          "action_text": "Retrain Shift C operators on NC program selection and re-issue the setup sheet"},
         {"line_no": 3, "action_type": "Preventive", "status": "Planned",
@@ -925,10 +935,111 @@ CASE_10048880 = {
 #
 # Đây là kiểu sai lầm rất người: kết luận dựa trên số đo mà không kiểm chứng hệ
 # đo trước.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Case 13 — Q3 Internal Defect · root cause MACHINE · Closed
+#
+# CỐ Ý không trùng bất kỳ khoá nào với 8D-10048412: khác work center, khác vật
+# tư, khác nhóm vật tư, khác mã lỗi, và mô tả lỗi không dùng chung một từ nào.
+# Chấm theo luật ra đúng 0 điểm.
+#
+# Nhưng nội dung thì cùng một kiểu hỏng: dao mòn quá tuổi để lại kim loại thừa
+# trên mép, phát hiện muộn vì chỉ kiểm ở công đoạn cuối. Đây là phép thử cho
+# tiêu chí ngữ nghĩa — nếu nó không kéo được case này lên thì vector search
+# không đem lại gì.
+# ─────────────────────────────────────────────────────────────────────────────
+CASE_10048420 = {
+    "notification_id": "8D-10048420",
+    "material": {"material_id": "MAT-11500", "description": "Sprocket Hub H22",
+                 "material_group": "MG-DRIVE"},
+    "batch": {"batch_id": "B-49688"},
+    "defect": {"defect_code": "DEF-1610", "defect_text": "Raised metal ridge at bore mouth"},
+    "work_center": {"work_center_id": "WC-BROACH-01", "description": "Broaching Line 1"},
+    "header": {
+        "symptom_short_text": "Assembly fitters cut their hands on hub bores",
+        "team_size": 3,
+        "origin": "Q3 - Internal Defect",
+        "customer_facing_summary": None,
+        "internal_facing_summary": None,
+        "status": "Closed",
+        "completion_date": "2026-07-19",
+        "found_date": "2026-06-28",
+        "quantity_extent": "74 units affected",
+    },
+    "inspections": [
+        {"characteristic": "Ridge height at bore mouth", "measured_value": "0.28mm", "spec_value": "max 0.05mm"},
+        {"characteristic": "Bore mouth radius", "measured_value": "0.02mm", "spec_value": "0.20-0.40mm"},
+    ],
+    "causes_ishikawa": [
+        {"category": "Man", "description": "EMP-3301, Shift A - ran the standard cycle, no deviation logged",
+         "metric_value": None, "is_root_cause": "N", "source": "ASSUMED: MES/HR"},
+        {"category": "Machine", "description": "EQ-BROACH01-002, broach tool ran 41,200 strokes against a 30,000 stroke replacement limit; cutting edges rounded and pushed material instead of shearing it",
+         "metric_value": "41,200 of 30,000 strokes", "is_root_cause": "Y", "source": "SAP: EQUI/AFIH (PM)"},
+        {"category": "Method", "description": "DOC-7740 Rev C - broaching instruction current, cycle parameters unchanged",
+         "metric_value": None, "is_root_cause": "N", "source": "SAP: DRAW/PLPO (DMS+Routing)"},
+        {"category": "Material", "description": "Forging cert PASS, hardness 198 HB within band",
+         "metric_value": "198 HB", "is_root_cause": "N", "source": "SAP: QALS/QAMR (incoming)"},
+        {"category": "Measurement", "description": "PG-0142, last cal 2026-05-22, R&R 6.8%",
+         "metric_value": "6.8%", "is_root_cause": "N", "source": "SAP: Test Equipment Mgmt"},
+        {"category": "Environment", "description": "21.8C at 07:40 (illustrative)",
+         "metric_value": None, "is_root_cause": "N", "source": "ASSUMED: MES/IoT"},
+    ],
+    "five_why_chain": [
+        {"step_no": 1,
+         "question": "Why is there a raised metal ridge at the bore mouth?",
+         "answer": "Ridge measured 0.28mm against a 0.05mm maximum - the broach pushed material up instead of shearing it off",
+         "evidence_citation": "Inspection lot QALS/QAMR"},
+        {"step_no": 2,
+         "question": "Why did the broach push material instead of shearing it?",
+         "answer": "Its cutting edges were rounded from wear after 41,200 strokes against a 30,000 stroke replacement limit",
+         "evidence_citation": "Equipment maintenance log EQ-BROACH01-002"},
+        {"step_no": 3,
+         "question": "Why was a worn broach still in the machine? (root cause)",
+         "answer": "Broach life is tracked on a paper tally at the machine and nobody owns it, so the replacement point passed unnoticed",
+         "evidence_citation": "PM plan EQ-BROACH01-002"},
+    ],
+    "is_is_not": {
+        "is_where_when_it_happens": "H22 hub bores - WC-BROACH-01 - parts broached after the tool passed 30,000 strokes on 2026-06-21",
+        "is_not_where_when_it_doesnt": "H18 hubs on WC-BROACH-02 - same part family, tool replaced on schedule",
+        "notes": "Defect starts at the stroke count overrun, not at a batch or shift change",
+    },
+    "actions": [
+        {"line_no": 1, "action_type": "Containment",
+         "action_text": "Quarantine batch B-49688 and inspect the bore mouth of all H22 hubs in WIP and finished stock",
+         "status": "Done"},
+        {"line_no": 2, "action_type": "Corrective",
+         "action_text": "Replace the worn broach on EQ-BROACH01-002 and deburr the 74 affected hubs",
+         "status": "Verified"},
+        {"line_no": 3, "action_type": "Preventive",
+         "action_text": "Move broach stroke counting into the PM system with an automatic work order at 90% of tool life, so replacement no longer depends on a paper tally",
+         "status": "Verified in production"},
+    ],
+    "fmea_link": {"fmea_id": "FMEA-BROACH01-02", "description": "Broach tool wear"},
+    "cost_copq": 8600,
+    "lessons_learned": {
+        "what_worked": "Stroke count from the PM log pinned the start date within one shift",
+        "what_didnt": "Tool life was tracked on paper at the machine, so nobody saw the limit go by",
+    },
+    "customer_reference": {
+        "complaint_reference": "N/A - internal defect, no customer reference",
+        "customer_plant_contact": "N/A",
+        "sla_response_due": "N/A",
+    },
+    "team_assignments": [
+        {"partner_id": "BP-100014", "partner_name": "Karl Wagner", "function_title": "Maintenance Planner",
+         "partner_role": "8D Team Leader", "source": "Backfilled from case record"},
+        {"partner_id": "BP-100012", "partner_name": "Minh Dinh", "function_title": "Production Engineer",
+         "partner_role": "8D Team Member", "source": "Backfilled from case record"},
+        {"partner_id": "BP-100061", "partner_name": "Anh Pham", "function_title": "Tooling Engineer",
+         "partner_role": "8D Team Member", "source": "Backfilled from case record"},
+    ],
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 CASE_10048903 = {
     "notification_id": "8D-10048903",
-    "material": {"material_id": "MAT-11388", "description": "Trim Panel T18"},
+    "material": {"material_id": "MAT-11388", "description": "Trim Panel T18",
+                 "material_group": "MG-TRIM"},
     "batch": {"batch_id": "B-54720"},
     "defect": {"defect_code": "DEF-1455", "defect_text": "Paint gloss out of specification"},
     "work_center": {"work_center_id": "WC-PAINT-03", "description": "Topcoat Booth 3"},
@@ -1013,7 +1124,7 @@ CASE_10048903 = {
 
 
 ALL_CASES = [
-    CASE_10048577, CASE_10048603, CASE_10048651,
+    CASE_10048420, CASE_10048577, CASE_10048603, CASE_10048651,
     CASE_10048702, CASE_10048745, CASE_10048788, CASE_10048811,
     CASE_10048834, CASE_10048857, CASE_10048880, CASE_10048903,
 ]

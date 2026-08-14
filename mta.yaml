@@ -10,7 +10,10 @@ build-parameters:
     - builder: custom
       commands:
         - npm install
-        - npx cds build --production
+        # `npm run build` chứ không phải `cds build` trực tiếp: bước
+        # bundle:library phải chạy trước để gói case sạch vào
+        # srv/data/case-library/, nơi app đọc lúc khởi động để tự nạp kho.
+        - npm run build
 
 modules:
   # --------------------- SERVER MODULE ---------------------
@@ -38,6 +41,12 @@ modules:
     requires:
       - name: cnma_proresolve_db
       - name: cnma_proresolve_xsuaa
+      # CDK đọc destination `AICORE` qua VCAP_SERVICES.destination của CHÍNH app
+      # này. Không bind ở đây thì nó rơi về credential trong biến môi trường,
+      # mà trên CF không có, nên mọi lời gọi model hỏng:
+      #     Destination service not bound. Run with --profile hybrid…
+      # Bind cho approuter là chưa đủ — approuter không gọi model.
+      - name: cnma_proresolve_destination
 
   # ------------------- DATABASE DEPLOYER -------------------
   - name: cnma_proresolve_db_deployer
@@ -51,6 +60,12 @@ modules:
       ignore:
         - node_modules
         - default-env.json
+        # HDI cố dịch MỌI file trong `src/` thành một artifact. `.gitkeep` là
+        # file giữ chỗ cho git, không có plugin nào nhận nó, nên `hdi-deploy`
+        # dừng cả lượt:
+        #     "src/.gitkeep": could not create a compile unit for the file
+        #     Could not find a ".hdiconfig" file in "src" or in any parent folder
+        - "**/.gitkeep"
     requires:
       - name: cnma_proresolve_db
 
@@ -68,7 +83,14 @@ modules:
         - node_modules
         - default-env.json
     requires:
-      - name: cnma_proresolve_html5_host
+      # Phải là plan `app-runtime`, KHÔNG phải `app-host`.
+      #
+      # `app-host` là nơi CHỨA nội dung UI (module ui_deployer đẩy lên đó);
+      # credential của nó không có `grant_type`, nên approuter crash ngay lúc
+      # khởi động:
+      #     html5-repo-credentials: Missing required property: grant_type
+      # `app-runtime` mới là plan cấp credential để ĐỌC nội dung lúc chạy.
+      - name: cnma_proresolve_html5_runtime
       - name: cnma_proresolve_xsuaa
       - name: cnma_proresolve_destination
       - name: srv-api
@@ -154,11 +176,19 @@ modules:
 
 resources:
   # ------------------ HDI CONTAINER DB ---------------------
+  #
+  # `com.sap.xs.hdi-container` với plan `hdi-shared` là dạng duy nhất chạy được
+  # ở đây. Khai báo cũ là `com.sap.hana.ondemand-service` + plan `hdb`, và
+  # MultiApps từ chối ngay ở bước merge descriptor:
+  #     Unsupported resource type "com.sap.hana.ondemand-service"
+  #     for platform type "CLOUD-FOUNDRY"
+  # Subaccount này cũng chỉ được entitle plan `hdi-shared` (xem `cf marketplace
+  # -e hana`) — `hdb` là plan cấp cả một HANA instance, không phải container.
   - name: cnma_proresolve_db
-    type: com.sap.hana.ondemand-service
+    type: com.sap.xs.hdi-container
     parameters:
       service: hana
-      service-plan: hdb
+      service-plan: hdi-shared
 
   # ----------------------- XSUAA ---------------------------
   - name: cnma_proresolve_xsuaa
@@ -172,15 +202,33 @@ resources:
       service-plan: application
 
   # ----------------- HTML5 APPS REPO HOST ------------------
+  # Nơi CHỨA nội dung UI. `ui_deployer` đẩy bundle lên đây.
   - name: cnma_proresolve_html5_host
     type: org.cloudfoundry.managed-service
     parameters:
       service: html5-apps-repo
       service-plan: app-host
 
+  # ---------------- HTML5 APPS REPO RUNTIME ----------------
+  # Nơi ĐỌC nội dung lúc chạy. Approuter bind vào cái này.
+  # Hai plan là hai vai trò khác nhau, không thay thế cho nhau được.
+  - name: cnma_proresolve_html5_runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-runtime
+
   # ------------------ DESTINATION SERVICE -------------------
   - name: cnma_proresolve_destination
     type: org.cloudfoundry.managed-service
+    # `init_data` bên dưới tham chiếu `~{srv-api/srv-url}`, nên resource này
+    # BẮT BUỘC phải khai phụ thuộc vào `srv-api`. Thiếu nó thì MultiApps dừng ở
+    # bước resolve descriptor:
+    #     Module/Resource "cnma_proresolve_destination" does not contain a
+    #     required dependency for "srv-api", but contains references to its
+    #     properties
+    requires:
+      - name: srv-api
     parameters:
       service: destination
       service-plan: lite
@@ -198,3 +246,7 @@ resources:
                 URL: ~{srv-api/srv-url}
                 HTML5.DynamicDestination: true
                 HTML5.ForwardAuthToken: true
+                # Mặc định của HTML5 runtime là 30 giây, mà `analyzeFromJson`
+                # chạy 60-90 giây. Không nâng thì UI nhận timeout trong khi
+                # pipeline vẫn đang chạy bình thường ở backend.
+                HTML5.Timeout: 600000

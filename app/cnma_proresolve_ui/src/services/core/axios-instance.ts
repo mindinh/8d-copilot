@@ -16,7 +16,7 @@ const axiosInstance: AxiosInstance = axios.create({
     baseURL: '',            // Relative — DO NOT change. Required for WorkZone AppRouter.
     headers: { 'Content-Type': 'application/json' },
     withCredentials: true,  // Required for XSUAA session cookie
-    timeout: 30_000,
+    timeout: 0,             // No timeout — allow AI tasks to run as long as needed
 });
 
 // ── CSRF token cache ──────────────────────────────────────────────────────────

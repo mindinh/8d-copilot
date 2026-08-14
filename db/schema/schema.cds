@@ -18,6 +18,12 @@ using from './ai-settings';
 // ── Mô hình báo cáo 8D ───────────────────────────────────────────────────────
 using from './eight-d';
 
+// ── Kho case lịch sử (nguồn tìm tiền lệ) ─────────────────────────────────────
+using from './case-library';
+
+// ── Cấu hình chấm điểm tương đồng + prompt từng bước D ───────────────────────
+using from './retrieval-config';
+
 // ── Application Entities ──────────────────────────────────────────────────────
 entity SampleEntity : cuid, managed {
     name        : String(255);

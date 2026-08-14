@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Button,
     Dialog,
@@ -15,12 +15,17 @@ import { toast } from 'sonner';
 import { eightDService } from '@/services/eightd-service';
 
 /**
- * Nhận một Golden Dataset JSON rồi xếp lịch phân tích.
+ * Nhận JSON của một case defect rồi xếp lịch phân tích.
  *
  * ── Vì sao validate ở phía client ──
- * Không phải để thay backend — backend vẫn chạy đủ 13 ràng buộc toàn vẹn. Chỉ là
- * lỗi JSON hỏng cú pháp thì bắt ngay tại chỗ rẻ hơn nhiều so với đi một vòng
- * server, và thông báo cũng cụ thể hơn.
+ * Không phải để thay backend — backend mới là nơi quyết định. Chỉ là JSON hỏng
+ * cú pháp hoặc dán nhầm file thì bắt ngay tại chỗ rẻ hơn nhiều so với đi một
+ * vòng server, và thông báo cũng cụ thể hơn.
+ *
+ * ⚠️ Kiểm tra dưới đây phải KHÔNG chặt hơn `extractDeepCase` ở
+ * `srv/src/domain/eightd/caseMapper.ts`. Chặt hơn thì UI từ chối đúng những file
+ * mà backend xử lý được — đó chính là lỗi đã xảy ra khi mock data chuyển sang
+ * Deep Structure còn hàm này vẫn chỉ tìm `data.notifications`.
  */
 
 interface Props {
@@ -30,9 +35,20 @@ interface Props {
     onScheduled: (reportID: string) => void;
 }
 
-/** Kiểm tra nhanh xem chuỗi có phải Golden Dataset không. */
+/**
+ * Bóc lớp bọc của OData (`value: [ … ]`). Export SAP thật luôn có lớp này; file
+ * viết tay thì không, nên phải chịu được cả hai.
+ */
+function unwrapOData(raw: any): any {
+    if (!raw || typeof raw !== 'object' || !('value' in raw)) return raw;
+    if (Array.isArray(raw.value)) return raw.value[0] ?? null;
+    if (raw.value && typeof raw.value === 'object') return raw.value;
+    return raw;
+}
+
+/** Kiểm tra nhanh xem chuỗi có phải một case 8D không, và lấy mã case. */
 function inspect(text: string): { ok: true; caseId: string } | { ok: false; reason: string } {
-    if (!text.trim()) return { ok: false, reason: 'Paste or upload a JSON dataset first.' };
+    if (!text.trim()) return { ok: false, reason: 'Paste or upload a JSON case file first.' };
 
     let parsed: any;
     try {
@@ -41,27 +57,76 @@ function inspect(text: string): { ok: true; caseId: string } | { ok: false; reas
         return { ok: false, reason: `Not valid JSON — ${e.message}` };
     }
 
-    const notifications = parsed?.data?.notifications ?? parsed?.nested_case_view?.notification_id;
-    if (!notifications) {
-        return {
-            ok: false,
-            reason: "This is valid JSON but not a Golden Dataset — no 'data.notifications' block found.",
-        };
+    const obj = unwrapOData(parsed);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+        return { ok: false, reason: 'Expected a JSON object describing one defect case.' };
     }
 
-    const caseId =
-        parsed?.data?.notifications?.[0]?.notification_id ??
-        parsed?.nested_case_view?.notification_id ??
-        'unknown';
+    // Deep Structure Business JSON — định dạng chính hiện nay.
+    const nid = obj.notificationId ?? obj.notification_id ?? obj.notification ?? obj.ID ?? obj.document;
+    if (nid || obj.symptomShortText || obj.symptom_short_text) {
+        return { ok: true, caseId: String(nid ?? 'unknown') };
+    }
 
-    return { ok: true, caseId };
+    // Golden Dataset cũ — vẫn nhận, bộ mock-data/beta còn ở định dạng này.
+    if (Array.isArray(obj.data?.notifications) && obj.data.notifications.length > 0) {
+        return { ok: true, caseId: String(obj.data.notifications[0]?.notification_id ?? 'unknown') };
+    }
+    if (obj.nested_case_view?.notification_id) {
+        return { ok: true, caseId: String(obj.nested_case_view.notification_id) };
+    }
+
+    return {
+        ok: false,
+        reason:
+            'This is valid JSON but not a defect case — expected a top-level "notificationId", ' +
+            'or a "data.notifications" block.',
+    };
+}
+
+/**
+ * Sự vụ mẫu gói theo bundle UI.
+ *
+ * Có mặt vì bắt người dùng đi tìm file JSON trên máy là không demo được, và
+ * người thử app cũng không có repo. Danh sách do `scripts/bundle-library.mjs`
+ * sinh ra từ `mock-data/incoming/`.
+ */
+interface SampleIssue {
+    file: string;
+    notificationId: string;
+    origin: string;
+    symptom: string;
+    workCenter: string | null;
+    material: string | null;
+    investigated: boolean;
 }
 
 export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
     const [text, setText] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [samples, setSamples] = useState<SampleIssue[]>([]);
     const fileRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!open || samples.length) return;
+        // Không có mẫu cũng không sao — dán tay vẫn là đường chính.
+        fetch('samples/index.json')
+            .then((r) => (r.ok ? r.json() : []))
+            .then(setSamples)
+            .catch(() => setSamples([]));
+    }, [open, samples.length]);
+
+    async function loadSample(s: SampleIssue) {
+        setError(null);
+        try {
+            const res = await fetch(`samples/${s.file}`);
+            if (!res.ok) throw new Error(`${res.status}`);
+            setText(JSON.stringify(await res.json(), null, 2));
+        } catch (e: any) {
+            setError(`Could not load the sample: ${e.message}`);
+        }
+    }
 
     const check = text ? inspect(text) : null;
 
@@ -121,8 +186,8 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                 <DialogHeader>
                     <DialogTitle>Analyze from JSON</DialogTitle>
                     <DialogDescription>
-                        Paste a Golden Dataset describing one SAP QM defect case. The AI extracts the
-                        verified facts and drafts all eight disciplines.
+                        Paste the JSON of one SAP QM defect case. The AI extracts the verified facts
+                        and drafts all eight disciplines.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -162,11 +227,44 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                         )}
                     </div>
 
+                    {samples.length > 0 && (
+                        <div className="rounded-lg border border-dashed p-3">
+                            <p className="text-xs font-medium">Or start from an incoming issue</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                Freshly logged cases — symptom and context only, no root cause, no
+                                actions, no team. That is what the Copilot is for.
+                            </p>
+                            <div className="mt-2 space-y-1">
+                                {samples.map((s) => (
+                                    <button
+                                        key={s.file}
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void loadSample(s)}
+                                        className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                                    >
+                                        <span className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                                            {s.notificationId}
+                                        </span>
+                                        <span className="flex-1">
+                                            <span className="block text-xs">{s.symptom}</span>
+                                            <span className="block text-[11px] text-muted-foreground">
+                                                {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
+                                                {s.workCenter && ` · ${s.workCenter}`}
+                                                {s.material && ` · ${s.material}`}
+                                            </span>
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <Textarea
                         value={text}
                         onChange={(e) => { setText(e.target.value); setError(null); }}
                         disabled={busy}
-                        placeholder='{ "meta": { … }, "data": { "notifications": [ … ] } }'
+                        placeholder='{ "notificationId": "8D-10048412", "symptomShortText": "…", "inspections": [ … ] }'
                         className="font-mono text-xs h-56 resize-none"
                     />
 

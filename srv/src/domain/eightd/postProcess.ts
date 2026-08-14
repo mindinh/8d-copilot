@@ -42,10 +42,12 @@ export function postProcess(
     context: CaseContext,
     enrichment?: unknown,
     independent?: unknown,
+    /** Tiền lệ đã tìm được — để `precedents#N` trong `sources` giải được. */
+    precedents?: unknown,
 ): { result: EightDResult; repairs: string[] } {
     const repairs: string[] = [];
     const incoming = Array.isArray(result?.disciplines) ? result.disciplines : [];
-    const vocab = buildSourceVocabulary(context, enrichment, independent);
+    const vocab = buildSourceVocabulary(context, enrichment, independent, precedents);
 
     const byCode = new Map<string, DisciplineDraft>();
     for (const d of incoming) {

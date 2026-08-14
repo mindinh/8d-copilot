@@ -14,8 +14,19 @@ import { PipelineError } from '../types';
 
 const MOCK_DIR = path.resolve(__dirname, '../../../../../mock-data/clean');
 
+/**
+ * `beta/` là bộ Golden Dataset cũ, đóng băng có chủ đích. Đây là nơi duy nhất
+ * còn khối `data` và `nested_case_view` — hai định dạng mapper vẫn phải đọc
+ * được, nên phải có test chạy trên chúng.
+ */
+const LEGACY_DIR = path.resolve(__dirname, '../../../../../mock-data/beta');
+
 function load(name: string) {
     return JSON.parse(fs.readFileSync(path.join(MOCK_DIR, name), 'utf-8'));
+}
+
+function loadLegacy(name: string) {
+    return JSON.parse(fs.readFileSync(path.join(LEGACY_DIR, name), 'utf-8'));
 }
 
 const Q3_MACHINE = 'case-8D-10048412.json';   // gốc của nhóm
@@ -163,7 +174,7 @@ describe('mapCase — chuỗi 5-Why dài hơn', () => {
 
 describe('mapCase — phương án dự phòng và lỗi', () => {
     it('map được từ nested_case_view khi không có khối data', () => {
-        const raw = load(Q3_MACHINE);
+        const raw = loadLegacy(Q3_MACHINE);
         const ctx = mapCase({ nested_case_view: raw.nested_case_view });
 
         expect(ctx.notificationId).toBe('8D-10048412');
@@ -174,7 +185,7 @@ describe('mapCase — phương án dự phòng và lỗi', () => {
     });
 
     it('cho ra cùng root cause dù đọc data hay nested_case_view', () => {
-        const raw = load(Q1_MATERIAL);
+        const raw = loadLegacy(Q1_MATERIAL);
         const fromData = mapCase(raw);
         const fromNested = mapCase({ nested_case_view: raw.nested_case_view });
 

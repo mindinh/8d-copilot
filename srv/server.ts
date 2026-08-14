@@ -12,6 +12,11 @@ import { initEmbeddings } from './src/core/ai/llmClient';
 import { runAiStartupProbes } from './src/core/ai/startupProbes';
 import { registerAiAdminHandlers } from './src/services/aiAdminService';
 import { registerEightDHandlers, sweepOnStartup } from './src/services/eightDService';
+import { seedRetrievalConfig } from './src/domain/eightd/precedent/configRepository';
+import {
+    embedLibraryInBackground,
+    seedLibraryFromBundle,
+} from './src/domain/eightd/precedent/librarySeeder';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -104,4 +109,27 @@ cds.on('served', async () => {
     // Job phân tích 8D sống trong tiến trình này. Server chết giữa chừng thì bản
     // ghi kẹt ở 'Analyzing' và UI quay vòng mãi không dừng — dọn ngay lúc boot.
     await sweepOnStartup();
+
+    // Trọng số chấm điểm và danh sách prompt bước D.
+    //
+    // Seed bằng code chứ không bằng CSV trong `db/data/`: HDI ghi đè CSV ở MỖI
+    // lần deploy, nên trọng số admin chỉnh trên UI sẽ bị xoá mà không ai được
+    // báo. Hàm này idempotent — chỉ ghi khi bảng còn rỗng.
+    await seedRetrievalConfig();
+
+    // Kho case tiền lệ. Chỉ BÙ case còn thiếu, không đụng case đã có — nên deploy
+    // lại vừa mang được case mới lên, vừa giữ nguyên dữ liệu thật. Đây là đường
+    // duy nhất để kho có dữ liệu trên CF mà không phải nới scope admin cho token
+    // kỹ thuật của chính app.
+    try {
+        await seedLibraryFromBundle();
+    } catch (e: any) {
+        // Kho thiếu làm hỏng gợi ý tiền lệ, nhưng không được làm app chết:
+        // `findPrecedents` đã báo rõ lý do thay vì đoán bừa.
+        logger.error('Không bù được kho case từ dữ liệu đóng gói:', e?.message ?? e);
+    }
+
+    // Vector cho tiêu chí ngữ nghĩa. Chạy ngầm — cần AI Core sống và mất vài
+    // giây, không đáng để chặn khởi động.
+    embedLibraryInBackground();
 });

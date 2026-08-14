@@ -34,6 +34,7 @@ import {
     ORIGIN_CUSTOMER,
     ORIGIN_INTERNAL,
 } from './types';
+import { extractDeepCase } from './caseMapper';
 
 export interface ValidationIssue {
     constraintId: string;
@@ -86,15 +87,15 @@ export function validateDataset(raw: any): ValidationIssue[] {
         return issues;
     }
 
-    const data = raw.data;
+    const data = extractDeepCase(raw);
     if (!data || typeof data !== 'object') {
-        fatal('SHAPE', "Thiếu khối 'data'. Payload phải là Golden Dataset, không phải một entity rời.");
+        fatal('SHAPE', 'Payload không đúng cấu trúc case 8D (Deep Structure JSON hoặc Golden Dataset).');
         return issues;
     }
 
     const notifications = rows(data, 'notifications');
     if (notifications.length === 0) {
-        fatal('SHAPE', 'Không có dòng notifications nào — không xác định được case.');
+        fatal('SHAPE', 'Không tìm thấy thông tin case notification — không xác định được case.');
         return issues;
     }
     if (notifications.length > 1) {
@@ -105,7 +106,7 @@ export function validateDataset(raw: any): ValidationIssue[] {
     const note = notifications[0];
     const nid = note.notification_id;
     if (!nid) {
-        fatal('SHAPE', 'notifications thiếu notification_id — không có khoá để join.');
+        fatal('SHAPE', 'Case notification thiếu notification_id — không có khoá định danh.');
         return issues;
     }
 

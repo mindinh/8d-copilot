@@ -19,12 +19,31 @@ import {
     qualityIssues,
     validateDataset,
 } from '../datasetValidator';
+import { extractDeepCase } from '../caseMapper';
 
 const MOCK_DIR = path.resolve(__dirname, '../../../../../mock-data/clean');
+
+/**
+ * `beta/` giữ định dạng Golden Dataset cũ với khối `data` phẳng — nơi master
+ * data nằm ở bảng riêng và notification trỏ sang bằng khoá ngoại.
+ *
+ * Deep Structure không có khái niệm đó: master data nằm lồng ngay trong case,
+ * nên `extractDeepCase` dựng cả hai đầu của khoá ngoại từ CÙNG một giá trị và
+ * FK-EXISTS không bao giờ có thể sai. Ba test về khoá ngoại vì vậy chỉ có nghĩa
+ * trên định dạng cũ — và vẫn cần chạy, vì mapper vẫn nhận định dạng đó.
+ */
+const LEGACY_DIR = path.resolve(__dirname, '../../../../../mock-data/beta');
 
 function load(name = 'case-8D-10048412.json') {
     return JSON.parse(fs.readFileSync(path.join(MOCK_DIR, name), 'utf-8'));
 }
+
+function loadLegacy(name = 'case-8D-10048412.json') {
+    return JSON.parse(fs.readFileSync(path.join(LEGACY_DIR, name), 'utf-8'));
+}
+
+/** Hình dạng đã chuẩn hoá — để test nói về nội dung, không về định dạng. */
+const rowsOf = (raw: unknown) => extractDeepCase(raw)!;
 
 const ALL_CASES = fs.readdirSync(MOCK_DIR)
     .filter((f) => f.startsWith('case-') && f.endsWith('.json'))
@@ -51,7 +70,7 @@ describe('bộ clean', () => {
     it('phủ đủ 6 nhánh Ishikawa làm nguyên nhân gốc', () => {
         const roots = new Set(
             ALL_CASES.map((f) => {
-                const rows = load(f).data.causes_ishikawa as Array<Record<string, string>>;
+                const rows = rowsOf(load(f)).causes_ishikawa as Array<Record<string, string>>;
                 return rows.find((r) => isRootCauseFlag(r.is_root_cause))?.category;
             }),
         );
@@ -61,7 +80,7 @@ describe('bộ clean', () => {
     });
 
     it('phủ cả hai origin và cả ba trạng thái SAP', () => {
-        const notes = ALL_CASES.map((f) => load(f).data.notifications[0]);
+        const notes = ALL_CASES.map((f) => rowsOf(load(f)).notifications[0]);
         expect(new Set(notes.map((n: any) => String(n.origin).slice(0, 2))))
             .toEqual(new Set(['Q1', 'Q3']));
         expect(new Set(notes.map((n: any) => n.status)))
@@ -86,7 +105,9 @@ describe('CHẶN — payload không phải một case', () => {
     });
 
     it('nhiều hơn một case trong một file', () => {
-        const raw = load();
+        // Chỉ định dạng cũ mới diễn đạt được "hai case trong một file": Deep
+        // Structure là một object cho đúng một case.
+        const raw = loadLegacy();
         raw.data.notifications.push({ ...raw.data.notifications[0], notification_id: '8D-99999999' });
         expect(blockingIds(raw)).toContain('SHAPE');
     });
@@ -103,27 +124,25 @@ describe('KHÔNG chặn — chỉ là vấn đề chất lượng', () => {
     /** Mọi thứ ở đây từng chặn pipeline; giờ chỉ cảnh báo. */
     const cases: Array<[string, string, (raw: any) => void]> = [
         ['thiếu nhánh Ishikawa', 'ISHIKAWA-COVERAGE',
-            (r) => { r.data.causes_ishikawa = r.data.causes_ishikawa.slice(0, 3); }],
+            (r) => { r.causesIshikawa = r.causesIshikawa.slice(0, 3); }],
         ['không nhánh nào được đánh dấu root cause', 'ROOT-CAUSE-FLAG',
-            (r) => { for (const x of r.data.causes_ishikawa) x.is_root_cause = 'N'; }],
+            (r) => { for (const x of r.causesIshikawa) x.isRootCause = 'N'; }],
         ['hai nhánh cùng đánh dấu root cause', 'ROOT-CAUSE-FLAG',
-            (r) => { r.data.causes_ishikawa[0].is_root_cause = 'Y'; }],
+            (r) => { r.causesIshikawa[0].isRootCause = 'Y'; }],
         ['5-Why rỗng', 'FIVE-WHY-DEPTH',
-            (r) => { r.data.five_why_chain = []; }],
+            (r) => { r.fiveWhyChain = []; }],
         ['5-Why chỉ một bước', 'FIVE-WHY-DEPTH',
-            (r) => { r.data.five_why_chain = r.data.five_why_chain.slice(0, 1); }],
+            (r) => { r.fiveWhyChain = r.fiveWhyChain.slice(0, 1); }],
         ['team_size lệch số dòng', 'TEAM-SIZE-MATCH',
-            (r) => { r.data.notifications[0].team_size = 99; }],
+            (r) => { r.teamSize = 99; }],
         ['không có trưởng nhóm', 'TEAM-ONE-LEADER',
-            (r) => { for (const x of r.data.team_assignments) x.partner_role = '8D Team Member'; }],
+            (r) => { for (const x of r.teamAssignments) x.partnerRole = '8D Team Member'; }],
         ['action trùng dòng', 'PK-UNIQUE',
-            (r) => { r.data.actions.push({ ...r.data.actions[0] }); }],
-        ['khoá ngoại trỏ vào nơi không tồn tại', 'FK-EXISTS',
-            (r) => { r.data.notifications[0].material_id = 'MAT-KHONG-TON-TAI'; }],
+            (r) => { r.actions.push({ ...r.actions[0] }); }],
         ['action không được phân loại', 'ACTION-TYPE-MISSING',
-            (r) => { for (const a of r.data.actions) a.action_type = ''; }],
+            (r) => { for (const a of r.actions) a.actionType = ''; }],
         ['case Q3 mang dữ liệu khách hàng', 'Q1-ONLY-CUSTOMER-FIELDS',
-            (r) => { r.data.customer_reference[0].complaint_reference = 'CC-2026-9999'; }],
+            (r) => { r.customerReference.complaintReference = 'CC-2026-9999'; }],
     ];
 
     it.each(cases)('%s → cảnh báo %s, không chặn', (_label, constraintId, mutate) => {
@@ -133,9 +152,16 @@ describe('KHÔNG chặn — chỉ là vấn đề chất lượng', () => {
         expect(blockingIds(raw)).toEqual([]);
     });
 
+    it('khoá ngoại trỏ vào nơi không tồn tại → cảnh báo FK-EXISTS, không chặn', () => {
+        const raw = loadLegacy();
+        raw.data.notifications[0].material_id = 'MAT-KHONG-TON-TAI';
+        expect(qualityIds(raw)).toContain('FK-EXISTS');
+        expect(blockingIds(raw)).toEqual([]);
+    });
+
     it('case đã đóng mà thiếu loại action chỉ là cảnh báo', () => {
         const raw = load('case-8D-10048603.json'); // Closed
-        raw.data.actions = raw.data.actions.filter((a: any) => a.action_type !== 'Preventive');
+        raw.actions = raw.actions.filter((a: any) => a.actionType !== 'Preventive');
         expect(qualityIds(raw)).toContain('ACTION-TYPE-COVERAGE');
         expect(blockingIds(raw)).toEqual([]);
     });
@@ -149,13 +175,13 @@ describe('KHÔNG chặn — chỉ là vấn đề chất lượng', () => {
 
 describe('dung sai với dữ liệu bẩn', () => {
     it('khoá ngoại có khoảng trắng thừa vẫn khớp', () => {
-        const raw = load();
+        const raw = loadLegacy();
         raw.data.notifications[0].material_id = `  ${raw.data.materials[0].material_id} `;
         expect(qualityIds(raw)).not.toContain('FK-EXISTS');
     });
 
     it('khoá ngoại sai hoa thường vẫn khớp', () => {
-        const raw = load();
+        const raw = loadLegacy();
         raw.data.notifications[0].work_center_id =
             String(raw.data.work_centers[0].work_center_id).toLowerCase();
         expect(qualityIds(raw)).not.toContain('FK-EXISTS');
@@ -163,7 +189,7 @@ describe('dung sai với dữ liệu bẩn', () => {
 
     it('ô trống dạng chuỗi ở trường khách hàng không bị coi là dữ liệu thật', () => {
         const raw = load(); // case Q3
-        raw.data.customer_reference[0].customer_plant_contact = '   ';
+        raw.customerReference.customerPlantContact = '   ';
         expect(qualityIds(raw)).not.toContain('Q1-ONLY-CUSTOMER-FIELDS');
     });
 });
@@ -203,14 +229,14 @@ describe('isDeliberateNA', () => {
 describe('thông báo', () => {
     it('gắn kèm notification_id để biết case nào', () => {
         const raw = load();
-        raw.data.notifications[0].team_size = 99;
+        raw.teamSize = 99;
         const issue = validateDataset(raw).find((i) => i.constraintId === 'TEAM-SIZE-MATCH');
         expect(issue?.message).toContain('8D-10048412');
     });
 
     it('cảnh báo nói rõ thiếu nhánh nào, không chỉ nói "sai"', () => {
         const raw = load();
-        raw.data.causes_ishikawa = raw.data.causes_ishikawa.filter(
+        raw.causesIshikawa = raw.causesIshikawa.filter(
             (r: any) => !['Man', 'Environment'].includes(r.category),
         );
         const msg = validateDataset(raw).find((i) => i.constraintId === 'ISHIKAWA-COVERAGE')?.message;

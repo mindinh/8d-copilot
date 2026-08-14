@@ -1,6 +1,16 @@
 import cds from '@sap/cds';
 import { ENTITIES } from '../config/ai';
 import { getGlobalAiConfigRaw, saveGlobalAiConfig } from '../core/ai/globalModelConfig';
+import {
+  clearRetrievalConfigCache,
+  getRetrievalConfig,
+  seedRetrievalConfig,
+  CRITERIA,
+  SETTINGS,
+  STEP_PROMPTS,
+} from '../domain/eightd/precedent/configRepository';
+import { explainScore, scoreCase, type ScorableCase } from '../domain/eightd/precedent/scoring';
+import { HISTORICAL_CASES } from '../domain/eightd/precedent/precedentRepository';
 
 const LOG = cds.log('ai-admin');
 
@@ -167,10 +177,80 @@ async function getAvailableModels(activity?: string): Promise<string> {
   return JSON.stringify(models.filter((m) => isSuitableFor(m, activity)).map(toAvailableModel));
 }
 
+/**
+ * Chấm thử hai case bằng cấu hình đang có hiệu lực.
+ *
+ * Nhận mã notification chứ không nhận UUID: admin nhìn thấy mã case trên màn
+ * hình, không nhìn thấy khoá kỹ thuật.
+ */
+async function previewScore(caseA?: string, caseB?: string): Promise<string> {
+  if (!caseA?.trim() || !caseB?.trim()) {
+    return JSON.stringify({ error: 'caseA và caseB là bắt buộc (mã notification).' });
+  }
+
+  const db = await cds.connect.to('db');
+  const cols = [
+    'notificationId', 'symptomShortText', 'workCenterId', 'defectCode',
+    'defectText', 'defectKeywords', 'materialId', 'materialFamily',
+    // Thiếu hai cột này thì `cosineSimilarity` trả null và tiêu chí ngữ nghĩa
+    // luôn cho 0 điểm — ô chấm thử trên UI sẽ mâu thuẫn với kết quả thật của
+    // `findPrecedents`, mà không có gì báo là do đâu.
+    'embedding', 'embeddingModel',
+  ];
+
+  const [a, b] = await Promise.all([
+    db.run(SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseA.trim() })),
+    db.run(SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseB.trim() })),
+  ]);
+
+  const missing = [!a && caseA, !b && caseB].filter(Boolean);
+  if (missing.length) {
+    return JSON.stringify({ error: `Không có trong kho: ${missing.join(', ')}` });
+  }
+
+  const { criteria } = await getRetrievalConfig();
+  const result = scoreCase(a as ScorableCase, b as ScorableCase, criteria);
+
+  return JSON.stringify({
+    caseA: { notificationId: a.notificationId, symptomShortText: a.symptomShortText },
+    caseB: { notificationId: b.notificationId, symptomShortText: b.symptomShortText },
+    ...result,
+    explanation: explainScore(result),
+  });
+}
+
+/** Ghi lại mặc định cho cấu hình tìm tiền lệ. */
+async function resetRetrievalConfig(scope = 'all'): Promise<string> {
+  const db = await cds.connect.to('db');
+  const wanted = scope.trim().toLowerCase();
+  const wipe = async (entity: string) => db.run(DELETE.from(entity));
+
+  if (wanted === 'all' || wanted === 'criteria') await wipe(CRITERIA);
+  if (wanted === 'all' || wanted === 'settings') await wipe(SETTINGS);
+  if (wanted === 'all' || wanted === 'prompts') await wipe(STEP_PROMPTS);
+
+  // `seedRetrievalConfig` chỉ ghi khi bảng rỗng — xoá trước rồi seed lại chính
+  // là "khôi phục mặc định".
+  await seedRetrievalConfig();
+  clearRetrievalConfigCache();
+
+  LOG.info(`Đã khôi phục mặc định cấu hình truy hồi (scope=${wanted})`);
+  return JSON.stringify({ reset: wanted, ...(await getRetrievalConfig()) });
+}
+
 /** Gắn handler vào service. Gọi từ hook `serving` trong srv/server.ts. */
 export function registerAiAdminHandlers(srv: any): void {
   srv.on('syncModels', async () => syncModels());
   srv.on('getAvailableModels', async (req: any) => getAvailableModels(req.data?.activity));
+
+  srv.on('previewScore', async (req: any) => previewScore(req.data?.caseA, req.data?.caseB));
+  srv.on('resetRetrievalConfig', async (req: any) => resetRetrievalConfig(req.data?.scope ?? 'all'));
+
+  // Cấu hình có cache 5 phút. Không xoá cache sau khi ghi thì admin sửa trọng số
+  // xong bấm chấm thử vẫn ra điểm cũ — và sẽ kết luận là nút lưu bị hỏng.
+  for (const entity of ['SimilarityCriteria', 'RetrievalSettings', 'StepPrompts']) {
+    srv.after(['UPDATE', 'CREATE', 'DELETE'], entity, () => clearRetrievalConfigCache());
+  }
 
   srv.on('getGlobalAiConfig', async () => getGlobalAiConfigRaw());
   srv.on('updateGlobalAiConfig', async (req: any) => {

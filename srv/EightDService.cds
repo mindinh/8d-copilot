@@ -54,4 +54,57 @@ service EightDService {
      * cáo không nhất quán mà chẳng ai truy được phần nào từ đâu.
      */
     action reanalyze(reportID : String) returns String;
+
+    // ── Kho case lịch sử ─────────────────────────────────────────────────────
+
+    /**
+     * Kho tiền lệ, chỉ đọc. Xem nhóm 8D kèm theo bằng `?$expand=team`.
+     *
+     * Ghi chỉ qua `seedCaseLibrary`: một dòng ghi tay sẽ không có `defectKeywords`
+     * và `materialFamily` tính sẵn, nên nó lặng lẽ không bao giờ ăn điểm.
+     */
+    @readonly
+    entity HistoricalCases as projection on ns.HistoricalCases;
+
+    @readonly
+    entity HistoricalTeamMembers as projection on ns.HistoricalTeamMembers;
+
+    /**
+     * Case tiền lệ của một report, kèm điểm và diễn giải từng tiêu chí.
+     *
+     * Trả JSON `PrecedentResult`. Không có tiền lệ ⇒ `precedents` rỗng và
+     * `reason` nói rõ vì sao — phân biệt được "kho chưa nạp" với "đã tìm nhưng
+     * không đủ điểm", hai thứ nhìn ngoài UI giống hệt nhau.
+     */
+    function findPrecedents(reportID : String) returns String;
+
+    /**
+     * Nạp case vào kho tiền lệ.
+     *
+     * Có mặt vì trên Cloud Foundry không chạy được script cục bộ đối với HDI
+     * container. Thay thế theo `notificationId`, nên nạp lại cùng bộ dữ liệu là
+     * an toàn.
+     *
+     * @param payload Mảng JSON các case, hoặc một case đơn lẻ.
+     */
+    @(requires: ['admin', 'Admin'])
+    action seedCaseLibrary(payload : LargeString) returns String;
+
+    /** Xoá sạch kho. Dùng khi muốn nạp lại từ đầu. */
+    @(requires: ['admin', 'Admin'])
+    action clearCaseLibrary() returns String;
+
+    /**
+     * Sinh vector cho các case trong kho — bước bắt buộc để tiêu chí ngữ nghĩa
+     * hoạt động.
+     *
+     * Tách khỏi `seedCaseLibrary` vì nạp kho là thao tác DB thuần luôn chạy được,
+     * còn nhúng thì phụ thuộc AI Core. Gộp chung thì một sự cố bên AI khiến kho
+     * không nạp được, trong khi chấm điểm theo luật vốn không cần vector.
+     *
+     * @param force true = nhúng lại tất cả. Dùng khi đổi công thức ghép searchText
+     *              hoặc đổi model nhúng — vector cũ khi đó không còn so được.
+     */
+    @(requires: ['admin', 'Admin'])
+    action embedCaseLibrary(force : Boolean) returns String;
 }

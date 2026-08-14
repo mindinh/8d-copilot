@@ -2,6 +2,18 @@
   "xsappname": "cnma_proresolve",
   "tenant-mode": "dedicated",
   "description": "Security configuration for CNMA Proresolve Application",
+
+  "oauth2-configuration": {
+    "redirect-uris": [
+      "https://*.cfapps.*.hana.ondemand.com/**",
+      "https://*.applicationstudio.cloud.sap/**",
+      "http://localhost:4004/**",
+      "http://localhost:5000/**",
+      "http://localhost:5173/**"
+    ],
+    "credential-types": ["binding-secret", "x509"]
+  },
+
   "scopes": [
     {
       "name": "$XSAPPNAME.admin",
@@ -13,9 +25,10 @@
     },
     {
       "name": "$XSAPPNAME.User",
-      "description": "User Scope"
+      "description": "Standard User Scope"
     }
   ],
+
   "role-templates": [
     {
       "name": "Admin",
@@ -29,6 +42,23 @@
       "name": "User",
       "description": "Standard User Role",
       "scope-references": [
+        "$XSAPPNAME.User"
+      ]
+    }
+  ],
+
+  "role-collections": [
+    {
+      "name": "CNMA_Proresolve_Admin",
+      "description": "8D Copilot admin: AI models, similarity criteria, step prompts, case library",
+      "role-template-references": [
+        "$XSAPPNAME.Admin"
+      ]
+    },
+    {
+      "name": "CNMA_Proresolve_User",
+      "description": "8D Copilot user: read and create 8D reports",
+      "role-template-references": [
         "$XSAPPNAME.User"
       ]
     }

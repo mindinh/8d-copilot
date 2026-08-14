@@ -90,12 +90,17 @@ export function buildSourceVocabulary(
     context: CaseContext,
     enrichment?: unknown,
     independent?: unknown,
+    precedents?: unknown,
 ): SourceVocabulary {
     const root: Record<string, unknown> = {
         ...context,
-        // Bước sinh 8D nhận cả ba object, nên `sources` được phép trỏ vào cả ba.
+        // Bước sinh 8D nhận cả bốn object, nên `sources` được phép trỏ vào cả bốn.
         enrichment: enrichment ?? { derivedFacts: [], dataQualityNotes: [], unmapped: [] },
         independent: independent ?? null,
+        // Không có tiền lệ thì để MẢNG RỖNG, không phải null: `precedents#1` khi
+        // đó giải không ra và bị loại — đúng ý, vì model không được trích dẫn
+        // một case tiền lệ không tồn tại.
+        precedents: precedents ?? [],
     };
 
     return {

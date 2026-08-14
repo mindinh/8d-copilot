@@ -205,7 +205,7 @@ function text(v: unknown): string | null {
  * hiểu một hình dạng duy nhất.
  */
 function flattenNested(nested: Row): Row {
-    const nid = nested.notification_id;
+    const nid = nested.notification_id ?? nested.notificationId;
     const stamp = (r: Row) => ({ notification_id: nid, ...r });
     const node = (k: string) => {
         const n = nested[k];
@@ -235,11 +235,11 @@ function flattenNested(nested: Row): Row {
             work_center_id: wc.work_center_id,
             ...header,
         }],
-        inspections: (nested.inspections?.rows ?? []).map(stamp),
-        causes_ishikawa: (nested.causes_ishikawa?.rows ?? []).map(stamp),
-        actions: (nested.actions?.rows ?? []).map(stamp),
-        five_why_chain: (nested.five_why_chain?.rows ?? []).map(stamp),
-        team_assignments: (nested.team_assignments?.rows ?? []).map(stamp),
+        inspections: (nested.inspections?.rows ?? nested.inspections ?? []).map(stamp),
+        causes_ishikawa: (nested.causes_ishikawa?.rows ?? nested.causes_ishikawa ?? []).map(stamp),
+        actions: (nested.actions?.rows ?? nested.actions ?? []).map(stamp),
+        five_why_chain: (nested.five_why_chain?.rows ?? nested.five_why_chain ?? []).map(stamp),
+        team_assignments: (nested.team_assignments?.rows ?? nested.team_assignments ?? []).map(stamp),
         fmea_link: fmea?.fmea_id ? [stamp(fmea)] : [],
         cost_copq: node('cost_copq') ? [stamp(node('cost_copq')!)] : [],
         lessons_learned: node('lessons_learned') ? [stamp(node('lessons_learned')!)] : [],
@@ -249,19 +249,186 @@ function flattenNested(nested: Row): Row {
     };
 }
 
+/**
+ * Trích xuất và chuẩn hoá mọi định dạng JSON đầu vào (Deep Structure Business JSON,
+ * OData response wrapper, legacy Golden Dataset) thành cấu trúc chuẩn.
+ */
+export function extractDeepCase(raw: any): Row | null {
+    if (!raw || typeof raw !== 'object') return null;
+
+    // 1. Giải bọc OData wrapper (`value: [...]` hoặc `value: {...}`)
+    let obj = raw;
+    if ('value' in raw) {
+        if (Array.isArray(raw.value) && raw.value.length > 0) {
+            obj = raw.value[0];
+        } else if (raw.value && typeof raw.value === 'object' && !Array.isArray(raw.value)) {
+            obj = raw.value;
+        }
+    }
+
+    if (!obj || typeof obj !== 'object') return null;
+
+    // 2. Format legacy `data`
+    if (obj.data && typeof obj.data === 'object' && Array.isArray(obj.data.notifications)) {
+        return obj.data;
+    }
+
+    // 3. Format legacy `nested_case_view`
+    if (obj.nested_case_view && typeof obj.nested_case_view === 'object') {
+        return flattenNested(obj.nested_case_view);
+    }
+
+    // 4. Định dạng Deep Structure Business JSON (OData / Real business object)
+    const nid = obj.notificationId ?? obj.notification_id ?? obj.notification ?? obj.ID ?? obj.document;
+    if (!nid && !obj.notifications && !obj.symptomShortText && !obj.symptom_short_text) {
+        return null;
+    }
+
+    const getArray = (val: any): Row[] => {
+        if (Array.isArray(val)) return val;
+        if (val && typeof val === 'object' && Array.isArray(val.rows)) return val.rows;
+        if (val && typeof val === 'object') return [val];
+        return [];
+    };
+
+    const getObj = (val: any): Row | null => {
+        if (!val || typeof val !== 'object') return null;
+        if (Array.isArray(val)) return val[0] ?? null;
+        return val;
+    };
+
+    const stamp = (r: Row) => ({ notification_id: nid, ...r });
+
+    const material = getObj(obj.material ?? obj.materials);
+    const batch = getObj(obj.batch ?? obj.batches);
+    const defect = getObj(obj.defect ?? obj.defectCatalog ?? obj.defect_catalog);
+    const wc = getObj(obj.workCenter ?? obj.workCenterId ?? obj.work_center ?? obj.work_centers);
+
+    const header = {
+        symptom_short_text: obj.symptomShortText ?? obj.symptom_short_text ?? obj.symptomText ?? obj.symptom ?? obj.description,
+        team_size: obj.teamSize ?? obj.team_size,
+        origin: obj.origin,
+        customer_facing_summary: obj.customerFacingSummary ?? obj.customer_facing_summary,
+        internal_facing_summary: obj.internalFacingSummary ?? obj.internal_facing_summary,
+        status: obj.status ?? obj.sapStatus ?? obj.sap_status,
+        completion_date: obj.completionDate ?? obj.completion_date,
+        found_date: obj.foundDate ?? obj.found_date,
+        quantity_extent: obj.quantityExtent ?? obj.quantity_extent,
+    };
+
+    const inspections = getArray(obj.inspections).map((r) => stamp({
+        characteristic: r.characteristic,
+        measured_value: r.measuredValue ?? r.measured_value,
+        spec_value: r.specValue ?? r.spec_value,
+    }));
+
+    const ishikawa = getArray(obj.causesIshikawa ?? obj.causes_ishikawa ?? obj.ishikawa).map((r) => stamp({
+        category: r.category,
+        description: r.description,
+        metric_value: r.metricValue ?? r.metric_value,
+        is_root_cause: r.isRootCause ?? r.is_root_cause,
+        source: r.source,
+    }));
+
+    const fiveWhy = getArray(obj.fiveWhyChain ?? obj.five_why_chain ?? obj.fiveWhy ?? obj.five_why).map((r) => stamp({
+        step_no: r.stepNo ?? r.step_no,
+        question: r.question,
+        answer: r.answer,
+        evidence_citation: r.evidenceCitation ?? r.evidence_citation,
+    }));
+
+    const actions = getArray(obj.actions).map((r) => stamp({
+        line_no: r.lineNo ?? r.line_no,
+        action_type: r.actionType ?? r.action_type,
+        action_text: r.actionText ?? r.action_text,
+        status: r.status,
+    }));
+
+    const team = getArray(obj.teamAssignments ?? obj.team_assignments ?? obj.team).map((r) => stamp({
+        partner_id: r.partnerId ?? r.partner_id,
+        partner_name: r.partnerName ?? r.partner_name,
+        function_title: r.functionTitle ?? r.function_title,
+        partner_role: r.partnerRole ?? r.partner_role,
+    }));
+
+    const fmea = getObj(obj.fmeaLink ?? obj.fmea_link ?? obj.fmea);
+    const fmeaList = fmea ? [stamp({
+        fmea_id: fmea.fmeaId ?? fmea.fmea_id,
+        description: fmea.description,
+    })] : [];
+
+    const cost = getObj(obj.costCopq ?? obj.cost_copq ?? obj.cost);
+    const copqVal = typeof obj.copqEur === 'number' ? obj.copqEur : (cost?.costOfPoorQualityEur ?? cost?.cost_of_poor_quality_eur ?? cost?.copqEur);
+    const costList = copqVal != null ? [stamp({ cost_of_poor_quality_eur: copqVal })] : [];
+
+    const ll = getObj(obj.lessonsLearned ?? obj.lessons_learned);
+    const llList = ll ? [stamp({
+        what_worked: ll.whatWorked ?? ll.what_worked,
+        what_didnt: ll.whatDidnt ?? ll.what_didnt,
+    })] : [];
+
+    const iin = getObj(obj.isIsNot ?? obj.is_is_not);
+    const iinList = iin ? [stamp({
+        is_where_when_it_happens: iin.isWhereWhenItHappens ?? iin.is_where_when_it_happens ?? iin.is,
+        is_not_where_when_it_doesnt: iin.isNotWhereWhenItDoesnt ?? iin.is_not_where_when_it_doesnt ?? iin.isNot,
+        notes: iin.notes,
+    })] : [];
+
+    const cref = getObj(obj.customerReference ?? obj.customer_reference);
+    const crefList = cref ? [stamp({
+        complaint_reference: cref.complaintReference ?? cref.complaint_reference,
+        customer_plant_contact: cref.customerPlantContact ?? cref.customer_plant_contact,
+        sla_response_due: cref.slaResponseDue ?? cref.sla_response_due,
+    })] : [];
+
+    const matId = material?.materialId ?? material?.material_id ?? obj.materialId ?? obj.material_id;
+    const matDesc = material?.description ?? obj.materialDesc ?? obj.material_desc;
+    const matGroup = material?.materialGroup ?? material?.material_group
+        ?? obj.materialGroup ?? obj.material_group;
+
+    const batchId = batch?.batchId ?? batch?.batch_id ?? obj.batchId ?? obj.batch_id;
+
+    const defCode = defect?.defectCode ?? defect?.defect_code ?? obj.defectCode ?? obj.defect_code;
+    const defText = defect?.defectText ?? defect?.defect_text ?? obj.defectText ?? obj.defect_text;
+
+    const wcId = wc?.workCenterId ?? wc?.work_center_id ?? obj.workCenterId ?? obj.work_center_id;
+    const wcDesc = wc?.description ?? obj.workCenterDesc ?? obj.work_center_desc;
+
+    return {
+        materials: matId ? [{ material_id: matId, description: matDesc, material_group: matGroup }] : [],
+        batches: batchId ? [{ batch_id: batchId, material_id: matId }] : [],
+        defect_catalog: defCode ? [{ defect_code: defCode, defect_text: defText }] : [],
+        work_centers: wcId ? [{ work_center_id: wcId, description: wcDesc }] : [],
+        notifications: [{
+            notification_id: nid,
+            material_id: matId,
+            batch_id: batchId,
+            defect_code: defCode,
+            work_center_id: wcId,
+            ...header,
+        }],
+        inspections,
+        causes_ishikawa: ishikawa,
+        actions,
+        five_why_chain: fiveWhy,
+        team_assignments: team,
+        fmea_link: fmeaList,
+        cost_copq: costList,
+        lessons_learned: llList,
+        is_is_not: iinList,
+        customer_reference: crefList,
+        spc_process_data: [],
+    };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function mapCase(raw: any): CaseContext {
-    const data: Row =
-        raw?.data && typeof raw.data === 'object'
-            ? raw.data
-            : raw?.nested_case_view
-                ? flattenNested(raw.nested_case_view)
-                : null;
+    const data: Row | null = extractDeepCase(raw);
 
     if (!data) {
         throw new PipelineError(
-            "Payload không có khối 'data' lẫn 'nested_case_view' — không phải Golden Dataset.",
+            "Payload không đúng cấu trúc case 8D (Deep Structure JSON hoặc Golden Dataset).",
             400,
         );
     }
@@ -427,6 +594,7 @@ export function mapCase(raw: any): CaseContext {
         product: {
             materialId: id(note.material_id ?? material.material_id),
             materialDesc: id(material.description),
+            materialGroup: id(material.material_group ?? note.material_group),
             batchId: id(note.batch_id ?? batch.batch_id),
             defectCode: id(note.defect_code ?? defect.defect_code),
             defectText: id(defect.defect_text),

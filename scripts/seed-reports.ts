@@ -35,10 +35,10 @@ const SRV = `${HOST}/api/cnma/EIGHTD_SRV`;
 const USER = process.env.SEED_USER ?? 'admin';
 const PASS = process.env.SEED_PASS ?? '123';
 
-/** Mỗi request đều ngắn — chỉ POST rồi poll. */
-const REQUEST_TIMEOUT_MS = 30_000;
-/** Một lượt chạy mất 60-90 giây. Bỏ cuộc sau 5 phút. */
-const POLL_TIMEOUT_MS = 300_000;
+/** Mỗi request POST / poll đều chờ cho tới khi AI xong mà không bị ngắt giữa chừng. */
+const REQUEST_TIMEOUT_MS = 600_000;
+/** Một lượt chạy mất 60-90 giây. Bỏ cuộc sau 10 phút. */
+const POLL_TIMEOUT_MS = 600_000;
 const POLL_INTERVAL_MS = 3_000;
 
 const MOCK_ROOT = path.resolve(__dirname, '../mock-data');
