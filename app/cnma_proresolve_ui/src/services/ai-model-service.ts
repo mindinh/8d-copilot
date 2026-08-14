@@ -27,35 +27,65 @@ function unwrap<T>(data: unknown): T {
     return data as T;
 }
 
+let availableModelsCache: Promise<AvailableModel[]> | null = null;
+let aiModelsCache: Promise<AIModelRecord[]> | null = null;
+
+export function invalidateAiModelCache(): void {
+    availableModelsCache = null;
+    aiModelsCache = null;
+}
+
+function isSuitableForActivity(model: AvailableModel, activity?: string): boolean {
+    if (!activity) return true;
+    const activities = model.suitableActivities;
+    if (!activities || !Array.isArray(activities)) return true;
+    return activities.includes(activity);
+}
+
 export function createAiModelApi(): AiModelApi {
     return {
         async getAIModels(): Promise<AIModelRecord[]> {
-            // Query string dựng tay, KHÔNG dùng `params` của axios.
-            // Serializer mặc định của axios v1 encodeURIComponent rồi thay %20 thành '+'
-            // (kiểu form-encoding). Parser OData của CAP từ chối '+' và trả 400:
-            //   Parsing URL failed ... but "+" found
-            // encodeURIComponent giữ nguyên %20 nên CAP đọc được.
-            const orderby = encodeURIComponent('provider asc,modelId asc');
-            const res = await axiosInstance.get(`${BASE}/AIModels?$orderby=${orderby}`);
-            return unwrap<AIModelRecord[]>(res.data) ?? [];
+            if (!aiModelsCache) {
+                const orderby = encodeURIComponent('provider asc,modelId asc');
+                aiModelsCache = axiosInstance
+                    .get(`${BASE}/AIModels?$orderby=${orderby}`)
+                    .then((res) => unwrap<AIModelRecord[]>(res.data) ?? [])
+                    .catch((err) => {
+                        aiModelsCache = null;
+                        throw err;
+                    });
+            }
+            return aiModelsCache;
         },
 
         async updateAIModel(id: string, data: Partial<AIModelRecord>): Promise<void> {
             await axiosInstance.patch(`${BASE}/AIModels('${id}')`, data);
+            invalidateAiModelCache();
         },
 
         async syncModels(): Promise<SyncModelsResult> {
             const res = await axiosInstance.post(`${BASE}/syncModels`, {});
-            // Action trả JSON dạng chuỗi — CAP bọc thêm một lớp `value`.
+            invalidateAiModelCache();
             const raw = unwrap<string>(res.data);
             return typeof raw === 'string' ? (JSON.parse(raw) as SyncModelsResult) : raw;
         },
 
         async getAvailableModels(activity?: string): Promise<AvailableModel[]> {
-            const param = activity ? `activity='${activity}'` : `activity=''`;
-            const res = await axiosInstance.get(`${BASE}/getAvailableModels(${param})`);
-            const raw = unwrap<string>(res.data);
-            return typeof raw === 'string' ? (JSON.parse(raw) as AvailableModel[]) : raw;
+            if (!availableModelsCache) {
+                availableModelsCache = axiosInstance
+                    .get(`${BASE}/getAvailableModels(activity='')`)
+                    .then((res) => {
+                        const raw = unwrap<string>(res.data);
+                        return typeof raw === 'string' ? (JSON.parse(raw) as AvailableModel[]) : raw;
+                    })
+                    .catch((err) => {
+                        availableModelsCache = null;
+                        throw err;
+                    });
+            }
+            const allModels = await availableModelsCache;
+            if (!activity) return allModels;
+            return allModels.filter((m) => isSuitableForActivity(m, activity));
         },
     };
 }
