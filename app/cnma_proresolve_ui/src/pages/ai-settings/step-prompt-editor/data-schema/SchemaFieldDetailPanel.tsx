@@ -1,0 +1,14 @@
+import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, Textarea } from '@cnma/react-ui';
+import { Pencil, X } from 'lucide-react';
+import type { DataSchemaField, DataSource, DataType } from '../types';
+
+export function SchemaFieldDetailPanel({ fieldKey, field, required, onChange, onRename, onRequiredChange, onClose }: { fieldKey: string; field: DataSchemaField; required: boolean; onChange: (patch: Partial<DataSchemaField>) => void; onRename: (key: string) => void; onRequiredChange: (required: boolean) => void; onClose: () => void }) {
+    return <div className="sticky top-4 rounded-xl border bg-card shadow-sm"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-2"><Pencil className="h-4 w-4 text-primary" /><h3 className="font-semibold">Field configuration</h3></div><Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button></div><div className="grid gap-4 p-5 md:grid-cols-2">
+        <div className="space-y-2"><Label>Field key</Label><Input defaultValue={fieldKey} onBlur={(event) => onRename(event.target.value)} /></div><div className="space-y-2"><Label>Display label</Label><Input value={field.title ?? field.label ?? ''} onChange={(event) => onChange({ title: event.target.value })} /></div>
+        <div className="space-y-2"><Label>Data type</Label><Select value={field.type} onValueChange={(type) => onChange({ type: type as DataType })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['string', 'number', 'integer', 'boolean', 'date', 'object', 'array'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><Label>Evidence source</Label><Select value={field['x-source'] ?? field.source ?? 'manual_input'} onValueChange={(source) => onChange({ 'x-source': source as DataSource })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['sap_qm', 'pdf_ocr', 'image_extract', 'vector_search', 'manual_input', 'ai_enrichment'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2 md:col-span-2"><Label>Description</Label><Textarea value={field.description ?? ''} onChange={(event) => onChange({ description: event.target.value })} /></div>
+        <div className="flex items-center gap-2"><Switch id={`required-${fieldKey}`} checked={required} onCheckedChange={onRequiredChange} /><Label htmlFor={`required-${fieldKey}`}>Required input</Label></div>
+        {field.type === 'string' && <div className="space-y-2"><Label>Format</Label><Input value={field.format ?? ''} onChange={(event) => onChange({ format: event.target.value || undefined })} placeholder="date, email, uri..." /></div>}
+    </div></div>;
+}

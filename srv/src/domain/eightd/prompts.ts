@@ -293,6 +293,7 @@ Output valid JSON matching the schema. No prose outside the JSON.
  */
 export function buildEightDSystemPrompt(
     overrides?: Partial<Record<DisciplineCode, string>>,
+    constraints?: Partial<Record<DisciplineCode, string>>,
 ): string {
     const guide = DISCIPLINE_CODES.map((code) => {
         const body = (overrides?.[code] ?? '').trim() || DEFAULT_DISCIPLINE_GUIDE[code];
@@ -301,7 +302,12 @@ export function buildEightDSystemPrompt(
         return `${code}  ${DISCIPLINE_TITLES[code]}\n${indented}`;
     }).join('\n\n');
 
-    return EIGHT_D_RULES.replace('{{DISCIPLINE_GUIDE}}', guide);
+    const configuredConstraints = DISCIPLINE_CODES.flatMap((code) => {
+        const value = constraints?.[code]?.trim();
+        return value ? [`${code} configured constraints:`, value] : [];
+    }).join('\n');
+    const base = EIGHT_D_RULES.replace('{{DISCIPLINE_GUIDE}}', guide);
+    return configuredConstraints ? `${base}\n\nCONFIGURED STEP CONSTRAINTS\n${configuredConstraints}` : base;
 }
 
 export interface PromptPrecedent {
@@ -360,6 +366,8 @@ export function buildEightDPrompt(
     enrichment: ContextEnrichment,
     independent: IndependentAnalysis,
     precedents: PromptPrecedent[] = [],
+    inputSchemas?: Partial<Record<DisciplineCode, string>>,
+    formSchemas?: Partial<Record<DisciplineCode, string>>,
 ): string {
     const gapNotice = context.gaps.length
         ? [
@@ -374,6 +382,35 @@ export function buildEightDPrompt(
     const originNotice = context.isCustomerFacing
         ? 'This is a CUSTOMER COMPLAINT (Q1). Produce customerSummary.'
         : 'This is an INTERNAL DEFECT (Q3). Set customerSummary to null.';
+
+    const configuredInputs: string[] = [];
+    const configuredOutputs: string[] = [];
+    const sourceData: Record<string, unknown> = {
+        ...context,
+        derivedFacts: enrichment.derivedFacts,
+        independent,
+        precedents,
+        teamMembers: [context.team.leader, ...context.team.members].filter(Boolean),
+        teamSize: [context.team.leader, ...context.team.members].filter(Boolean).length,
+        precedentTeams: precedents.map((precedent, index) => ({ source: `precedents#${index + 1}`, members: precedent.team })),
+    };
+    for (const code of DISCIPLINE_CODES) {
+        if (inputSchemas?.[code]) {
+            try {
+                const schema = JSON.parse(inputSchemas[code]!) as { fields?: Array<{ key?: string }>; properties?: Record<string, unknown> };
+                const requested = schema.properties ? Object.keys(schema.properties) : (schema.fields ?? []).map((field) => field.key).filter((key): key is string => Boolean(key));
+                const configured = Object.fromEntries(requested.filter((key) => key in sourceData).map((key) => [key, sourceData[key]]));
+                configuredInputs.push(`## ${code} CONFIGURED INPUT\n\`\`\`json\n${JSON.stringify(configured)}\n\`\`\``);
+            } catch { /* Invalid admin JSON is ignored at runtime; save validation prevents new invalid values. */ }
+        }
+        if (formSchemas?.[code]) {
+            try {
+                const schema = JSON.parse(formSchemas[code]!) as { fields?: Array<{ key?: string; binding?: string; label?: string; constraints?: unknown }> };
+                const fields = (schema.fields ?? []).map((field) => ({ path: field.binding?.trim() || field.key, label: field.label, constraints: field.constraints })).filter((field) => field.path);
+                configuredOutputs.push([`## ${code} FORM OUTPUT CONTRACT`, `Fill these paths directly on the ${code} discipline object. The field path is implicit; no separate mapping layer exists.`, '```json', JSON.stringify(fields), '```'].join('\n'));
+            } catch { /* See input-schema handling above. */ }
+        }
+    }
 
     return [
         `## ORIGIN\n${originNotice}`,
@@ -404,5 +441,7 @@ export function buildEightDPrompt(
         'Closed cases scored as similar to this one, best match first. See rule 6.',
         '',
         renderPrecedents(precedents),
-    ].join('\n');
+        ...configuredInputs,
+        ...configuredOutputs,
+    ].filter(Boolean).join('\n');
 }

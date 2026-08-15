@@ -54,6 +54,10 @@ export interface StepPrompt {
     description: string | null;
     systemPrompt: string | null;
     userTemplate: string | null;
+    inputSchemaJson: string | null;
+    combinedPrompt: string | null;
+    formSchemaJson: string | null;
+    constraintsJson: string | null;
     enabled: boolean;
     version: number;
 }
@@ -185,7 +189,7 @@ export async function previewScore(caseA: string, caseB: string): Promise<ScoreP
     return unwrapAction<ScorePreview>(res.data);
 }
 
-export async function resetRetrievalConfig(scope: 'criteria' | 'settings' | 'prompts' | 'all') {
+export async function resetRetrievalConfig(scope: 'criteria' | 'settings' | 'prompts' | 'all' | `prompt:${string}`) {
     const res = await axiosInstance.post(`${AI}/resetRetrievalConfig`, { scope });
     return unwrapAction<unknown>(res.data);
 }

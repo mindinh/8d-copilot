@@ -183,7 +183,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                 }
             }}
         >
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[calc(100%-2rem)] max-w-2xl overflow-hidden">
                 <DialogHeader>
                     <DialogTitle>Analyze from JSON</DialogTitle>
                     <DialogDescription>
@@ -192,7 +192,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-3">
+                <div className="min-w-0 space-y-3">
                     <div className="flex items-center gap-2">
                         <Input
                             ref={fileRef}
@@ -229,7 +229,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     </div>
 
                     {samples.length > 0 && (
-                        <div className="rounded-lg border border-dashed p-3">
+                        <div className="min-w-0 rounded-lg border border-dashed p-3">
                             <p className="text-xs font-medium">Or start from an incoming issue</p>
                             <p className="mt-0.5 text-xs text-muted-foreground">
                                 Freshly logged cases — symptom and context only, no root cause, no
@@ -243,14 +243,14 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                         variant="ghost"
                                         disabled={busy}
                                         onClick={() => void loadSample(s)}
-                                        className="flex w-full items-start justify-start gap-2 rounded-md px-2 py-1.5 h-auto text-left transition-colors hover:bg-muted disabled:opacity-50"
+                                        className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
                                     >
                                         <span className="mt-0.5 font-mono text-xs text-muted-foreground">
                                             {s.notificationId}
                                         </span>
-                                        <span className="flex-1 text-left">
-                                            <span className="block text-xs font-normal text-foreground">{s.symptom}</span>
-                                            <span className="block text-xs font-normal text-muted-foreground">
+                                        <span className="min-w-0 flex-1 text-left">
+                                            <span className="block break-words text-xs font-normal text-foreground">{s.symptom}</span>
+                                            <span className="block break-words text-xs font-normal text-muted-foreground">
                                                 {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
                                                 {s.workCenter && ` · ${s.workCenter}`}
                                                 {s.material && ` · ${s.material}`}
@@ -267,7 +267,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                         onChange={(e) => { setText(e.target.value); setError(null); }}
                         disabled={busy}
                         placeholder='{ "notificationId": "8D-10048412", "symptomShortText": "…", "inspections": [ … ] }'
-                        className="font-mono text-xs h-56 resize-none"
+                        className="h-56 w-full min-w-0 max-w-full resize-none font-mono text-xs"
                     />
 
                     {(error || (text && check && !check.ok)) && (
@@ -284,7 +284,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     </p>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="min-w-0">
                     <Button
                         variant="outline"
                         disabled={busy}

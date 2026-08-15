@@ -37,3 +37,23 @@ html, body {
 #root {
     height: 100%;
 }
+
+/* The shared Table wrapper uses overflow:auto on both axes. Wide identity
+ * tables then gain a few pixels of vertical overflow when the horizontal
+ * scrollbar appears, clipping the last row and action menu. Keep vertical
+ * scrolling at page level while retaining horizontal table scrolling. */
+.organization-page .ci-org-manager [role='tabpanel'] .rounded-lg.border.bg-card {
+    overflow: visible;
+}
+
+.organization-page .ci-org-manager div.relative.w-full.overflow-auto:has(> table) {
+    overflow: visible;
+}
+
+@media (max-width: 1024px) {
+    .organization-page .ci-org-manager div.relative.w-full.overflow-auto:has(> table) {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 12px;
+    }
+}

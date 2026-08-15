@@ -1,6 +1,6 @@
 # Codebase Rules & Styling Review Report
 
-Generated at: 2026-08-14T08:36:35.830Z
+Generated at: 2026-08-15T14:02:07.428Z
 
 This report lists all detected codebase violations based on the zero-tolerance styling and component rules.
 
@@ -40,7 +40,7 @@ This report lists all detected codebase violations based on the zero-tolerance s
 
 ---
 
-## §6 i18n / Hardcoded UI Text (198 issues)
+## §6 i18n / Hardcoded UI Text (274 issues)
 
 ### File: `src/components/common/error-boundary.tsx`
 - [ ] **Line 41**: Hardcoded JSX Text: "Something went wrong" ``` Something went wrong ```
@@ -151,22 +151,119 @@ This report lists all detected codebase violations based on the zero-tolerance s
 - [ ] **Line 450**: Hardcoded JSX Text: "Matched on" ``` Matched on ```
 - [ ] **Line 451**: Hardcoded JSX Text: "Points" ``` Points ```
 
+### File: `src/pages/ai-settings/step-prompt-editor/ConstraintsEditor.tsx`
+- [ ] **Line 19**: Hardcoded JSX Text: "Enable" ``` Enable ```
+- [ ] **Line 19**: Hardcoded JSX Text: "constraints" ``` constraints ```
+- [ ] **Line 19**: Hardcoded JSX Text: "Rule sets are enforced during post-processing." ``` Rule sets are enforced during post-processing. ```
+- [ ] **Line 20**: Hardcoded JSX Text: "Add rule" ``` Add rule ```
+- [ ] **Line 21**: Hardcoded JSX Text: "JSON error:" ``` JSON error: ```
+- [ ] **Line 25**: Hardcoded JSX Text: "Rule ID" ``` Rule ID ```
+- [ ] **Line 26**: Hardcoded JSX Text: "Name" ``` Name ```
+- [ ] **Line 27**: Hardcoded JSX Text: "Rule type" ``` Rule type ```
+- [ ] **Line 28**: Hardcoded JSX Text: "Outcome severity" ``` Outcome severity ```
+- [ ] **Line 28**: Hardcoded JSX Text: "Error" ``` Error ```
+- [ ] **Line 28**: Hardcoded JSX Text: "Warning" ``` Warning ```
+- [ ] **Line 28**: Hardcoded JSX Text: "Info" ``` Info ```
+- [ ] **Line 29**: Hardcoded JSX Text: "Message" ``` Message ```
+- [ ] **Line 30**: Hardcoded JSX Text: "Allowed source pattern" ``` Allowed source pattern ```
+- [ ] **Line 31**: Hardcoded JSX Text: "Input fields" ``` Input fields ```
+- [ ] **Line 32**: Hardcoded JSX Text: "Rule enabled" ``` Rule enabled ```
+- [ ] **Line 34**: Hardcoded JSX Text: "Add or select a rule." ``` Add or select a rule. ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/DataSchemaEditor.tsx`
+- [ ] **Line 40**: Hardcoded JSX Text: "No fields yet" ``` No fields yet ```
+- [ ] **Line 40**: Hardcoded JSX Text: "Start by adding the first" ``` Start by adding the first ```
+- [ ] **Line 40**: Hardcoded JSX Text: "input field." ``` input field. ```
+- [ ] **Line 41**: Hardcoded JSX Text: "No field selected" ``` No field selected ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/EditorModeToolbar.tsx`
+- [ ] **Line 15**: Hardcoded JSX Text: "Visual Editor" ``` Visual Editor ```
+- [ ] **Line 16**: Hardcoded JSX Text: "JSON Source" ``` JSON Source ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/FormMappingEditor.tsx`
+- [ ] **Line 27**: Hardcoded JSX Text: "Review layout" ``` Review layout ```
+- [ ] **Line 29**: Hardcoded JSX Text: "JSON error:" ``` JSON error: ```
+- [ ] **Line 35**: Hardcoded JSX Text: "form layout review" ``` form layout review ```
+- [ ] **Line 35**: Hardcoded JSX Text: "Each field key is the AI output path. Layout settings only control presentation." ``` Each field key is the AI output path. Layout settings only control presentation. ```
+- [ ] **Line 35**: Hardcoded JSX Text: "Close review" ``` Close review ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/data-schema/AddSchemaFieldForm.tsx`
+- [ ] **Line 9**: Hardcoded attribute [placeholder]: "fieldKey" ``` placeholder="fieldKey" ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Add field" ``` Add field ```
+- [ ] **Line 9**: Hardcoded attribute [placeholder]: "Field description" ``` placeholder="Field description" ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Use a unique camelCase key." ``` Use a unique camelCase key. ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/data-schema/SchemaFieldDetailPanel.tsx`
+- [ ] **Line 6**: Hardcoded JSX Text: "Field configuration" ``` Field configuration ```
+- [ ] **Line 7**: Hardcoded JSX Text: "Field key" ``` Field key ```
+- [ ] **Line 7**: Hardcoded JSX Text: "Display label" ``` Display label ```
+- [ ] **Line 8**: Hardcoded JSX Text: "Data type" ``` Data type ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Evidence source" ``` Evidence source ```
+- [ ] **Line 10**: Hardcoded JSX Text: "Description" ``` Description ```
+- [ ] **Line 11**: Hardcoded JSX Text: "Required input" ``` Required input ```
+- [ ] **Line 12**: Hardcoded JSX Text: "Format" ``` Format ```
+- [ ] **Line 12**: Hardcoded attribute [placeholder]: "date, email, uri..." ``` placeholder="date, email, uri..." ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/data-schema/SchemaFieldRow.tsx`
+- [ ] **Line 8**: Hardcoded JSX Text: "Required" ``` Required ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/layout/AddLayoutGroupDialog.tsx`
+- [ ] **Line 6**: Hardcoded JSX Text: "Add layout group" ``` Add layout group ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Groups define sections on the generated D1 form." ``` Groups define sections on the generated D1 form. ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Group name" ``` Group name ```
+- [ ] **Line 6**: Hardcoded attribute [placeholder]: "Team assignment" ``` placeholder="Team assignment" ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Cancel" ``` Cancel ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Add group" ``` Add group ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/layout/LayoutCanvasPanel.tsx`
+- [ ] **Line 11**: Hardcoded JSX Text: "Hidden" ``` Hidden ```
+- [ ] **Line 17**: Hardcoded JSX Text: "Spacer ·" ``` Spacer · ```
+- [ ] **Line 25**: Hardcoded JSX Text: "cols ·" ``` cols · ```
+- [ ] **Line 25**: Hardcoded JSX Text: "fields" ``` fields ```
+- [ ] **Line 26**: Hardcoded JSX Text: "Drop fields here" ``` Drop fields here ```
+- [ ] **Line 33**: Hardcoded JSX Text: "No layout groups" ``` No layout groups ```
+- [ ] **Line 33**: Hardcoded JSX Text: "Create a group, then drag fields into it." ``` Create a group, then drag fields into it. ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/layout/LayoutConfigPanel.tsx`
+- [ ] **Line 6**: Hardcoded JSX Text: "Configuration" ``` Configuration ```
+- [ ] **Line 6**: Hardcoded JSX Text: "AI output path:" ``` AI output path: ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Label" ``` Label ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Widget" ``` Widget ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Column span" ``` Column span ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Row span" ``` Row span ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Visible" ``` Visible ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Required output" ``` Required output ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Pattern" ``` Pattern ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Group settings" ``` Group settings ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Group label" ``` Group label ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Width" ``` Width ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Columns" ``` Columns ```
+- [ ] **Line 6**: Hardcoded JSX Text: "column" ``` column ```
+- [ ] **Line 6**: Hardcoded JSX Text: "Select a field or group to configure it." ``` Select a field or group to configure it. ```
+
+### File: `src/pages/ai-settings/step-prompt-editor/layout/LayoutFieldsPanel.tsx`
+- [ ] **Line 28**: Hardcoded JSX Text: "Available Fields" ``` Available Fields ```
+- [ ] **Line 28**: Hardcoded JSX Text: "Drag fields into layout groups." ``` Drag fields into layout groups. ```
+- [ ] **Line 29**: Hardcoded JSX Text: "Drop here to unassign" ``` Drop here to unassign ```
+- [ ] **Line 29**: Hardcoded JSX Text: "or all fields are assigned." ``` or all fields are assigned. ```
+- [ ] **Line 30**: Hardcoded JSX Text: "Add group" ``` Add group ```
+
+### File: `src/pages/ai-settings/step-prompts-landing.tsx`
+- [ ] **Line 17**: Hardcoded JSX Text: "Loading disciplines..." ``` Loading disciplines... ```
+- [ ] **Line 23**: Hardcoded JSX Text: "Open editor" ``` Open editor ```
+
 ### File: `src/pages/ai-settings/step-prompts-tab.tsx`
-- [ ] **Line 95**: Hardcoded JSX Text: "Loading step prompts…" ``` Loading step prompts… ```
-- [ ] **Line 104**: Hardcoded JSX Text: "Discipline" ``` Discipline ```
-- [ ] **Line 105**: Hardcoded JSX Text: "Pick a step to edit its prompt." ``` Pick a step to edit its prompt. ```
-- [ ] **Line 126**: Hardcoded attribute [title]: "Custom prompt configured" ``` title="Custom prompt configured" ```
-- [ ] **Line 159**: Hardcoded JSX Text: "Enabled" ``` Enabled ```
-- [ ] **Line 166**: Hardcoded JSX Text: "Guidance for this discipline" ``` Guidance for this discipline ```
-- [ ] **Line 169**: Hardcoded JSX Text: "DISCIPLINE GUIDE" ``` DISCIPLINE GUIDE ```
-- [ ] **Line 169**: Hardcoded JSX Text: ".
-                                The rules that stop the model inventing facts — grounding, citing
-                                sources, admitting gaps — live in the code and are not editable here." ``` .
-                                The rules that stop the model inventing facts — grounding, citing ```
-- [ ] **Line 177**: Hardcoded attribute [placeholder]: "Empty — the guidance from srv/src/domain/eightd/prompts.ts is used." ``` placeholder="Empty — the guidance from srv/src/domain/eightd/prompts.ts is used." ```
-- [ ] **Line 205**: Hardcoded JSX Text: "Restore code defaults" ``` Restore code defaults ```
-- [ ] **Line 209**: Hardcoded JSX Text: "Unsaved changes" ``` Unsaved changes ```
-- [ ] **Line 217**: Hardcoded JSX Text: "Discard" ``` Discard ```
+- [ ] **Line 65**: Hardcoded JSX Text: "Loading step prompt..." ``` Loading step prompt... ```
+- [ ] **Line 66**: Hardcoded JSX Text: "The enriched editor is currently available for D1-D4." ``` The enriched editor is currently available for D1-D4. ```
+- [ ] **Line 66**: Hardcoded JSX Text: "Back to AI Settings" ``` Back to AI Settings ```
+- [ ] **Line 70**: Hardcoded JSX Text: "Unsaved changes" ``` Unsaved changes ```
+- [ ] **Line 70**: Hardcoded JSX Text: "Discard" ``` Discard ```
+- [ ] **Line 70**: Hardcoded JSX Text: "Enabled" ``` Enabled ```
+- [ ] **Line 70**: Hardcoded JSX Text: "Restore" ``` Restore ```
+- [ ] **Line 70**: Hardcoded JSX Text: "Save changes" ``` Save changes ```
+- [ ] **Line 76**: Hardcoded JSX Text: "agent guide" ``` agent guide ```
+- [ ] **Line 76**: Hardcoded JSX Text: "Define the AI instructions for" ``` Define the AI instructions for ```
+- [ ] **Line 76**: Hardcoded JSX Text: "/80 lines" ``` /80 lines ```
 
 ### File: `src/pages/eight-d/analyze-dialog.tsx`
 - [ ] **Line 188**: Hardcoded JSX Text: "Analyze from JSON" ``` Analyze from JSON ```
@@ -310,13 +407,13 @@ This report lists all detected codebase violations based on the zero-tolerance s
 
 ## Summary
 
-- Total Issues Found: **198**
+- Total Issues Found: **274**
   - §0 Hardcoded Pixels: **0**
   - §0 Hardcoded Hex Colors: **0**
   - §0 Raw Tailwind Colors: **0**
   - §0 Raw HTML Component Primitives: **0**
   - §0 Inline Styles: **0**
   - §0 Local Status/Color Mappings: **0**
-  - §6 i18n / Hardcoded UI Text: **198**
+  - §6 i18n / Hardcoded UI Text: **274**
 
 Fix these issues to align with the Lead React Frontend Engineer guidelines.

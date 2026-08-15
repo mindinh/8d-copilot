@@ -109,6 +109,12 @@ entity StepPrompts : managed {
          */
         userTemplate : LargeString;
 
+        /** Four-tab configuration used by the enriched step prompt editor. */
+        inputSchemaJson : LargeString;
+        combinedPrompt  : LargeString;
+        formSchemaJson  : LargeString;
+        constraintsJson : LargeString;
+
         enabled      : Boolean   default true;
         /** Tăng mỗi lần lưu — để biết prompt nào đã sinh ra kết quả nào. */
         version      : Integer   default 1;

@@ -141,11 +141,115 @@ export const DEFAULT_STEP_PROMPTS: readonly {
     label: string;
     description: string;
     systemPrompt: string;
+    inputSchemaJson?: string;
+    combinedPrompt?: string;
+    formSchemaJson?: string;
+    constraintsJson?: string;
 }[] = Object.freeze([
-    { stepCode: 'D1', label: 'Establish the Team', description: 'Suggest roles and people from the teams of matching precedent cases.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D1 },
-    { stepCode: 'D2', label: 'Describe the Problem', description: 'Draft the problem paragraph and the 5W2H grid from verified case facts.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D2 },
-    { stepCode: 'D3', label: 'Interim Containment Actions', description: 'Surface containment actions, or reuse the top precedent when none exist yet.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D3 },
-    { stepCode: 'D4', label: 'Root Cause Analysis', description: 'Walk the 5-Why chain and weigh it against the independent diagnosis.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D4 },
+    {
+        stepCode: 'D1',
+        label: 'Establish the Team',
+        description: 'Suggest roles and people from the teams of matching precedent cases.',
+        systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D1,
+        combinedPrompt: [
+            'Extract the official team leader and members with their functions.',
+            'Explain why the skill mix is appropriate for this problem.',
+            'When official team data is missing, recommend people only from matching precedent cases and cite precedents#N.',
+            'When neither current team data nor precedents exist, state that manual assignment is required.',
+        ].join('\n'),
+        inputSchemaJson: JSON.stringify({
+            type: 'object',
+            properties: {
+                teamMembers: { type: 'array', title: 'Team members', description: 'Official team leader and members from the current case.', 'x-source': 'sap_qm', items: { type: 'object', properties: {} } },
+                teamSize: { type: 'number', title: 'Team size', description: 'Calculated number of current team members.', 'x-source': 'ai_enrichment' },
+                precedentTeams: { type: 'array', title: 'Precedent teams', description: 'Teams from similar completed 8D cases.', 'x-source': 'vector_search', items: { type: 'object', properties: {} } },
+            },
+            required: [],
+            additionalProperties: false,
+        }, null, 2),
+        formSchemaJson: JSON.stringify({
+            fields: [
+                { key: 'content', label: 'D1 team recommendation', widget: 'textarea', width: '100%', constraints: { required: true, minLength: 20, maxLength: 1000 } },
+                { key: 'sources', label: 'Evidence sources', widget: 'tag-selector', width: '100%', constraints: { pattern: '^(team\\.|precedents#)' } },
+                { key: 'confidence', label: 'Confidence', widget: 'input', width: '50%', constraints: { min: 0, max: 100 } },
+                { key: 'dataBacked', label: 'Data backed', widget: 'checkbox', width: '50%', constraints: {} },
+            ],
+            groups: [{ id: 'team', label: 'Team assignment', fieldKeys: ['content', 'sources', 'confidence', 'dataBacked'], width: '100', columns: 2, order: 10 }],
+        }, null, 2),
+        constraintsJson: JSON.stringify({
+            enabled: true,
+            rules: [
+                { id: 'D1_GROUNDING', name: 'Ground team identities', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(team\\.|precedents#)', message: 'Team names must come from the current team or a cited precedent.' },
+                { id: 'D1_DATA_BACKED', name: 'Correct data-backed flag', type: 'dataBackedWhenInputPresent', severity: 'warning', enabled: true, inputFields: ['teamMembers', 'precedentTeams'], message: 'Set dataBacked to false when current and precedent team data are both empty.' },
+            ],
+        }, null, 2),
+    },
+    {
+        stepCode: 'D2', label: 'Describe the Problem', description: 'Draft the problem paragraph and the 5W2H grid from verified case facts.', systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D2,
+        combinedPrompt: ['Describe the problem with verified 5W2H facts.', 'Quantify measured-versus-specification differences when values exist.', 'Use Is/Is-Not boundaries and cite every factual statement.', 'Do not invent missing measurements or locations.'].join('\n'),
+        inputSchemaJson: JSON.stringify({ type: 'object', properties: {
+            header: { type: 'object', title: 'Case header', 'x-source': 'sap_qm', properties: {} },
+            product: { type: 'object', title: 'Material and product', 'x-source': 'sap_qm', properties: {} },
+            defect: { type: 'object', title: 'Defect details', 'x-source': 'sap_qm', properties: {} },
+            inspections: { type: 'array', title: 'Inspection results', 'x-source': 'sap_qm', items: { type: 'object', properties: {} } },
+            isIsNot: { type: 'object', title: 'Is / Is-Not analysis', 'x-source': 'manual_input', properties: {} },
+            derivedFacts: { type: 'array', title: 'Derived facts', 'x-source': 'ai_enrichment', items: { type: 'string' } },
+        }, required: [], additionalProperties: false }, null, 2),
+        formSchemaJson: JSON.stringify({ fields: [
+            { key: 'summary', label: 'Problem summary', widget: 'textarea', width: '100%', constraints: { required: true, minLength: 20, maxLength: 500 } },
+            { key: 'content', label: '5W2H and Is / Is-Not analysis', widget: 'textarea', width: '100%', constraints: { required: true, minLength: 50, maxLength: 2000 } },
+            { key: 'sources', label: 'Evidence sources', widget: 'tag-selector', width: '100%', constraints: {} },
+            { key: 'confidence', label: 'Confidence', widget: 'input', width: '50%', constraints: { min: 0, max: 1 } },
+            { key: 'dataBacked', label: 'Data backed', widget: 'checkbox', width: '50%', constraints: {} },
+        ], groups: [{ id: 'problem', label: 'Problem description', fieldKeys: ['summary', 'content', 'sources', 'confidence', 'dataBacked'], width: '100', columns: 2, order: 10 }] }, null, 2),
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D2_CITATIONS', name: 'Require factual citations', type: 'citationRequired', severity: 'error', enabled: true, message: 'Measured values and verified facts require sources.' },
+            { id: 'D2_SOURCES', name: 'Use problem evidence', type: 'sourcePattern', severity: 'warning', enabled: true, pattern: '^(header|product|defect|inspections|isIsNot|derivedFacts)', message: 'D2 sources must resolve to problem evidence.' },
+        ] }, null, 2),
+    },
+    {
+        stepCode: 'D3', label: 'Interim Containment Actions', description: 'Surface containment actions, or reuse the top precedent when none exist yet.', systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D3,
+        combinedPrompt: ['List immediate containment actions with owner and status when recorded.', 'Explain how each action protects the customer or process.', 'If no current action exists, present precedent actions only as proposals and cite precedents#N.', 'Clearly distinguish recorded actions from recommendations.'].join('\n'),
+        inputSchemaJson: JSON.stringify({ type: 'object', properties: {
+            actions: { type: 'object', title: 'Current actions', 'x-source': 'sap_qm', properties: {} },
+            customer: { type: 'object', title: 'Customer impact', 'x-source': 'sap_qm', properties: {} },
+            precedents: { type: 'array', title: 'Precedent actions', 'x-source': 'vector_search', items: { type: 'object', properties: {} } },
+        }, required: [], additionalProperties: false }, null, 2),
+        formSchemaJson: JSON.stringify({ fields: [
+            { key: 'summary', label: 'Containment summary', widget: 'textarea', width: '100%', constraints: { required: true, maxLength: 500 } },
+            { key: 'content', label: 'Containment action analysis', widget: 'textarea', width: '100%', constraints: { required: true, minLength: 20, maxLength: 2000 } },
+            { key: 'actionItems', label: 'Recommended follow-up actions', widget: 'multiSelect', width: '100%', constraints: {} },
+            { key: 'sources', label: 'Evidence sources', widget: 'tag-selector', width: '100%', constraints: {} },
+            { key: 'confidence', label: 'Confidence', widget: 'input', width: '50%', constraints: { min: 0, max: 1 } },
+            { key: 'dataBacked', label: 'Data backed', widget: 'checkbox', width: '50%', constraints: {} },
+        ], groups: [{ id: 'containment', label: 'Interim containment', fieldKeys: ['summary', 'content', 'actionItems', 'sources', 'confidence', 'dataBacked'], width: '100', columns: 2, order: 10 }] }, null, 2),
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D3_SOURCES', name: 'Ground containment actions', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(actions\.containment|customer|precedents#)', message: 'Containment actions must be recorded actions or cited proposals.' },
+            { id: 'D3_DATA_BACKED', name: 'Correct data-backed flag', type: 'dataBackedWhenInputPresent', severity: 'warning', enabled: true, inputFields: ['actions', 'precedents'], message: 'Set dataBacked false when neither current nor precedent actions exist.' },
+        ] }, null, 2),
+    },
+    {
+        stepCode: 'D4', label: 'Root Cause Analysis', description: 'Walk the 5-Why chain and weigh it against the independent diagnosis.', systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D4,
+        combinedPrompt: ['Walk the recorded 5-Why chain and evaluate Ishikawa 6M evidence.', 'State the confirmed root cause only when supported by evidence.', 'Include an Independent verification section that reports agreement or disagreement with the blind diagnosis.', 'Treat precedent root causes as hypotheses, never as facts for this case.'].join('\n'),
+        inputSchemaJson: JSON.stringify({ type: 'object', properties: {
+            fiveWhy: { type: 'array', title: '5-Why chain', 'x-source': 'sap_qm', items: { type: 'object', properties: {} } },
+            ishikawa: { type: 'array', title: 'Ishikawa findings', 'x-source': 'sap_qm', items: { type: 'object', properties: {} } },
+            rootCause: { type: 'object', title: 'Recorded root cause', 'x-source': 'sap_qm', properties: {} },
+            independent: { type: 'object', title: 'Independent diagnosis', 'x-source': 'ai_enrichment', properties: {} },
+            precedents: { type: 'array', title: 'Precedent root causes', 'x-source': 'vector_search', items: { type: 'object', properties: {} } },
+        }, required: [], additionalProperties: false }, null, 2),
+        formSchemaJson: JSON.stringify({ fields: [
+            { key: 'summary', label: 'Root cause summary', widget: 'textarea', width: '100%', constraints: { required: true, maxLength: 500 } },
+            { key: 'content', label: '5-Why, Ishikawa and independent verification', widget: 'textarea', width: '100%', constraints: { required: true, minLength: 50, maxLength: 2500 } },
+            { key: 'sources', label: 'Evidence sources', widget: 'tag-selector', width: '100%', constraints: {} },
+            { key: 'confidence', label: 'Confidence', widget: 'input', width: '50%', constraints: { min: 0, max: 1 } },
+            { key: 'dataBacked', label: 'Data backed', widget: 'checkbox', width: '50%', constraints: {} },
+        ], groups: [{ id: 'root-cause', label: 'Root cause analysis', fieldKeys: ['summary', 'content', 'sources', 'confidence', 'dataBacked'], width: '100', columns: 2, order: 10 }] }, null, 2),
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D4_DISCLOSURE', name: 'Independent verification disclosure', type: 'requiredDisclosure', severity: 'error', enabled: true, pattern: 'independent verification', message: 'D4 must disclose agreement or disagreement with the independent diagnosis.' },
+            { id: 'D4_SOURCES', name: 'Ground root cause analysis', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(fiveWhy|ishikawa|rootCause|independent|precedents#)', message: 'D4 sources must resolve to root-cause evidence.' },
+        ] }, null, 2),
+    },
     { stepCode: 'D5', label: 'Permanent Corrective Actions', description: 'Tie each corrective action to a step of the root cause chain.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D5 },
     { stepCode: 'D6', label: 'Verify Effectiveness', description: 'Write the verification plan; this dataset carries no verification evidence.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D6 },
     { stepCode: 'D7', label: 'Prevent Recurrence', description: 'Preventive actions and the FMEA entry to update.' , systemPrompt: DEFAULT_DISCIPLINE_GUIDE.D7 },

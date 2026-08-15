@@ -53,7 +53,7 @@ npm run dev
 | Command | Description |
 |:---|:---|
 | `npm run dev:all` | Auto-cleans ports 4004/5544 & launches Backend + Frontend concurrently |
-| `npm run dev:backend` | Starts only CAP Backend (`cds serve`) |
+| `npm run dev:backend` | Starts CAP through the local TSX runner so `srv/server.ts` bootstrap and seed hooks run |
 | `npm run dev --prefix app/cnma_proresolve_ui` | Starts only React Frontend (`vite`) |
 | `npm run deploy:sqlite` | Deploys schema to local SQLite database (`sqlite.db`) |
 | `npm run clean` | Cleans temporary build directories & Makefiles |

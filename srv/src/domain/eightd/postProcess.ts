@@ -44,6 +44,7 @@ export function postProcess(
     independent?: unknown,
     /** Tiền lệ đã tìm được — để `precedents#N` trong `sources` giải được. */
     precedents?: unknown,
+    constraintsJson?: string | Partial<Record<DisciplineCode, string>>,
 ): { result: EightDResult; repairs: string[] } {
     const repairs: string[] = [];
     const incoming = Array.isArray(result?.disciplines) ? result.disciplines : [];
@@ -141,6 +142,49 @@ export function postProcess(
                 `${d.code}: dataBacked=true nhưng CaseContext không có dữ liệu nguồn tương ứng; hạ xuống false.`,
             );
             d.dataBacked = false;
+        }
+    }
+
+    const configuredConstraints: Partial<Record<DisciplineCode, string>> = typeof constraintsJson === 'string' ? { D1: constraintsJson } : (constraintsJson ?? {});
+    const d1 = disciplines.find((discipline) => discipline.code === 'D1');
+    if (d1 && configuredConstraints.D1) {
+        const hasCurrentTeam = Boolean(context.team.leader) || context.team.members.length > 0;
+        const hasPrecedentTeam = Array.isArray(precedents)
+            && precedents.some((item: any) => Array.isArray(item?.team) && item.team.length > 0);
+        if (!hasCurrentTeam && !hasPrecedentTeam && d1.dataBacked) {
+            repairs.push('D1: dataBacked=true but neither current nor precedent team data exists; set to false.');
+            d1.dataBacked = false;
+        }
+        const groundedSources = d1.sources.filter((source) => /^(team\.|precedents#)/.test(source));
+        if (groundedSources.length !== d1.sources.length) {
+            repairs.push('D1: removed team sources that were not grounded in team.* or precedents#N.');
+            d1.sources = groundedSources;
+            if (d1.sources.length === 0) d1.dataBacked = false;
+        }
+    }
+
+    for (const discipline of disciplines) {
+        const json = configuredConstraints[discipline.code];
+        if (!json) continue;
+        try {
+            const config = JSON.parse(json) as { rules?: Array<{ type?: string; enabled?: boolean; pattern?: string; message?: string }> };
+            for (const rule of config.rules ?? []) {
+                if (rule.enabled === false) continue;
+                if (rule.type === 'sourcePattern' && rule.pattern) {
+                    const pattern = new RegExp(rule.pattern);
+                    const grounded = discipline.sources.filter((source) => pattern.test(source));
+                    if (grounded.length !== discipline.sources.length) {
+                        repairs.push(`${discipline.code}: removed sources outside configured pattern ${rule.pattern}.`);
+                        discipline.sources = grounded;
+                        if (!grounded.length) discipline.dataBacked = false;
+                    }
+                }
+                if (rule.type === 'requiredDisclosure' && rule.pattern && !new RegExp(rule.pattern, 'i').test(discipline.content)) {
+                    repairs.push(`${discipline.code}: required disclosure is missing (${rule.message ?? rule.pattern}).`);
+                }
+            }
+        } catch {
+            repairs.push(`${discipline.code}: configured constraints could not be evaluated.`);
         }
     }
 

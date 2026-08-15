@@ -9,6 +9,7 @@ import {
     HomePage,
     OrganizationPage,
     AiSettingsPage,
+    StepPromptEditorPage,
     EightDListPage,
     EightDDetailPage,
 } from '@/pages';
@@ -45,6 +46,7 @@ export default function App() {
             <div className="min-h-screen bg-background">
                 <ErrorBoundary>
                     <Routes>
+                        <Route path="/ai-settings/step-prompts/:stepCode" element={<StepPromptEditorPage />} />
                         <Route element={<MainLayout />}>
                             {/* ─── Application Routes ─── */}
                             <Route path="/" element={<HomePage />} />
