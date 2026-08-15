@@ -3,7 +3,6 @@ import cors from 'cors';
 import cds from '@sap/cds';
 import path from 'path';
 import dotenv from 'dotenv';
-import { IdentityServiceHandler } from '@cnma/cap-identity/srv';
 import { ValueHelpHandler } from '@cnma/cap-valuehelp/srv';
 
 import { registerAppActivities } from './src/core/ai/activities';
@@ -11,6 +10,7 @@ import { registerAppEmbeddingCorpora } from './src/core/ai/embeddingCorpora';
 import { initEmbeddings } from './src/core/ai/llmClient';
 import { runAiStartupProbes } from './src/core/ai/startupProbes';
 import { registerAiAdminHandlers } from './src/services/aiAdminService';
+import { registerIdentityHandlers } from './src/services/identityService';
 import { registerEightDHandlers, sweepOnStartup } from './src/services/eightDService';
 import { seedRetrievalConfig } from './src/domain/eightd/precedent/configRepository';
 import {
@@ -78,17 +78,7 @@ cds.on('bootstrap', (app: express.Application) => {
  */
 cds.on('serving', (srv) => {
     if (srv.name === 'IdentityService') {
-        const handler = new IdentityServiceHandler(srv as cds.ApplicationService);
-        handler.register();
-
-        // Ensure isAdmin returns true for both lowercase 'admin' and uppercase 'Admin' XSUAA scopes
-        srv.on('me', async (req, next) => {
-            const res = await next();
-            if (res && typeof res === 'object') {
-                res.isAdmin = req.user.is('admin') || req.user.is('Admin');
-            }
-            return res;
-        });
+        registerIdentityHandlers(srv as cds.ApplicationService);
     }
     if (srv.name === 'AiAdminService') {
         registerAiAdminHandlers(srv);

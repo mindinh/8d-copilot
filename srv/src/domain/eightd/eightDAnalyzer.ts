@@ -30,7 +30,7 @@ import {
     buildEightDSystemPrompt,
     buildEnrichmentPrompt,
 } from './prompts';
-import { getDisciplineGuide } from './precedent/configRepository';
+import { getDisciplineGuide, getStepPromptRuntimeConfig } from './precedent/configRepository';
 import { findPrecedents, type Precedent } from './precedent/findPrecedents';
 import { callAndParse } from './jsonExtract';
 import { postProcess } from './postProcess';
@@ -169,7 +169,18 @@ async function generateReport(
 
     // Hướng dẫn từng discipline admin chỉnh trên UI. Bảng rỗng ⇒ dùng hằng số
     // trong `prompts.ts`, tức là prompt y như cũ.
-    const systemPrompt = buildEightDSystemPrompt(await getDisciplineGuide());
+    const configurableCodes = ['D1', 'D2', 'D3', 'D4'] as const;
+    const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
+    const configuredConstraints = Object.fromEntries(configurableCodes.flatMap((code) => {
+        const json = configs[code]?.constraintsJson; if (!json) return [];
+        try { return (JSON.parse(json) as { enabled?: boolean }).enabled === false ? [] : [[code, json]]; } catch { return []; }
+    }));
+    const systemPrompt = buildEightDSystemPrompt(
+        await getDisciplineGuide(),
+        configuredConstraints,
+    );
+    const inputSchemas = Object.fromEntries(configurableCodes.flatMap((code) => configs[code]?.inputSchemaJson ? [[code, configs[code]!.inputSchemaJson]] : []));
+    const formSchemas = Object.fromEntries(configurableCodes.flatMap((code) => configs[code]?.formSchemaJson ? [[code, configs[code]!.formSchemaJson]] : []));
 
     const { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
         const res = await complete(
@@ -178,8 +189,8 @@ async function generateReport(
                 {
                     role: 'user',
                     content: repairHint
-                        ? `${buildEightDPrompt(context, enrichment, independent, precedents)}\n\n## CORRECTION\n${repairHint}`
-                        : buildEightDPrompt(context, enrichment, independent, precedents),
+                        ? `${buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas)}\n\n## CORRECTION\n${repairHint}`
+                        : buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas),
                 },
             ],
             {
@@ -273,7 +284,18 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         await generateReport(context, enrichment, independent, precedents);
 
     // ── Lưới an toàn ──
-    const { result, repairs } = postProcess(rawResult, context, enrichment, independent, precedents);
+    const constraintConfigs = Object.fromEntries((await Promise.all(['D1', 'D2', 'D3', 'D4'].map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {
+        if (!config?.constraintsJson) return [];
+        try { return (JSON.parse(config.constraintsJson) as { enabled?: boolean }).enabled === false ? [] : [[code, config.constraintsJson]]; } catch { return []; }
+    }));
+    const { result, repairs } = postProcess(
+        rawResult,
+        context,
+        enrichment,
+        independent,
+        precedents,
+        constraintConfigs,
+    );
     if (repairs.length) LOG.warn(`postProcess phải chữa ${repairs.length} chỗ:`, repairs);
 
     const [parseModel, analyzeModel] = await Promise.all([

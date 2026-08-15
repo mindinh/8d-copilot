@@ -121,17 +121,41 @@ export async function getRetrievalConfig(): Promise<RetrievalConfig> {
 export async function getDisciplineGuide(): Promise<Record<string, string>> {
     try {
         const db = await cds.connect.to('db');
-        const rows = await db.run(SELECT.from(STEP_PROMPTS).columns('stepCode', 'systemPrompt', 'enabled'));
+        const rows = await db.run(SELECT.from(STEP_PROMPTS).columns('stepCode', 'systemPrompt', 'combinedPrompt', 'enabled'));
         const out: Record<string, string> = {};
         for (const r of rows as any[]) {
             if (r.enabled === false) continue;
-            const text = String(r.systemPrompt ?? '').trim();
+            const text = String(r.combinedPrompt ?? r.systemPrompt ?? '').trim();
             if (text) out[String(r.stepCode)] = text;
         }
         return out;
     } catch (e: any) {
         LOG.warn(`Không đọc được hướng dẫn từng bước, dùng mặc định trong code: ${e.message}`);
         return {};
+    }
+}
+
+export interface StepPromptRuntimeConfig {
+    inputSchemaJson: string;
+    combinedPrompt: string;
+    formSchemaJson: string;
+    constraintsJson: string;
+}
+
+export async function getStepPromptRuntimeConfig(stepCode: string): Promise<StepPromptRuntimeConfig | null> {
+    try {
+        const db = await cds.connect.to('db');
+        const row = await db.run(SELECT.one.from(STEP_PROMPTS).where({ stepCode }));
+        if (!row || row.enabled === false) return null;
+        return {
+            inputSchemaJson: String(row.inputSchemaJson ?? ''),
+            combinedPrompt: String(row.combinedPrompt ?? row.systemPrompt ?? ''),
+            formSchemaJson: String(row.formSchemaJson ?? ''),
+            constraintsJson: String(row.constraintsJson ?? ''),
+        };
+    } catch (e: any) {
+        LOG.warn(`Khong doc duoc cau hinh runtime ${stepCode}: ${e.message}`);
+        return null;
     }
 }
 
@@ -232,12 +256,25 @@ export async function seedRetrievalConfig(): Promise<void> {
                         description: p.description,
                         systemPrompt: p.systemPrompt,
                         userTemplate: null,
+                        inputSchemaJson: p.inputSchemaJson ?? null,
+                        combinedPrompt: p.combinedPrompt ?? p.systemPrompt,
+                        formSchemaJson: p.formSchemaJson ?? null,
+                        constraintsJson: p.constraintsJson ?? null,
                         enabled: true,
                         version: 1,
                     })),
                 ),
             );
             LOG.info(`Đã seed ${missing.length} dòng prompt bước D`);
+        }
+
+        for (const configuredDefault of DEFAULT_STEP_PROMPTS.filter((prompt) => ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode))) {
+            const current = await db.run(SELECT.one.from(STEP_PROMPTS).where({ stepCode: configuredDefault.stepCode }));
+            const patch: Record<string, string> = {};
+            for (const field of ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'] as const) {
+                if (!String(current?.[field] ?? '').trim() && configuredDefault[field]) patch[field] = configuredDefault[field];
+            }
+            if (Object.keys(patch).length) await db.run(UPDATE(STEP_PROMPTS).set(patch).where({ stepCode: configuredDefault.stepCode }));
         }
 
         // Bù nội dung cho dòng đã tồn tại nhưng còn rỗng.

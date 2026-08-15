@@ -202,7 +202,7 @@ export function EightDListPage() {
                 </Card>
             ) : (
                 <Card className="p-0 overflow-hidden">
-                    <Table>
+                    <Table containerClassName="overflow-x-auto overflow-y-hidden">
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-32">Notification</TableHead>

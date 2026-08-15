@@ -52,3 +52,6 @@ srv/data/case-library/
 
 # Sự vụ mẫu, do scripts/bundle-library.mjs sinh ra từ mock-data/incoming/.
 app/cnma_proresolve_ui/public/samples/
+
+# added by cds
+.cdsrc-private.json

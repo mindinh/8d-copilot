@@ -442,7 +442,7 @@ export function SimilarityTab() {
                                         </Badge>
                                     </div>
 
-                                    <Table>
+                                    <Table containerClassName="overflow-x-auto overflow-y-hidden">
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>Step</TableHead>

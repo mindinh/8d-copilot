@@ -1,230 +1,82 @@
-import { useEffect, useState } from 'react';
-import {
-    Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
-    Label, Separator, Spinner, Switch, Textarea,
-} from '@cnma/react-ui';
-import { RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Badge, Button, Label, Spinner, Switch, Textarea } from '@cnma/react-ui';
+import { ArrowLeft, RotateCcw, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-    getStepPrompts, resetRetrievalConfig, updateStepPrompt, type StepPrompt,
-} from '@/services/retrieval-service';
+import { getStepPrompts, resetRetrievalConfig, updateStepPrompt, type StepPrompt } from '@/services/retrieval-service';
+import { ConstraintsEditor } from './step-prompt-editor/ConstraintsEditor';
+import { DataSchemaEditor } from './step-prompt-editor/DataSchemaEditor';
+import { FormMappingEditor } from './step-prompt-editor/FormMappingEditor';
+import { normalizeDataSchema, normalizeFormSchema, parseConfig, stringifyConfig } from './step-prompt-editor/json';
+import { RawConfigEditor } from './step-prompt-editor/RawConfigEditor';
+import { StepEditorTabNavigation, type StepEditorTab } from './step-prompt-editor/StepEditorTabNavigation';
+import type { ConstraintsConfig, FormSchemaConfig } from './step-prompt-editor/types';
 
-/**
- * Sửa hướng dẫn của từng discipline.
- *
- * ── Ô này điều khiển đúng cái gì ──
- * Pipeline sinh cả tám discipline trong MỘT lời gọi model. Prompt của lời gọi đó
- * gồm hai phần:
- *
- *   phần LUẬT     grounding, bắt buộc trích nguồn, thành thật về chỗ thiếu dữ
- *                 liệu, D6 luôn dataBacked = false. Nằm trong code, KHÔNG sửa
- *                 được ở đây — đó là cơ chế chống bịa, cho sửa trên UI nghĩa là
- *                 cho phép tắt nó bằng vài cú gõ.
- *
- *   phần HƯỚNG DẪN  "D4 nên nhấn cái gì", "D8 nên tóm tắt thế nào". Đây là quyết
- *                   định nghiệp vụ, thay đổi theo nhà máy — và đây là thứ trang
- *                   này sửa.
- *
- * Nội dung được seed sẵn bằng chính bản đang chạy, nên mở lên là thấy ngay prompt
- * thật chứ không phải ô rỗng.
- */
+type ConfigField = 'inputSchemaJson' | 'combinedPrompt' | 'formSchemaJson' | 'constraintsJson';
+const CONFIG_FIELDS: ConfigField[] = ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'];
 
-export function StepPromptsTab() {
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unexpected error'; }
+
+export function StepPromptEditorPage() {
+    const navigate = useNavigate();
+    const { stepCode = 'D1' } = useParams();
     const [prompts, setPrompts] = useState<StepPrompt[]>([]);
-    const [active, setActive] = useState<string>('D1');
+    const [active, setActive] = useState(stepCode.toUpperCase());
+    const [draft, setDraft] = useState<Record<ConfigField, string>>({ inputSchemaJson: '', combinedPrompt: '', formSchemaJson: '', constraintsJson: '' });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState<StepEditorTab>('data');
+    const current = prompts.find((prompt) => prompt.stepCode === active) ?? null;
 
-    const [systemPrompt, setSystemPrompt] = useState('');
+    const loadDraft = useCallback((prompt: StepPrompt) => setDraft({
+        inputSchemaJson: prompt.inputSchemaJson ?? '', combinedPrompt: prompt.combinedPrompt ?? prompt.systemPrompt ?? '',
+        formSchemaJson: prompt.formSchemaJson ?? '', constraintsJson: prompt.constraintsJson ?? '',
+    }), []);
+    const reload = useCallback(async (selected = active) => {
+        const rows = await getStepPrompts(); setPrompts(rows);
+        const next = rows.find((row) => row.stepCode === selected) ?? rows[0];
+        if (next) { setActive(next.stepCode); loadDraft(next); }
+    }, [active, loadDraft]);
+    useEffect(() => { reload(stepCode.toUpperCase()).catch((error: unknown) => toast.error(errorMessage(error))).finally(() => setLoading(false)); }, [stepCode]);
 
-    const current = prompts.find((p) => p.stepCode === active) ?? null;
-    const dirty = current !== null && systemPrompt !== (current.systemPrompt ?? '');
-
-    async function reload(keep = active) {
-        const list = await getStepPrompts();
-        setPrompts(list);
-        const sel = list.find((p) => p.stepCode === keep) ?? list[0] ?? null;
-        if (sel) {
-            setActive(sel.stepCode);
-            setSystemPrompt(sel.systemPrompt ?? '');
-        }
-        return list;
-    }
-
-    useEffect(() => {
-        (async () => {
-            try {
-                await reload('D1');
-            } catch (e: any) {
-                toast.error(`Could not load step prompts: ${e.message}`);
-            } finally {
-                setLoading(false);
-            }
-        })();
-    }, []);
-
-    function select(step: StepPrompt) {
-        if (dirty && !window.confirm('Discard unsaved changes to this step?')) return;
-        setActive(step.stepCode);
-        setSystemPrompt(step.systemPrompt ?? '');
-    }
-
+    const dirty = current ? CONFIG_FIELDS.some((field) => draft[field] !== (current[field] ?? (field === 'combinedPrompt' ? current.systemPrompt : '') ?? '')) : false;
+    const input = useMemo(() => { const parsed = parseConfig<unknown>(draft.inputSchemaJson, {}); return { value: normalizeDataSchema(parsed.value), error: parsed.error }; }, [draft.inputSchemaJson]);
+    const form = useMemo(() => { const parsed = parseConfig<FormSchemaConfig>(draft.formSchemaJson, { fields: [] }); return { ...parsed, value: normalizeFormSchema(parsed.value, current?.stepCode) }; }, [draft.formSchemaJson, current?.stepCode]);
+    const constraints = useMemo(() => parseConfig<ConstraintsConfig>(draft.constraintsJson, { enabled: true, rules: [] }), [draft.constraintsJson]);
+    const setField = (field: ConfigField, value: string) => setDraft((previous) => ({ ...previous, [field]: value }));
     async function save() {
-        if (!current) return;
+        if (!current || input.error || form.error || constraints.error) { toast.error('Fix invalid JSON before saving'); return; }
         setSaving(true);
         try {
-            await updateStepPrompt(current.stepCode, {
-                // Rỗng → null: backend hiểu là "chưa cấu hình" và rơi về hằng số
-                // trong code. Lưu chuỗi rỗng sẽ thành hướng dẫn rỗng, tức là
-                // discipline đó chạy không có chỉ dẫn nào.
-                systemPrompt: systemPrompt.trim() || null,
-                version: (current.version ?? 1) + 1,
-            });
-            await reload(current.stepCode);
-            toast.success(`${current.stepCode} prompt saved`);
-        } catch (e: any) {
-            toast.error(`Save failed: ${e?.response?.data?.error?.message ?? e.message}`);
-        } finally {
-            setSaving(false);
-        }
+            await updateStepPrompt(current.stepCode, { ...draft, systemPrompt: draft.combinedPrompt, version: current.version + 1 });
+            await reload(current.stepCode); toast.success(`${current.stepCode} configuration saved`);
+        } catch (error: unknown) { toast.error(errorMessage(error)); }
+        finally { setSaving(false); }
     }
 
-    if (loading) {
-        return (
-            <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-                Loading step prompts…
+    async function restoreStep() {
+        if (!current || !window.confirm(`Restore only ${current.stepCode} to the shipped defaults?`)) return;
+        setSaving(true);
+        try { await resetRetrievalConfig(`prompt:${current.stepCode}`); await reload(current.stepCode); toast.success(`${current.stepCode} defaults restored. Other steps were not changed.`); }
+        catch (error: unknown) { toast.error(errorMessage(error)); }
+        finally { setSaving(false); }
+    }
+
+    if (loading) return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground"><Spinner className="mr-2 h-5 w-5" /> Loading step prompt...</div>;
+    if (!current || !['D1', 'D2', 'D3', 'D4'].includes(current.stepCode)) return <div className="flex min-h-screen flex-col items-center justify-center gap-4"><p className="text-muted-foreground">The enriched editor is currently available for D1-D4.</p><Button variant="outline" onClick={() => navigate('/ai-settings')}><ArrowLeft className="h-4 w-4" /> Back to AI Settings</Button></div>;
+    return <div className="flex h-screen min-w-0 flex-col overflow-hidden bg-background">
+        <header className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-4 border-b bg-card px-6 py-4">
+            <div className="flex min-w-0 items-center gap-4"><Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate('/ai-settings')}><ArrowLeft className="h-5 w-5" /></Button><div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-xl font-bold">{current.stepCode} - {current.label}</h1><Badge variant="outline">v{current.version}</Badge></div><p className="truncate text-sm text-muted-foreground">{current.description}</p></div></div>
+            <div className="flex items-center gap-3">{dirty && <><Badge variant="secondary">Unsaved changes</Badge><Button variant="ghost" size="sm" onClick={() => loadDraft(current)}>Discard</Button></>}<div className="flex items-center gap-2"><Switch id="step-enabled" checked={current.enabled} onCheckedChange={async (enabled) => { await updateStepPrompt(current.stepCode, { enabled }); await reload(current.stepCode); }} /><Label htmlFor="step-enabled">Enabled</Label></div><Button variant="outline" disabled={saving} onClick={restoreStep}><RotateCcw className="h-4 w-4" /> Restore {current.stepCode}</Button><Button disabled={!dirty || saving || draft.combinedPrompt.split(/\r?\n/).length > 80 || Boolean(input.error || form.error || constraints.error)} onClick={save}>{saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />} Save changes</Button></div>
+        </header>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <StepEditorTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {activeTab === 'data' && (input.error ? <RawConfigEditor value={draft.inputSchemaJson} error={input.error} onChange={(value) => setField('inputSchemaJson', value)} /> : <DataSchemaEditor stepCode={current.stepCode} value={input.value} onChange={(value) => setField('inputSchemaJson', stringifyConfig(value))} />)}
+                {activeTab === 'prompt' && <div className="mx-auto w-full max-w-5xl space-y-6 overflow-y-auto p-6"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-medium">{current.stepCode} agent guide</h3><p className="text-sm text-muted-foreground">Define the AI instructions for {current.label}.</p></div><Badge variant={draft.combinedPrompt.split(/\r?\n/).length > 80 ? 'destructive' : 'secondary'}>{draft.combinedPrompt.split(/\r?\n/).length}/80 lines</Badge></div><div className="rounded-xl border bg-card p-6 shadow-sm"><Textarea className="min-h-96 font-mono text-sm leading-relaxed" value={draft.combinedPrompt} onChange={(event) => setField('combinedPrompt', event.target.value)} /></div></div>}
+                {activeTab === 'form' && (form.error ? <RawConfigEditor value={draft.formSchemaJson} error={form.error} onChange={(value) => setField('formSchemaJson', value)} /> : <FormMappingEditor stepCode={current.stepCode} value={form.value} onChange={(value) => setField('formSchemaJson', stringifyConfig(value))} />)}
+                {activeTab === 'constraints' && (constraints.error ? <RawConfigEditor value={draft.constraintsJson} error={constraints.error} onChange={(value) => setField('constraintsJson', value)} /> : <ConstraintsEditor stepCode={current.stepCode} value={constraints.value} onChange={(value) => setField('constraintsJson', stringifyConfig(value))} />)}
             </div>
-        );
-    }
-
-    return (
-        <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
-            <Card className="h-fit">
-                <CardHeader>
-                    <CardTitle className="text-base">Discipline</CardTitle>
-                    <CardDescription>Pick a step to edit its prompt.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                    {prompts.map((p) => {
-                        const configured = Boolean(p.systemPrompt || p.userTemplate);
-                        return (
-                            <Button
-                                key={p.stepCode}
-                                type="button"
-                                variant="ghost"
-                                onClick={() => select(p)}
-                                className={`flex w-full items-center justify-start gap-2 rounded-md px-2.5 py-2 text-left text-sm h-auto transition-colors
-                                    ${p.stepCode === active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}
-                            >
-                                <span className="w-7 shrink-0 font-mono text-xs text-muted-foreground">
-                                    {p.stepCode}
-                                </span>
-                                <span className="flex-1 truncate text-left">{p.label}</span>
-                                {configured && (
-                                    <span
-                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                                        title="Custom prompt configured"
-                                    />
-                                )}
-                            </Button>
-                        );
-                    })}
-                </CardContent>
-            </Card>
-
-            {current && (
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <CardTitle className="flex items-center gap-2">
-                                    {current.stepCode} — {current.label}
-                                    {!current.systemPrompt && (
-                                        <Badge variant="secondary" className="text-xs">empty — using code default</Badge>
-                                    )}
-                                    <Badge variant="outline" className="text-xs">v{current.version}</Badge>
-                                </CardTitle>
-                                <CardDescription className="mt-1">{current.description}</CardDescription>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2 pt-1">
-                                <Switch
-                                    id="enabled"
-                                    checked={current.enabled}
-                                    disabled={saving}
-                                    onCheckedChange={async (v) => {
-                                        await updateStepPrompt(current.stepCode, { enabled: v });
-                                        await reload(current.stepCode);
-                                    }}
-                                />
-                                <Label htmlFor="enabled" className="cursor-pointer text-xs">Enabled</Label>
-                            </div>
-                        </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-5">
-                        <div className="space-y-2">
-                            <Label htmlFor="system">Guidance for this discipline</Label>
-                            <p className="text-xs text-muted-foreground">
-                                What the model should emphasise when writing this discipline. It is
-                                inserted into the report prompt under <span className="font-mono">DISCIPLINE GUIDE</span>.
-                                The rules that stop the model inventing facts — grounding, citing
-                                sources, admitting gaps — live in the code and are not editable here.
-                            </p>
-                            <Textarea
-                                id="system"
-                                rows={12}
-                                className="font-mono text-xs"
-                                placeholder="Empty — the guidance from srv/src/domain/eightd/prompts.ts is used."
-                                value={systemPrompt}
-                                onChange={(e) => setSystemPrompt(e.target.value)}
-                                disabled={saving}
-                            />
-                        </div>
-
-                        <Separator />
-
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline" size="sm"
-                                disabled={saving}
-                                onClick={async () => {
-                                    if (!window.confirm('Restore every step to the guidance shipped in the code?')) return;
-                                    setSaving(true);
-                                    try {
-                                        await resetRetrievalConfig('prompts');
-                                        await reload(current.stepCode);
-                                        toast.success('All steps restored to the code defaults');
-                                    } catch (e: any) {
-                                        toast.error(`Reset failed: ${e.message}`);
-                                    } finally {
-                                        setSaving(false);
-                                    }
-                                }}
-                            >
-                                <RotateCcw className="w-4 h-4" />
-                                Restore code defaults
-                            </Button>
-
-                            <div className="ml-auto flex items-center gap-2">
-                                {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
-                                <Button
-                                    variant="ghost" size="sm"
-                                    disabled={saving || !dirty}
-                                    onClick={() => {
-                                        setSystemPrompt(current.systemPrompt ?? '');
-                                    }}
-                                >
-                                    Discard
-                                </Button>
-                                <Button size="sm" disabled={saving || !dirty} onClick={save}>
-                                    {saving && <Spinner className="w-4 h-4" />}
-                                    {saving ? 'Saving…' : 'Save prompt'}
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
-    );
+        </main>
+    </div>;
 }

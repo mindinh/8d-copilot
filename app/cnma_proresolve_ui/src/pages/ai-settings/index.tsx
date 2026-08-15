@@ -4,7 +4,7 @@ import { SlidersHorizontal, GitCompare, MessageSquareCode, Cpu } from 'lucide-re
 import { aiModelApi } from '@/services/ai-model-service';
 import { GeneralSettingsTab } from './general-settings-tab';
 import { SimilarityTab } from './similarity-tab';
-import { StepPromptsTab } from './step-prompts-tab';
+import { StepPromptsTab } from './step-prompts-landing';
 
 /**
  * Trang cấu hình AI.
@@ -61,15 +61,32 @@ export function AiSettingsPage() {
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="general" className="mt-5">
+                {/*
+                 * Keep every settings panel mounted. Model sync can take tens of seconds;
+                 * unmounting sibling panels made them discard their loaded data and show a
+                 * blocking loader again whenever the user changed tabs during the sync.
+                 */}
+                <TabsContent
+                    value="general"
+                    forceMount
+                    className="mt-5 data-[state=inactive]:hidden"
+                >
                     <GeneralSettingsTab />
                 </TabsContent>
 
-                <TabsContent value="similarity" className="mt-5">
+                <TabsContent
+                    value="similarity"
+                    forceMount
+                    className="mt-5 data-[state=inactive]:hidden"
+                >
                     <SimilarityTab />
                 </TabsContent>
 
-                <TabsContent value="prompts" className="mt-5">
+                <TabsContent
+                    value="prompts"
+                    forceMount
+                    className="mt-5 data-[state=inactive]:hidden"
+                >
                     <StepPromptsTab />
                 </TabsContent>
 
@@ -78,7 +95,11 @@ export function AiSettingsPage() {
                  * ngoài cùng — nó render thẳng bảng và empty state. Không bọc thì
                  * nội dung dính sát mép tab.
                  */}
-                <TabsContent value="models" className="mt-5">
+                <TabsContent
+                    value="models"
+                    forceMount
+                    className="mt-5 data-[state=inactive]:hidden"
+                >
                     <div className="rounded-lg border bg-card p-6">
                         <AiModelManagementPage api={aiModelApi} />
                     </div>

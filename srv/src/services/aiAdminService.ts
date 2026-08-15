@@ -236,6 +236,11 @@ async function resetRetrievalConfig(scope = 'all'): Promise<string> {
   if (wanted === 'all' || wanted === 'criteria') await wipe(CRITERIA);
   if (wanted === 'all' || wanted === 'settings') await wipe(SETTINGS);
   if (wanted === 'all' || wanted === 'prompts') await wipe(STEP_PROMPTS);
+  if (wanted.startsWith('prompt:')) {
+    const stepCode = wanted.slice('prompt:'.length).toUpperCase();
+    if (!/^D[1-8]$/.test(stepCode)) throw new Error(`Invalid step prompt scope: ${scope}`);
+    await db.run(DELETE.from(STEP_PROMPTS).where({ stepCode }));
+  }
 
   // `seedRetrievalConfig` chỉ ghi khi bảng rỗng — xoá trước rồi seed lại chính
   // là "khôi phục mặc định".
@@ -253,6 +258,21 @@ export function registerAiAdminHandlers(srv: any): void {
 
   srv.on('previewScore', async (req: any) => previewScore(req.data?.caseA, req.data?.caseB));
   srv.on('resetRetrievalConfig', async (req: any) => resetRetrievalConfig(req.data?.scope ?? 'all'));
+
+  srv.before(['UPDATE', 'CREATE'], 'StepPrompts', (req: any) => {
+    for (const field of ['inputSchemaJson', 'formSchemaJson', 'constraintsJson']) {
+      const value = req.data?.[field];
+      if (value === null || value === undefined || value === '') continue;
+      try {
+        JSON.parse(value);
+      } catch (error: any) {
+        req.reject(400, `${field} must contain valid JSON: ${error.message}`);
+      }
+    }
+    if (typeof req.data?.combinedPrompt === 'string' && req.data.combinedPrompt.split(/\r?\n/).length > 80) {
+      req.reject(400, 'combinedPrompt must not exceed 80 lines');
+    }
+  });
 
   // Cấu hình có cache 5 phút. Không xoá cache sau khi ghi thì admin sửa trọng số
   // xong bấm chấm thử vẫn ra điểm cũ — và sẽ kết luận là nút lưu bị hỏng.
