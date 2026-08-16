@@ -138,5 +138,10 @@ entity Disciplines : cuid, managed {
      * người đọc tưởng đây là sự thật đã kiểm chứng.
      */
     dataBacked  : Boolean;
+    /** Flexible AI data and immutable runtime snapshots for schema-driven rendering. */
+    resultJson     : LargeString;
+    formSchemaJson : LargeString;
+    validationJson : LargeString;
+    configVersion  : String(64);
     aiGenerated : Boolean default true;
 }
