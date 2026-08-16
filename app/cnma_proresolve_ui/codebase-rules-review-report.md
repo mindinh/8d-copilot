@@ -1,6 +1,6 @@
 # Codebase Rules & Styling Review Report
 
-Generated at: 2026-08-15T14:02:07.428Z
+Generated at: 2026-08-16T05:52:59.893Z
 
 This report lists all detected codebase violations based on the zero-tolerance styling and component rules.
 
@@ -40,7 +40,7 @@ This report lists all detected codebase violations based on the zero-tolerance s
 
 ---
 
-## §6 i18n / Hardcoded UI Text (274 issues)
+## §6 i18n / Hardcoded UI Text (282 issues)
 
 ### File: `src/components/common/error-boundary.tsx`
 - [ ] **Line 41**: Hardcoded JSX Text: "Something went wrong" ``` Something went wrong ```
@@ -188,10 +188,10 @@ This report lists all detected codebase violations based on the zero-tolerance s
 - [ ] **Line 35**: Hardcoded JSX Text: "Close review" ``` Close review ```
 
 ### File: `src/pages/ai-settings/step-prompt-editor/data-schema/AddSchemaFieldForm.tsx`
-- [ ] **Line 9**: Hardcoded attribute [placeholder]: "fieldKey" ``` placeholder="fieldKey" ```
-- [ ] **Line 9**: Hardcoded JSX Text: "Add field" ``` Add field ```
-- [ ] **Line 9**: Hardcoded attribute [placeholder]: "Field description" ``` placeholder="Field description" ```
-- [ ] **Line 9**: Hardcoded JSX Text: "Use a unique camelCase key." ``` Use a unique camelCase key. ```
+- [ ] **Line 11**: Hardcoded attribute [placeholder]: "result.fieldPath" ``` placeholder="result.fieldPath" ```
+- [ ] **Line 11**: Hardcoded JSX Text: "Add output field" ``` Add output field ```
+- [ ] **Line 11**: Hardcoded attribute [placeholder]: "Output field description" ``` placeholder="Output field description" ```
+- [ ] **Line 11**: Hardcoded JSX Text: "Use a unique camelCase path such as team.roster." ``` Use a unique camelCase path such as team.roster. ```
 
 ### File: `src/pages/ai-settings/step-prompt-editor/data-schema/SchemaFieldDetailPanel.tsx`
 - [ ] **Line 6**: Hardcoded JSX Text: "Field configuration" ``` Field configuration ```
@@ -225,21 +225,22 @@ This report lists all detected codebase violations based on the zero-tolerance s
 - [ ] **Line 33**: Hardcoded JSX Text: "Create a group, then drag fields into it." ``` Create a group, then drag fields into it. ```
 
 ### File: `src/pages/ai-settings/step-prompt-editor/layout/LayoutConfigPanel.tsx`
-- [ ] **Line 6**: Hardcoded JSX Text: "Configuration" ``` Configuration ```
-- [ ] **Line 6**: Hardcoded JSX Text: "AI output path:" ``` AI output path: ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Label" ``` Label ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Widget" ``` Widget ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Column span" ``` Column span ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Row span" ``` Row span ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Visible" ``` Visible ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Required output" ``` Required output ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Pattern" ``` Pattern ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Group settings" ``` Group settings ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Group label" ``` Group label ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Width" ``` Width ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Columns" ``` Columns ```
-- [ ] **Line 6**: Hardcoded JSX Text: "column" ``` column ```
-- [ ] **Line 6**: Hardcoded JSX Text: "Select a field or group to configure it." ``` Select a field or group to configure it. ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Configuration" ``` Configuration ```
+- [ ] **Line 9**: Hardcoded JSX Text: "AI output path:" ``` AI output path: ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Label" ``` Label ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Data type" ``` Data type ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Widget" ``` Widget ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Column span" ``` Column span ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Row span" ``` Row span ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Visible" ``` Visible ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Required output" ``` Required output ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Pattern" ``` Pattern ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Group settings" ``` Group settings ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Group label" ``` Group label ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Width" ``` Width ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Columns" ``` Columns ```
+- [ ] **Line 9**: Hardcoded JSX Text: "column" ``` column ```
+- [ ] **Line 9**: Hardcoded JSX Text: "Select a field or group to configure it." ``` Select a field or group to configure it. ```
 
 ### File: `src/pages/ai-settings/step-prompt-editor/layout/LayoutFieldsPanel.tsx`
 - [ ] **Line 28**: Hardcoded JSX Text: "Available Fields" ``` Available Fields ```
@@ -285,41 +286,41 @@ This report lists all detected codebase violations based on the zero-tolerance s
 - [ ] **Line 293**: Hardcoded JSX Text: "Cancel" ``` Cancel ```
 
 ### File: `src/pages/eight-d/detail.tsx`
-- [ ] **Line 95**: Hardcoded JSX Text: "Loading report…" ``` Loading report… ```
-- [ ] **Line 104**: Hardcoded JSX Text: "Could not load this report" ``` Could not load this report ```
-- [ ] **Line 109**: Hardcoded JSX Text: "Back to list" ``` Back to list ```
-- [ ] **Line 129**: Hardcoded JSX Text: "8D Reports" ``` 8D Reports ```
-- [ ] **Line 143**: Hardcoded JSX Text: "Source JSON" ``` Source JSON ```
-- [ ] **Line 152**: Hardcoded JSX Text: "Re-analyze" ``` Re-analyze ```
-- [ ] **Line 161**: Hardcoded JSX Text: "Analysis in progress — extracting facts, then drafting the eight disciplines.
+- [ ] **Line 97**: Hardcoded JSX Text: "Loading report…" ``` Loading report… ```
+- [ ] **Line 106**: Hardcoded JSX Text: "Could not load this report" ``` Could not load this report ```
+- [ ] **Line 111**: Hardcoded JSX Text: "Back to list" ``` Back to list ```
+- [ ] **Line 131**: Hardcoded JSX Text: "8D Reports" ``` 8D Reports ```
+- [ ] **Line 145**: Hardcoded JSX Text: "Source JSON" ``` Source JSON ```
+- [ ] **Line 154**: Hardcoded JSX Text: "Re-analyze" ``` Re-analyze ```
+- [ ] **Line 163**: Hardcoded JSX Text: "Analysis in progress — extracting facts, then drafting the eight disciplines.
                     This page updates automatically." ``` Analysis in progress — extracting facts, then drafting the eight disciplines.
                     T ```
-- [ ] **Line 171**: Hardcoded JSX Text: "Analysis failed" ``` Analysis failed ```
-- [ ] **Line 194**: Hardcoded attribute [label]: "Origin" ``` label="Origin" ```
-- [ ] **Line 195**: Hardcoded attribute [label]: "SAP status" ``` label="SAP status" ```
-- [ ] **Line 196**: Hardcoded attribute [label]: "Found" ``` label="Found" ```
-- [ ] **Line 197**: Hardcoded attribute [label]: "Extent" ``` label="Extent" ```
-- [ ] **Line 199**: Hardcoded attribute [label]: "Material" ``` label="Material" ```
-- [ ] **Line 203**: Hardcoded attribute [label]: "Batch" ``` label="Batch" ```
-- [ ] **Line 204**: Hardcoded attribute [label]: "Defect" ``` label="Defect" ```
-- [ ] **Line 208**: Hardcoded attribute [label]: "Work center" ``` label="Work center" ```
-- [ ] **Line 213**: Hardcoded attribute [label]: "Root cause" ``` label="Root cause" ```
-- [ ] **Line 214**: Hardcoded attribute [label]: "Cost of poor quality" ``` label="Cost of poor quality" ```
-- [ ] **Line 215**: Hardcoded attribute [label]: "FMEA" ``` label="FMEA" ```
-- [ ] **Line 216**: Hardcoded attribute [label]: "Team size" ``` label="Team size" ```
-- [ ] **Line 224**: Hardcoded JSX Text: "Internal summary" ``` Internal summary ```
-- [ ] **Line 226**: Hardcoded JSX Text: "Customer summary" ``` Customer summary ```
-- [ ] **Line 254**: Hardcoded JSX Text: "Eight disciplines" ``` Eight disciplines ```
-- [ ] **Line 260**: Hardcoded JSX Text: "of" ``` of ```
-- [ ] **Line 260**: Hardcoded JSX Text: "have no source data in the dataset" ``` have no source data in the dataset ```
-- [ ] **Line 278**: Hardcoded JSX Text: "AI Models Used:" ``` AI Models Used: ```
-- [ ] **Line 282**: Hardcoded JSX Text: "Parse:" ``` Parse: ```
-- [ ] **Line 288**: Hardcoded JSX Text: "Analyze:" ``` Analyze: ```
-- [ ] **Line 295**: Hardcoded JSX Text: "Generated:" ``` Generated: ```
-- [ ] **Line 297**: Hardcoded JSX Text: "Tokens:" ``` Tokens: ```
-- [ ] **Line 301**: Hardcoded JSX Text: "Duration:" ``` Duration: ```
-- [ ] **Line 313**: Hardcoded JSX Text: "Source dataset —" ``` Source dataset — ```
-- [ ] **Line 338**: Hardcoded JSX Text: "Loading…" ``` Loading… ```
+- [ ] **Line 173**: Hardcoded JSX Text: "Analysis failed" ``` Analysis failed ```
+- [ ] **Line 196**: Hardcoded attribute [label]: "Origin" ``` label="Origin" ```
+- [ ] **Line 197**: Hardcoded attribute [label]: "SAP status" ``` label="SAP status" ```
+- [ ] **Line 198**: Hardcoded attribute [label]: "Found" ``` label="Found" ```
+- [ ] **Line 199**: Hardcoded attribute [label]: "Extent" ``` label="Extent" ```
+- [ ] **Line 201**: Hardcoded attribute [label]: "Material" ``` label="Material" ```
+- [ ] **Line 205**: Hardcoded attribute [label]: "Batch" ``` label="Batch" ```
+- [ ] **Line 206**: Hardcoded attribute [label]: "Defect" ``` label="Defect" ```
+- [ ] **Line 210**: Hardcoded attribute [label]: "Work center" ``` label="Work center" ```
+- [ ] **Line 215**: Hardcoded attribute [label]: "Root cause" ``` label="Root cause" ```
+- [ ] **Line 216**: Hardcoded attribute [label]: "Cost of poor quality" ``` label="Cost of poor quality" ```
+- [ ] **Line 217**: Hardcoded attribute [label]: "FMEA" ``` label="FMEA" ```
+- [ ] **Line 218**: Hardcoded attribute [label]: "Team size" ``` label="Team size" ```
+- [ ] **Line 226**: Hardcoded JSX Text: "Internal summary" ``` Internal summary ```
+- [ ] **Line 228**: Hardcoded JSX Text: "Customer summary" ``` Customer summary ```
+- [ ] **Line 256**: Hardcoded JSX Text: "Eight disciplines" ``` Eight disciplines ```
+- [ ] **Line 262**: Hardcoded JSX Text: "of" ``` of ```
+- [ ] **Line 262**: Hardcoded JSX Text: "have no source data in the dataset" ``` have no source data in the dataset ```
+- [ ] **Line 299**: Hardcoded JSX Text: "AI Models Used:" ``` AI Models Used: ```
+- [ ] **Line 303**: Hardcoded JSX Text: "Parse:" ``` Parse: ```
+- [ ] **Line 309**: Hardcoded JSX Text: "Analyze:" ``` Analyze: ```
+- [ ] **Line 316**: Hardcoded JSX Text: "Generated:" ``` Generated: ```
+- [ ] **Line 318**: Hardcoded JSX Text: "Tokens:" ``` Tokens: ```
+- [ ] **Line 322**: Hardcoded JSX Text: "Duration:" ``` Duration: ```
+- [ ] **Line 334**: Hardcoded JSX Text: "Source dataset —" ``` Source dataset — ```
+- [ ] **Line 359**: Hardcoded JSX Text: "Loading…" ``` Loading… ```
 
 ### File: `src/pages/eight-d/discipline-card.tsx`
 - [ ] **Line 74**: Hardcoded JSX Text: "No source data" ``` No source data ```
@@ -397,6 +398,15 @@ This report lists all detected codebase violations based on the zero-tolerance s
 - [ ] **Line 214**: Hardcoded JSX Text: "Next most likely, and what would change the verdict" ``` Next most likely, and what would change the verdict ```
 - [ ] **Line 227**: Hardcoded JSX Text: "Evidence the AI would ask for" ``` Evidence the AI would ask for ```
 
+### File: `src/pages/eight-d/schema-discipline-card.tsx`
+- [ ] **Line 52**: Hardcoded JSX Text: "No rows returned" ``` No rows returned ```
+- [ ] **Line 65**: Hardcoded JSX Text: "Not provided" ``` Not provided ```
+- [ ] **Line 72**: Hardcoded JSX Text: "No open gaps" ``` No open gaps ```
+- [ ] **Line 97**: Hardcoded JSX Text: "% confidence" ``` % confidence ```
+- [ ] **Line 97**: Hardcoded JSX Text: "errors" ``` errors ```
+- [ ] **Line 97**: Hardcoded JSX Text: "warnings" ``` warnings ```
+- [ ] **Line 97**: Hardcoded JSX Text: "Validation passed" ``` Validation passed ```
+
 ### File: `src/pages/home/index.tsx`
 - [ ] **Line 19**: Hardcoded JSX Text: "CNMA Proresolve Dashboard" ``` CNMA Proresolve Dashboard ```
 - [ ] **Line 22**: Hardcoded JSX Text: "Full-stack SAP CAP application integrated with @cnma/cap-identity." ``` Full-stack SAP CAP application integrated with @cnma/cap-identity. ```
@@ -407,13 +417,13 @@ This report lists all detected codebase violations based on the zero-tolerance s
 
 ## Summary
 
-- Total Issues Found: **274**
+- Total Issues Found: **282**
   - §0 Hardcoded Pixels: **0**
   - §0 Hardcoded Hex Colors: **0**
   - §0 Raw Tailwind Colors: **0**
   - §0 Raw HTML Component Primitives: **0**
   - §0 Inline Styles: **0**
   - §0 Local Status/Color Mappings: **0**
-  - §6 i18n / Hardcoded UI Text: **274**
+  - §6 i18n / Hardcoded UI Text: **282**
 
 Fix these issues to align with the Lead React Frontend Engineer guidelines.

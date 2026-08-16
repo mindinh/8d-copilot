@@ -36,13 +36,19 @@ export interface FieldConstraints {
     min?: number;
     max?: number;
     minItems?: number;
+    maxItems?: number;
     pattern?: string;
+    enum?: unknown[];
 }
 
 export interface FormFieldConfig {
     key: string;
     label?: string;
     widget: string;
+    /** Runtime data contract; presentation remains controlled by widget/layout fields. */
+    dataType?: DataType;
+    items?: DataSchemaField;
+    properties?: Record<string, DataSchemaField>;
     /** Legacy field. New configurations use key as the implicit AI output path. */
     binding?: string;
     width?: '100%' | '50%' | '33%';

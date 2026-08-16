@@ -41,3 +41,32 @@ Each editor restores only its own row through `prompt:D1`, `prompt:D2`, `prompt:
 - Disabled or blank configuration falls back to the original code defaults, so existing analysis remains operational.
 - Existing database rows may predate the JSON columns. Blank JSON values are treated as unconfigured rather than invalid JSON, preventing `Unexpected end of JSON input`; restarting the CAP server backfills D1-D4 defaults.
 - Local backend scripts invoke the local TSX CAP runner; plain `cds serve` does not load this repository's `srv/server.ts`, so custom handlers and startup backfill would otherwise be skipped.
+# Flexible D1-D4 Runtime Flow
+
+The D1-D4 editors now define the runtime contract used by analysis and report rendering.
+
+- Data Schema declares the discipline output data contract. Its property names are dotted paths inside the discipline `data` result object.
+- Form Editor uses exactly the same paths and types, adding only widget and layout presentation. There is no separate output binding.
+- Saving rejects duplicate paths, unknown group fields, unsupported data types, unsupported rule types, and invalid severities.
+- AI Core receives a lightweight stable response envelope to avoid Gemini serving-state limits. The complete dynamic Data Schema is enforced by backend validation and repair. D5-D8 continue to use the legacy fixed contract.
+- Each generated discipline stores `resultJson`, `formSchemaJson`, `validationJson`, and `configVersion`; historical reports therefore retain their original layout.
+- Report Detail uses the saved schema snapshot when present and falls back to the legacy discipline card for old reports.
+
+Supported validation includes required values, string length, numeric range, enum membership, citation requirements, source patterns, required disclosures, and data-backed input conditions. Error violations trigger one focused AI repair attempt; warnings remain visible in the saved validation snapshot.
+
+Administrators can call `previewStepConfiguration(stepCode, payload)` on `AiAdminService` to inspect the effective input, Data Schema, lightweight serving schema, Form Schema, rules, and config version without exposing AI credentials.
+
+Saving rejects a configuration when Data Schema and Form Editor do not contain the same field paths or declare different types. Inputs used to populate those outputs continue to come from the complete verified CaseContext, enrichment, independent diagnosis, and precedents.
+
+## Structured D1-D4 Defaults
+
+The default configurations no longer render one large narrative field:
+
+- D1 first states whether selection uses the current case team, precedent recommendations, a hybrid, or unassigned roles. It then shows required capabilities and an explainable roster with organizational role, assigned 8D role, case responsibility, selection reason, source type, source path, and precedent case where applicable. Readiness status is kept separate from its rationale, and the source summary explains how current-case and precedent data contributed.
+- D2 produces a problem statement, separate 5W2H facts, Is/Is-Not boundaries, measurement rows, gaps, and traceability.
+- D3 produces an owned containment-action table, protected scope, recommendation basis, gaps, and traceability.
+- D4 produces a root-cause conclusion, 5-Why table, contributing factors, independent-verification fields, evidence gaps, and traceability.
+
+Group width, 12-column layout, field spans, and collapse state are honored by Report Detail. Runtime errors and warnings appear both in the discipline validation header and next to the affected field. Evidence paths are translated into readable labels and resolved values while retaining the technical path for audit use.
+
+On startup, the application upgrades only the original narrative-only D1-D4 defaults. Structured administrator-authored schemas are preserved.

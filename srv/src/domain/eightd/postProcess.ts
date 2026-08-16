@@ -34,6 +34,7 @@ function placeholder(code: DisciplineCode, index: number): DisciplineDraft {
         sources: [],
         confidence: 0,
         dataBacked: false,
+        data: {},
     };
 }
 
@@ -83,6 +84,7 @@ export function postProcess(
             sources: Array.isArray(found.sources) ? found.sources : [],
             confidence: Number(found.confidence),
             dataBacked: Boolean(found.dataBacked),
+            data: found.data && typeof found.data === 'object' && !Array.isArray(found.data) ? found.data : {},
         };
 
         if (d.summary.length > 500) {
@@ -114,6 +116,17 @@ export function postProcess(
         if (unknown.length) {
             repairs.push(`${code}: sources không tồn tại trong CaseContext: ${unknown.join(', ')}.`);
             d.sources = known;
+        }
+        // Cùng bộ lọc cho data.sources — đây là mảng hiển thị ở UI (Source records).
+        // Không lọc thì `d.sources` (cột cũ) sạch nhưng `data.sources` (cấu trúc mới)
+        // vẫn còn path bịa, và người đọc thấy "[object Object]" thay vì cảnh báo.
+        if (d.data && Array.isArray(d.data.sources)) {
+            const dataSources = (d.data.sources as unknown[]).filter((s): s is string => typeof s === 'string');
+            const { known: dataKnown, unknown: dataUnknown } = checkSources(dataSources, vocab);
+            if (dataUnknown.length) {
+                repairs.push(`${code}: data.sources không tồn tại trong CaseContext: ${dataUnknown.join(', ')}.`);
+                d.data.sources = dataKnown;
+            }
         }
 
         // Khẳng định có dữ liệu chống lưng mà không chỉ ra được nguồn nào thì
@@ -177,6 +190,15 @@ export function postProcess(
                         repairs.push(`${discipline.code}: removed sources outside configured pattern ${rule.pattern}.`);
                         discipline.sources = grounded;
                         if (!grounded.length) discipline.dataBacked = false;
+                    }
+                    // Cùng pattern cho data.sources — UI render mảng này trong Source records.
+                    if (discipline.data && Array.isArray(discipline.data.sources)) {
+                        const dataSources = discipline.data.sources as unknown[];
+                        const groundedData = dataSources.filter((item): item is string => typeof item === 'string' && pattern.test(item));
+                        if (groundedData.length !== dataSources.length) {
+                            repairs.push(`${discipline.code}: filtered data.sources against pattern ${rule.pattern}.`);
+                            discipline.data.sources = groundedData;
+                        }
                     }
                 }
                 if (rule.type === 'requiredDisclosure' && rule.pattern && !new RegExp(rule.pattern, 'i').test(discipline.content)) {

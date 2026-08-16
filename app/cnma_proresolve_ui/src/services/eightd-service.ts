@@ -31,6 +31,10 @@ export interface Discipline8D {
     confidence: number;
     /** false = không có dữ liệu nguồn, AI suy luận ra. D6 luôn false. */
     dataBacked: boolean;
+    resultJson: string | null;
+    formSchemaJson: string | null;
+    validationJson: string | null;
+    configVersion: string | null;
     aiGenerated: boolean;
 }
 

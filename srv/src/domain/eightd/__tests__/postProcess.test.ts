@@ -188,6 +188,96 @@ describe('postProcess — làm sạch giá trị', () => {
     });
 });
 
+describe('postProcess — structured data.sources phải cùng bộ lọc với discipline.sources', () => {
+    const d1GroundOnly = JSON.stringify({
+        enabled: true,
+        rules: [
+            {
+                id: 'D1_GROUNDING',
+                type: 'sourcePattern',
+                severity: 'error',
+                enabled: true,
+                pattern: '^(team\\.|precedents#)',
+                message: 'Team identities must come from the current team or a cited precedent.',
+            },
+        ],
+    });
+
+    it('loại bỏ path không khớp pattern khỏi data.sources (D1)', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) =>
+            d.code === 'D1'
+                ? {
+                    ...d,
+                    // sources cũ thì đúng pattern, sources mới (UI hiển thị) thì không
+                    sources: ['team.leader'],
+                    data: { sources: ['team', 'report[]', 'team.leader'] },
+                }
+                : d,
+        );
+        const { result, repairs } = postProcess(
+            r,
+            ctxQ3,
+            undefined,
+            undefined,
+            undefined,
+            { D1: d1GroundOnly },
+        );
+        const d1 = result.disciplines.find((d) => d.code === 'D1')!;
+        expect(d1.data?.sources).toEqual(['team.leader']);
+        expect(repairs.some((x) => /D1: filtered data\.sources against pattern/.test(x))).toBe(true);
+    });
+
+    it('KHÔNG đụng data.sources khi các path đều hợp lệ', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) =>
+            d.code === 'D1'
+                ? {
+                    ...d,
+                    sources: ['team.leader', 'team.members#1'],
+                    data: { sources: ['team.leader', 'team.members#1'] },
+                }
+                : d,
+        );
+        const { result, repairs } = postProcess(
+            r,
+            ctxQ3,
+            undefined,
+            undefined,
+            [{ notificationId: 'X', team: [{ partnerName: 'A' }] }],
+            { D1: d1GroundOnly },
+        );
+        const d1 = result.disciplines.find((d) => d.code === 'D1')!;
+        expect(d1.data?.sources).toEqual(['team.leader', 'team.members#1']);
+        expect(repairs.some((x) => /data\.sources/.test(x))).toBe(false);
+    });
+
+    it('áp dụng cùng bộ lọc khi path match pattern nhưng không giải được trên CaseContext', () => {
+        // `precedents#999` khớp pattern nhưng vượt quá số tiền lệ — vocab check loại.
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) =>
+            d.code === 'D1'
+                ? {
+                    ...d,
+                    sources: ['team.leader'],
+                    data: { sources: ['team.leader', 'precedents#999'] },
+                }
+                : d,
+        );
+        const { result, repairs } = postProcess(
+            r,
+            ctxQ3,
+            undefined,
+            undefined,
+            [{ notificationId: 'X', team: [] }],
+            { D1: d1GroundOnly },
+        );
+        const d1 = result.disciplines.find((d) => d.code === 'D1')!;
+        expect(d1.data?.sources).toEqual(['team.leader']);
+        expect(repairs.some((x) => /D1: data\.sources không tồn tại trong CaseContext/.test(x))).toBe(true);
+    });
+});
+
 describe('postProcess — ràng buộc Q1-ONLY-CUSTOMER-FIELDS', () => {
     it('bỏ customerSummary khi case là Q3 nội bộ', () => {
         const { result, repairs } = postProcess(

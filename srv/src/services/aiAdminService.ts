@@ -1,4 +1,8 @@
 import cds from '@sap/cds';
+import { buildFlexibleResponseSchema, buildRuntimeSources, normalizeStepConfig } from '../domain/eightd/runtimeConfig';
+import type { DisciplineCode } from '../domain/eightd/types';
+import { mapCase } from '../domain/eightd/caseMapper';
+import { getStepPromptRuntimeConfig } from '../domain/eightd/precedent/configRepository';
 import { ENTITIES } from '../config/ai';
 import { getGlobalAiConfigRaw, saveGlobalAiConfig } from '../core/ai/globalModelConfig';
 import {
@@ -257,6 +261,20 @@ export function registerAiAdminHandlers(srv: any): void {
   srv.on('getAvailableModels', async (req: any) => getAvailableModels(req.data?.activity));
 
   srv.on('previewScore', async (req: any) => previewScore(req.data?.caseA, req.data?.caseB));
+  srv.on('previewStepConfiguration', async (req: any) => {
+    const stepCode = String(req.data?.stepCode ?? req.params?.[0]?.stepCode ?? '').toUpperCase();
+    if (!/^D[1-4]$/.test(stepCode)) return req.reject(400, 'stepCode must be D1, D2, D3, or D4');
+    try {
+      const context = mapCase(JSON.parse(String(req.data?.payload ?? '')));
+      const raw = await getStepPromptRuntimeConfig(stepCode);
+      if (!raw) return req.reject(404, `No configuration found for ${stepCode}`);
+      const config = normalizeStepConfig(stepCode as DisciplineCode, raw);
+      const effectiveInput = buildRuntimeSources(context, {}, {}, []);
+      return JSON.stringify({ stepCode, configVersion: config.configVersion, effectiveInput, dataSchema: config.inputSchema, servingSchema: buildFlexibleResponseSchema({ [stepCode]: config }), formSchema: config.formSchema, rules: config.rules });
+    } catch (error) {
+      return req.reject(400, error instanceof Error ? error.message : 'Preview failed');
+    }
+  });
   srv.on('resetRetrievalConfig', async (req: any) => resetRetrievalConfig(req.data?.scope ?? 'all'));
 
   srv.before(['UPDATE', 'CREATE'], 'StepPrompts', (req: any) => {
@@ -271,6 +289,14 @@ export function registerAiAdminHandlers(srv: any): void {
     }
     if (typeof req.data?.combinedPrompt === 'string' && req.data.combinedPrompt.split(/\r?\n/).length > 80) {
       req.reject(400, 'combinedPrompt must not exceed 80 lines');
+    }
+    const stepCode = String(req.data?.stepCode ?? '').toUpperCase();
+    if (/^D[1-4]$/.test(stepCode)) {
+      try {
+        normalizeStepConfig(stepCode as DisciplineCode, req.data);
+      } catch (error) {
+        req.reject(400, error instanceof Error ? error.message : 'Invalid step configuration');
+      }
     }
   });
 

@@ -118,6 +118,10 @@ service AiAdminService {
     @requires: ['admin', 'Admin']
     function previewScore(caseA : String, caseB : String) returns String;
 
+    /** Resolve one D1-D4 configuration against a sample case without exposing credentials. */
+    @requires: ['admin', 'Admin']
+    action previewStepConfiguration(stepCode : String, payload : LargeString) returns String;
+
     /**
      * Ghi lại mặc định cho cấu hình tìm tiền lệ.
      *

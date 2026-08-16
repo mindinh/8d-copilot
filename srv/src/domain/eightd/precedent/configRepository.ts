@@ -270,10 +270,52 @@ export async function seedRetrievalConfig(): Promise<void> {
 
         for (const configuredDefault of DEFAULT_STEP_PROMPTS.filter((prompt) => ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode))) {
             const current = await db.run(SELECT.one.from(STEP_PROMPTS).where({ stepCode: configuredDefault.stepCode }));
-            const patch: Record<string, string> = {};
+            const patch: Record<string, string | number> = {};
             for (const field of ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'] as const) {
                 if (!String(current?.[field] ?? '').trim() && configuredDefault[field]) patch[field] = configuredDefault[field];
             }
+            // Upgrade only the original narrative-only defaults. Admin-authored structured
+            // schemas are preserved; resetStep remains the explicit way to replace them.
+            try {
+                const currentFields = (JSON.parse(String(current?.formSchemaJson ?? '{}')) as { fields?: Array<{ key?: string }> }).fields?.map((field) => field.key).filter(Boolean) ?? [];
+                const defaultFields = (JSON.parse(String(configuredDefault.formSchemaJson ?? '{}')) as { fields?: Array<{ key?: string }> }).fields?.map((field) => field.key).filter(Boolean) ?? [];
+                const legacyFields = new Set(['summary', 'content', 'actionItems', 'sources', 'confidence', 'dataBacked']);
+                const isLegacyDefault = currentFields.length > 0 && currentFields.every((key) => legacyFields.has(String(key)));
+                if (isLegacyDefault) {
+                    for (const field of ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'] as const) {
+                        if (configuredDefault[field]) patch[field] = configuredDefault[field];
+                    }
+                    patch.version = Math.max(2, Number(current?.version ?? 1) + 1);
+                }
+                const usesStructuredDefaultForm = currentFields.length > 0
+                    && currentFields.length === defaultFields.length
+                    && currentFields.every((key, index) => key === defaultFields[index]);
+                if (usesStructuredDefaultForm && configuredDefault.inputSchemaJson
+                    && String(current?.inputSchemaJson ?? '') !== configuredDefault.inputSchemaJson) {
+                    // Repairs the intermediate release where Form Editor was upgraded
+                    // before Data Schema changed from input selection to output contract.
+                    patch.inputSchemaJson = configuredDefault.inputSchemaJson;
+                    patch.version = Math.max(3, Number(current?.version ?? 1) + 1);
+                }
+                if (usesStructuredDefaultForm && Number(current?.version ?? 1) <= 3) {
+                    // v4 marks AI-generated output fields and consolidates each step
+                    // into one readable section.
+                    for (const field of ['inputSchemaJson', 'formSchemaJson', 'combinedPrompt', 'constraintsJson'] as const) {
+                        if (configuredDefault[field]) patch[field] = configuredDefault[field];
+                    }
+                    patch.version = 4;
+                }
+                const previousD1Fields = ['team.objective', 'team.roster', 'team.skillCoverage', 'team.readinessStatus', 'team.gaps', 'team.assignmentRationale', 'sources'];
+                const usesPreviousD1Default = configuredDefault.stepCode === 'D1'
+                    && currentFields.length === previousD1Fields.length
+                    && currentFields.every((key, index) => key === previousD1Fields[index]);
+                if (usesPreviousD1Default && Number(current?.version ?? 1) <= 4) {
+                    for (const field of ['inputSchemaJson', 'formSchemaJson', 'combinedPrompt', 'constraintsJson'] as const) {
+                        if (configuredDefault[field]) patch[field] = configuredDefault[field];
+                    }
+                    patch.version = 5;
+                }
+            } catch { /* Invalid custom JSON is left untouched for the editor to repair. */ }
             if (Object.keys(patch).length) await db.run(UPDATE(STEP_PROMPTS).set(patch).where({ stepCode: configuredDefault.stepCode }));
         }
 
