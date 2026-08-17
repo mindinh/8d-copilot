@@ -34,6 +34,15 @@ import { getDisciplineGuide, getStepPromptRuntimeConfig } from './precedent/conf
 import { findPrecedents, type Precedent } from './precedent/findPrecedents';
 import { callAndParse } from './jsonExtract';
 import { postProcess } from './postProcess';
+import {
+    buildFlexibleResponseSchema,
+    buildRuntimeSources,
+    normalizeStepConfig,
+    setPath,
+    syncLegacyFields,
+    validateFlexibleResult,
+    type RuntimeStepConfig,
+} from './runtimeConfig';
 import { auditBlindEvidence, buildBlindEvidence } from './blindEvidence';
 import {
     INDEPENDENT_SCHEMA,
@@ -55,6 +64,7 @@ const LOG = cds.log('eightd');
 
 const ACTIVITY_PARSE = 'parseData';
 const ACTIVITY_ANALYZE = 'analyzeDefect';
+const ACTIVITY_STRUCTURE = 'analyzeDefectStructuredFields';
 /** Chẩn đoán mù dùng activity riêng để admin chỉnh model/budget độc lập. */
 const ACTIVITY_DIAGNOSE = 'reviewQuality';
 
@@ -164,25 +174,52 @@ async function generateReport(
     enrichment: ContextEnrichment,
     independent: IndependentAnalysis,
     precedents: Precedent[],
-): Promise<{ result: EightDResult; tokens: number }> {
+): Promise<{
+    result: EightDResult;
+    tokens: number;
+    configs: Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
+    inputs: Partial<Record<import('./types').DisciplineCode, Record<string, unknown>>>;
+    diagnostics: Partial<Record<import('./types').DisciplineCode, unknown[]>>;
+}> {
     let tokens = 0;
 
     // Hướng dẫn từng discipline admin chỉnh trên UI. Bảng rỗng ⇒ dùng hằng số
     // trong `prompts.ts`, tức là prompt y như cũ.
     const configurableCodes = ['D1', 'D2', 'D3', 'D4'] as const;
     const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
+    const effectiveConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
+        const config = configs[code];
+        if (!config) return [];
+        try {
+            normalizeStepConfig(code, config);
+            return [[code, config]];
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (!message.startsWith('Data Schema and Form Editor fields must match.')) throw error;
+            // A prior release persisted the new Form Editor beside the old Data Schema.
+            // Trust the visible form contract until startup migration repairs the row.
+            return [[code, { ...config, inputSchemaJson: '' }]];
+        }
+    })) as typeof configs;
+    const normalizedConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
+        const config = effectiveConfigs[code];
+        return config ? [[code, normalizeStepConfig(code, config)]] : [];
+    })) as Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
+    const runtimeSources = buildRuntimeSources(context, enrichment, independent, precedents);
+    const resolved = Object.fromEntries(Object.keys(normalizedConfigs).map((code) => [code, { input: runtimeSources, diagnostics: [] }]));
     const configuredConstraints = Object.fromEntries(configurableCodes.flatMap((code) => {
-        const json = configs[code]?.constraintsJson; if (!json) return [];
+        const json = effectiveConfigs[code]?.constraintsJson; if (!json) return [];
         try { return (JSON.parse(json) as { enabled?: boolean }).enabled === false ? [] : [[code, json]]; } catch { return []; }
     }));
     const systemPrompt = buildEightDSystemPrompt(
         await getDisciplineGuide(),
         configuredConstraints,
     );
-    const inputSchemas = Object.fromEntries(configurableCodes.flatMap((code) => configs[code]?.inputSchemaJson ? [[code, configs[code]!.inputSchemaJson]] : []));
-    const formSchemas = Object.fromEntries(configurableCodes.flatMap((code) => configs[code]?.formSchemaJson ? [[code, configs[code]!.formSchemaJson]] : []));
+    const inputSchemas = Object.fromEntries(configurableCodes.flatMap((code) => effectiveConfigs[code]?.inputSchemaJson ? [[code, effectiveConfigs[code]!.inputSchemaJson]] : []));
+    const formSchemas = Object.fromEntries(configurableCodes.flatMap((code) => effectiveConfigs[code]?.formSchemaJson ? [[code, effectiveConfigs[code]!.formSchemaJson]] : []));
 
-    const { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
+    const responseSchema = buildFlexibleResponseSchema(normalizedConfigs);
+    let { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
         const res = await complete(
             [
                 { role: 'system', content: systemPrompt },
@@ -199,14 +236,108 @@ async function generateReport(
                 max_tokens: BUDGET.analyze.maxTokens,
                 thinkingBudget: BUDGET.analyze.thinkingBudget,
                 responseMimeType: 'application/json',
-                responseSchema: EIGHT_D_SCHEMA as unknown as Record<string, unknown>,
+                responseSchema,
             },
         );
         tokens += res.usage?.totalTokens ?? 0;
         return { content: res.content, finishReason: res.finishReason };
     });
 
-    return { result: value, tokens };
+    const configuredFieldContracts = Object.entries(normalizedConfigs).flatMap(([code, config]) =>
+        config?.formSchema?.fields.map((field) => ({ code, path: field.key, type: field.type, label: field.label, required: Boolean(field.constraints.required), items: field.items, properties: field.properties })) ?? [],
+    );
+    if (configuredFieldContracts.length) {
+        const structuredSchema = {
+            type: 'object',
+            properties: {
+                fields: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            code: { type: 'string', enum: configurableCodes },
+                            path: { type: 'string' },
+                            valueJson: { type: 'string' },
+                        },
+                        required: ['code', 'path', 'valueJson'],
+                    },
+                },
+            },
+            required: ['fields'],
+        };
+        const structured = await callAndParse<{ fields: Array<{ code: string; path: string; valueJson: string }> }>(ACTIVITY_STRUCTURE, async (repairHint) => {
+            const res = await complete([
+                {
+                    role: 'system',
+                    content: 'Convert a grounded 8D narrative into configured form fields. Return one entry for every contract field. valueJson must be a JSON-encoded value of the requested type. Use only the supplied verified context and narrative. When evidence is incomplete, write an explicit recommendation or gap; never invent a person, measurement, date, identifier, or completed action.',
+                },
+                {
+                    role: 'user',
+                    content: JSON.stringify({
+                        contracts: configuredFieldContracts,
+                        verifiedContext: runtimeSources,
+                        report: value.disciplines.filter((discipline) => configurableCodes.includes(discipline.code as typeof configurableCodes[number])),
+                        correction: repairHint || undefined,
+                    }),
+                },
+            ], {
+                activity: ACTIVITY_ANALYZE,
+                temperature: 0,
+                max_tokens: BUDGET.analyze.maxTokens,
+                thinkingBudget: BUDGET.analyze.thinkingBudget,
+                responseMimeType: 'application/json',
+                responseSchema: structuredSchema,
+            });
+            tokens += res.usage?.totalTokens ?? 0;
+            return { content: res.content, finishReason: res.finishReason };
+        });
+        const allowedPaths = new Map(configuredFieldContracts.map((field) => [`${field.code}:${field.path}`, field]));
+        for (const field of structured.value.fields ?? []) {
+            if (!allowedPaths.has(`${field.code}:${field.path}`)) continue;
+            const discipline = value.disciplines.find((item) => item.code === field.code);
+            if (!discipline) continue;
+            try {
+                setPath(discipline.data ??= {}, field.path, JSON.parse(field.valueJson));
+            } catch {
+                LOG.warn(`Structured AI field ${field.code}.${field.path} returned invalid valueJson.`);
+            }
+        }
+    }
+
+    for (const discipline of value.disciplines ?? []) syncLegacyFields(discipline);
+    const errors = (value.disciplines ?? []).flatMap((discipline) => {
+        const config = normalizedConfigs[discipline.code];
+        return config
+            ? validateFlexibleResult(discipline, config, resolved[discipline.code]?.input ?? {})
+                .filter((item) => item.severity === 'error')
+                .map((item) => ({ code: discipline.code, ...item }))
+            : [];
+    });
+    if (errors.length) {
+        const configuredData = new Map(value.disciplines.map((discipline) => [discipline.code, discipline.data]));
+        const repaired = await callAndParse<EightDResult>(`${ACTIVITY_ANALYZE}-configured-repair`, async (repairHint) => {
+            const res = await complete([
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `${buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas)}\n\n## CONFIGURATION VALIDATION ERRORS\n${JSON.stringify(errors, null, 2)}\nReturn the complete corrected report.${repairHint ? `\n${repairHint}` : ''}` },
+            ], { activity: ACTIVITY_ANALYZE, temperature: 0, max_tokens: BUDGET.analyze.maxTokens, thinkingBudget: BUDGET.analyze.thinkingBudget, responseMimeType: 'application/json', responseSchema });
+            tokens += res.usage?.totalTokens ?? 0;
+            return { content: res.content, finishReason: res.finishReason };
+        });
+        value = repaired.value;
+        for (const discipline of value.disciplines ?? []) {
+            // The narrative repair schema intentionally keeps data open to avoid
+            // Gemini's serving-state limit, so it must not erase structured output.
+            discipline.data = configuredData.get(discipline.code) ?? discipline.data ?? {};
+            syncLegacyFields(discipline);
+        }
+    }
+    return {
+        result: value,
+        tokens,
+        configs: normalizedConfigs,
+        inputs: Object.fromEntries(Object.entries(resolved).map(([code, item]) => [code, item.input])),
+        diagnostics: Object.fromEntries(Object.entries(resolved).map(([code, item]) => [code, item.diagnostics])),
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,7 +411,13 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
     }
 
-    const { result: rawResult, tokens: analyzeTokens } =
+    const {
+        result: rawResult,
+        tokens: analyzeTokens,
+        configs: runtimeConfigs,
+        inputs: runtimeInputs,
+        diagnostics: inputDiagnostics,
+    } =
         await generateReport(context, enrichment, independent, precedents);
 
     // ── Lưới an toàn ──
@@ -303,6 +440,18 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         resolveModel(ACTIVITY_ANALYZE),
     ]);
 
+    const runtime = Object.fromEntries(result.disciplines.flatMap((discipline) => {
+        const config = runtimeConfigs[discipline.code];
+        if (!config?.formSchema) return [];
+        const violations = validateFlexibleResult(discipline, config, runtimeInputs[discipline.code] ?? {});
+        return [[discipline.code, {
+            resultJson: JSON.stringify(discipline.data ?? {}),
+            formSchemaJson: JSON.stringify(config.formSchema),
+            validationJson: JSON.stringify({ version: 1, violations, inputDiagnostics: inputDiagnostics[discipline.code] ?? [], repairs }),
+            configVersion: config.configVersion,
+        }]];
+    }));
+
     return {
         context,
         result,
@@ -311,5 +460,6 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         tokensUsed: parseTokens + diagnoseTokens + analyzeTokens,
         durationMs: Date.now() - started,
         repairs,
+        runtime,
     };
 }

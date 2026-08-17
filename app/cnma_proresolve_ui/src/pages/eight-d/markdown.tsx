@@ -83,11 +83,11 @@ export function Markdown({ children, className = '' }: { children: string; class
     const blocks = toBlocks(children ?? '');
 
     return (
-        <div className={`text-sm leading-relaxed text-foreground/90 space-y-3 ${className}`}>
+        <div className={`min-w-0 max-w-full space-y-3 break-words text-sm leading-relaxed text-foreground/90 ${className}`}>
             {blocks.map((block, bi) => {
                 if (block.type === 'p') {
                     return (
-                        <p key={bi}>
+                        <p key={bi} className="max-w-full break-words">
                             {block.lines.map((l, li) => (
                                 <Fragment key={li}>
                                     {li > 0 && ' '}
@@ -109,7 +109,7 @@ export function Markdown({ children, className = '' }: { children: string; class
                         }
                     >
                         {block.lines.map((l, li) => (
-                            <li key={li}>{renderInline(l, `${bi}-${li}`)}</li>
+                            <li key={li} className="break-words">{renderInline(l, `${bi}-${li}`)}</li>
                         ))}
                     </ListTag>
                 );

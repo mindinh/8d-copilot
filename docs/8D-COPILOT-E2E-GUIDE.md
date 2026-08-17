@@ -251,3 +251,12 @@ flowchart TD
 ---
 
 *Tài liệu này được biên soạn cho dự án **8D Copilot (CNMA Proresolve)**.*
+# Flexible Configuration Verification
+
+1. In AI Settings, add a D2 Form Editor field with key `problemStatement`, a visible group, and a required constraint.
+2. Save the D2 configuration. Invalid or conflicting paths must be rejected immediately.
+3. Run **Analyze new case** and open the completed report.
+4. Confirm D2 renders `problemStatement` from `resultJson` using the saved group and widget.
+5. Inspect the discipline OData data and verify `formSchemaJson`, `validationJson`, and `configVersion` are populated.
+6. Change the D2 layout and run a second report. The first report must retain the old snapshot while the second uses the new layout.
+7. Open an older report without snapshots and confirm the legacy `DisciplineCard` still renders.

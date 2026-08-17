@@ -28,6 +28,7 @@ import {
     type Report8D,
 } from '@/services/eightd-service';
 import { DisciplineCard } from './discipline-card';
+import { SchemaDisciplineCard } from './schema-discipline-card';
 import { ReportStatusBadge } from './status-badge';
 import { ReasoningPanel } from './reasoning-panel';
 import { PrecedentPanel } from './precedent-panel';
@@ -63,6 +64,7 @@ export function EightDDetailPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [showPayload, setShowPayload] = useState(false);
+    const [activeDiscipline, setActiveDiscipline] = useState('D1');
 
     const { data: report, isLoading, isError, error } = useQuery({
         queryKey: ['8d', 'report', id],
@@ -262,9 +264,28 @@ export function EightDDetailPage() {
                         )}
                     </div>
 
-                    {disciplines.map((d) => (
-                        <DisciplineCard key={d.ID} discipline={d} />
-                    ))}
+                    <Tabs value={activeDiscipline} onValueChange={setActiveDiscipline} className="min-w-0">
+                        <div className="rounded-xl border bg-card p-2 shadow-sm">
+                            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 bg-transparent p-0 sm:grid-cols-8">
+                                {disciplines.map((discipline) => (
+                                    <TabsTrigger
+                                        key={discipline.ID}
+                                        value={discipline.code}
+                                        className="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                    >
+                                        {discipline.code}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </div>
+                        {disciplines.map((discipline) => (
+                            <TabsContent key={discipline.ID} value={discipline.code} className="mt-4 min-w-0">
+                                {discipline.formSchemaJson && discipline.resultJson
+                                    ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} />
+                                    : <DisciplineCard discipline={discipline} />}
+                            </TabsContent>
+                        ))}
+                    </Tabs>
                 </div>
             )}
 

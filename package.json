@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "start": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve",
+    "start": "cds-serve",
     "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve\" \"npm run dev --prefix app/cnma_proresolve_ui\"",
     "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve",
     "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve",

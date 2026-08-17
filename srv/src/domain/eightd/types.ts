@@ -202,6 +202,8 @@ export interface DisciplineDraft {
     confidence: number;
     /** false = không có dữ liệu nguồn, model suy luận. D6 luôn false. */
     dataBacked: boolean;
+    /** Flexible D1-D4 output. Form Editor field keys are paths inside this object. */
+    data?: Record<string, unknown>;
 }
 
 export interface EightDResult {
@@ -225,6 +227,12 @@ export interface AnalyzeOutcome {
     durationMs: number;
     /** Ghi chú của postProcess: chỗ nào phải chữa sau khi model trả về. */
     repairs: string[];
+    runtime?: Partial<Record<DisciplineCode, {
+        formSchemaJson: string;
+        validationJson: string;
+        configVersion: string;
+        resultJson: string;
+    }>>;
 }
 
 /** Lỗi có mã HTTP, để tầng service ánh xạ thẳng sang `req.error`. */

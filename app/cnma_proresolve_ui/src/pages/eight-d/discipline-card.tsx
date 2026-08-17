@@ -32,7 +32,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
     return (
         <Card
             className={cn(
-                'p-0 overflow-hidden transition-colors',
+                'min-w-0 overflow-hidden p-0 transition-colors',
                 inferred && 'border-warning/40 bg-warning/[0.02]',
             )}
         >
@@ -40,7 +40,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                 type="button"
                 variant="ghost"
                 onClick={() => setOpen((v) => !v)}
-                className="w-full text-left p-4 h-auto flex items-start justify-start gap-3 hover:bg-muted/40 transition-colors"
+                className="flex h-auto w-full min-w-0 items-start justify-start gap-3 whitespace-normal p-4 text-left transition-colors hover:bg-muted/40"
             >
                 {/* Mã discipline */}
                 <div
@@ -76,12 +76,12 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                         )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed font-normal">
+                    <p className="mt-1.5 max-w-full break-words text-xs font-normal leading-relaxed text-muted-foreground">
                         {discipline.summary}
                     </p>
 
                     {inferred && (
-                        <p className="text-xs text-warning mt-1.5 font-normal">
+                        <p className="mt-1.5 break-words text-xs font-normal text-warning">
                             Proposed by AI — the dataset holds no evidence for this discipline.
                         </p>
                     )}
@@ -96,7 +96,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
             </Button>
 
             {open && (
-                <div className="px-4 pb-4 pt-0 space-y-4 border-t border-border/60">
+                <div className="min-w-0 space-y-4 border-t border-border/60 px-4 pb-4 pt-0">
                     <div className="pt-4">
                         <Markdown>{discipline.content}</Markdown>
                     </div>
@@ -108,9 +108,9 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                             </h4>
                             <ul className="space-y-1.5">
                                 {actionItems.map((item, i) => (
-                                    <li key={i} className="flex gap-2 text-sm">
+                                    <li key={i} className="flex min-w-0 gap-2 text-sm">
                                         <span className="text-primary mt-0.5">→</span>
-                                        <span>{item}</span>
+                                        <span className="min-w-0 break-words">{item}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -136,7 +136,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                                 {sources.map((s, i) => (
                                     <code
                                         key={i}
-                                        className="px-2 py-0.5 rounded bg-muted text-xs font-mono text-muted-foreground"
+                                        className="max-w-full break-all rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
                                     >
                                         {s}
                                     </code>

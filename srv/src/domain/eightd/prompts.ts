@@ -383,31 +383,20 @@ export function buildEightDPrompt(
         ? 'This is a CUSTOMER COMPLAINT (Q1). Produce customerSummary.'
         : 'This is an INTERNAL DEFECT (Q3). Set customerSummary to null.';
 
-    const configuredInputs: string[] = [];
+    const configuredDataSchemas: string[] = [];
     const configuredOutputs: string[] = [];
-    const sourceData: Record<string, unknown> = {
-        ...context,
-        derivedFacts: enrichment.derivedFacts,
-        independent,
-        precedents,
-        teamMembers: [context.team.leader, ...context.team.members].filter(Boolean),
-        teamSize: [context.team.leader, ...context.team.members].filter(Boolean).length,
-        precedentTeams: precedents.map((precedent, index) => ({ source: `precedents#${index + 1}`, members: precedent.team })),
-    };
     for (const code of DISCIPLINE_CODES) {
         if (inputSchemas?.[code]) {
             try {
-                const schema = JSON.parse(inputSchemas[code]!) as { fields?: Array<{ key?: string }>; properties?: Record<string, unknown> };
-                const requested = schema.properties ? Object.keys(schema.properties) : (schema.fields ?? []).map((field) => field.key).filter((key): key is string => Boolean(key));
-                const configured = Object.fromEntries(requested.filter((key) => key in sourceData).map((key) => [key, sourceData[key]]));
-                configuredInputs.push(`## ${code} CONFIGURED INPUT\n\`\`\`json\n${JSON.stringify(configured)}\n\`\`\``);
+                const configured = JSON.parse(inputSchemas[code]!);
+                configuredDataSchemas.push(`## ${code} DATA SCHEMA (output data contract)\n\`\`\`json\n${JSON.stringify(configured)}\n\`\`\``);
             } catch { /* Invalid admin JSON is ignored at runtime; save validation prevents new invalid values. */ }
         }
         if (formSchemas?.[code]) {
             try {
-                const schema = JSON.parse(formSchemas[code]!) as { fields?: Array<{ key?: string; binding?: string; label?: string; constraints?: unknown }> };
-                const fields = (schema.fields ?? []).map((field) => ({ path: field.binding?.trim() || field.key, label: field.label, constraints: field.constraints })).filter((field) => field.path);
-                configuredOutputs.push([`## ${code} FORM OUTPUT CONTRACT`, `Fill these paths directly on the ${code} discipline object. The field path is implicit; no separate mapping layer exists.`, '```json', JSON.stringify(fields), '```'].join('\n'));
+                const schema = JSON.parse(formSchemas[code]!) as { fields?: Array<{ key?: string; binding?: string; label?: string; widget?: string; dataType?: string; items?: unknown; properties?: unknown; constraints?: unknown }> };
+                const fields = (schema.fields ?? []).map((field) => ({ path: field.binding?.trim() || field.key, label: field.label, type: field.dataType, widget: field.widget, items: field.items, properties: field.properties, constraints: field.constraints })).filter((field) => field.path);
+                configuredOutputs.push([`## ${code} AI-GENERATED FORM OUTPUT CONTRACT`, `You must generate every listed field inside the ${code} discipline data object. Use nested objects for dotted paths (for example, team.objective becomes data.team.objective). Do not leave a required field absent; when verified facts are unavailable, provide an explicit evidence-limited recommendation or gap statement without inventing identities, measurements, or completed actions.`, '```json', JSON.stringify(fields), '```'].join('\n'));
             } catch { /* See input-schema handling above. */ }
         }
     }
@@ -441,7 +430,7 @@ export function buildEightDPrompt(
         'Closed cases scored as similar to this one, best match first. See rule 6.',
         '',
         renderPrecedents(precedents),
-        ...configuredInputs,
+        ...configuredDataSchemas,
         ...configuredOutputs,
     ].filter(Boolean).join('\n');
 }

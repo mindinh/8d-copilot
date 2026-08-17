@@ -105,6 +105,10 @@ export async function saveResult(reportID: string, outcome: AnalyzeOutcome): Pro
             sources: JSON.stringify(d.sources),
             confidence: d.confidence,
             dataBacked: d.dataBacked,
+            resultJson: outcome.runtime?.[d.code]?.resultJson ?? JSON.stringify(d.data ?? {}),
+            formSchemaJson: outcome.runtime?.[d.code]?.formSchemaJson ?? null,
+            validationJson: outcome.runtime?.[d.code]?.validationJson ?? null,
+            configVersion: outcome.runtime?.[d.code]?.configVersion ?? null,
             aiGenerated: true,
         })),
     );
