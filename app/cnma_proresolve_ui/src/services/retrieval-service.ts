@@ -142,16 +142,32 @@ export async function swapCriterionOrder(
  * mãi 0 điểm.
  */
 export const COMPARABLE_FIELDS = [
-    { field: 'workCenterId', label: 'Work centre', note: 'Nơi sản xuất' },
-    { field: 'defectCode', label: 'Defect code', note: 'Mã lỗi trong danh mục' },
-    { field: 'defectKeywords', label: 'Defect keywords', note: 'Từ khoá đã tách từ mô tả lỗi' },
-    { field: 'materialId', label: 'Material', note: 'Mã vật tư' },
-    { field: 'materialFamily', label: 'Material group', note: 'Nhóm vật tư (MATKL)' },
-    { field: 'batchId', label: 'Batch', note: 'Số lô' },
-    { field: 'rootCauseCategory', label: 'Root cause category', note: 'Nhánh Ishikawa' },
-    { field: 'origin', label: 'Origin', note: 'Q1 khiếu nại / Q3 nội bộ' },
-    { field: 'fmeaId', label: 'FMEA', note: 'Liên kết FMEA' },
-    { field: 'embedding', label: 'Case narrative (vector)', note: 'Chỉ dùng với phương pháp cosine' },
+    { field: 'workCenterId', label: 'Work centre', note: 'Nơi sản xuất', sourceTable: 'HistoricalCases · GD 4 WorkCenters' },
+    { field: 'defectCode', label: 'Defect code', note: 'Mã lỗi trong danh mục', sourceTable: 'HistoricalCases · GD 3 Defects' },
+    { field: 'defectKeywords', label: 'Defect keywords', note: 'Từ khoá đã tách từ mô tả lỗi', sourceTable: 'HistoricalCases · GD 3 Defects (Keywords)' },
+    { field: 'materialId', label: 'Material', note: 'Mã vật tư', sourceTable: 'HistoricalCases · GD 1 Materials' },
+    { field: 'materialFamily', label: 'Material group', note: 'Nhóm vật tư (MATKL)', sourceTable: 'HistoricalCases · GD 1 Materials (Family)' },
+    { field: 'batchId', label: 'Batch', note: 'Số lô', sourceTable: 'HistoricalCases · Batch Records' },
+    { field: 'rootCauseCategory', label: 'Root cause category', note: 'Nhánh Ishikawa', sourceTable: 'HistoricalCases · 5-Why & Ishikawa' },
+    { field: 'origin', label: 'Origin', note: 'Q1 khiếu nại / Q3 nội bộ', sourceTable: 'HistoricalCases · Case Header (Q1/Q3)' },
+    { field: 'fmeaId', label: 'FMEA', note: 'Liên kết FMEA', sourceTable: 'HistoricalCases · FMEA Registry' },
+    { field: 'embedding', label: 'Case narrative (vector)', note: 'Chỉ dùng với phương pháp cosine', sourceTable: 'HistoricalCases.searchText (embedding)' },
+] as const;
+
+export const AVAILABLE_SOURCE_TABLES = [
+    { value: 'HistoricalCases · GD 4 WorkCenters', label: 'HistoricalCases · GD 4 WorkCenters' },
+    { value: 'HistoricalCases · GD 3 Defects', label: 'HistoricalCases · GD 3 Defects' },
+    { value: 'HistoricalCases · GD 3 Defects (Keywords)', label: 'HistoricalCases · GD 3 Defects (Keywords)' },
+    { value: 'HistoricalCases · GD 1 Materials', label: 'HistoricalCases · GD 1 Materials' },
+    { value: 'HistoricalCases · GD 1 Materials (Family)', label: 'HistoricalCases · GD 1 Materials (Family)' },
+    { value: 'HistoricalCases · Batch Records', label: 'HistoricalCases · Batch Records' },
+    { value: 'HistoricalCases · 5-Why & Ishikawa', label: 'HistoricalCases · 5-Why & Ishikawa' },
+    { value: 'HistoricalCases · Case Header (Q1/Q3)', label: 'HistoricalCases · Case Header (Q1/Q3)' },
+    { value: 'HistoricalCases · FMEA Registry', label: 'HistoricalCases · FMEA Registry' },
+    { value: 'HistoricalCases.searchText (embedding)', label: 'HistoricalCases.searchText (embedding)' },
+    { value: 'NotificationHeader · SAP QM', label: 'NotificationHeader · SAP QM' },
+    { value: 'DefectItem · SAP QM', label: 'DefectItem · SAP QM' },
+    { value: 'InspectionLot · SAP QM', label: 'InspectionLot · SAP QM' },
 ] as const;
 
 /** Phương pháp so khớp CÓ nhánh xử lý trong `scoring.ts`. */
@@ -224,4 +240,99 @@ export async function getLibraryCases(): Promise<LibraryCase[]> {
 export async function embedLibrary(force = false): Promise<EmbedReport> {
     const res = await axiosInstance.post(`${EIGHTD}/embedCaseLibrary`, { force });
     return unwrapAction<EmbedReport>(res.data);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tổng quan cho trang Workflow
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WorkflowSnapshot {
+    /** Tiêu chí đang bật và trần điểm — quyết định bước tìm tiền lệ. */
+    criteriaEnabled: number;
+    criteriaTotal: number;
+    maxScore: number;
+    hasVectorStep: boolean;
+
+    minScore: number;
+    topN: number;
+    closedOnly: boolean;
+
+    libraryCount: number;
+    embeddedCount: number;
+    embeddingModel: string | null;
+
+    /** Prompt bước D đã có nội dung / tổng số bước. */
+    promptsFilled: number;
+    promptsTotal: number;
+
+    /** Model mặc định và ghi đè theo activity, đọc từ cấu hình chung. */
+    defaultModel: string | null;
+    activityModels: Record<string, string>;
+    modelsInRegistry: number;
+
+    reportsAnalyzed: number;
+    reportsTotal: number;
+}
+
+/**
+ * Gom mọi thứ trang Workflow cần trong một lần.
+ *
+ * Từng phần hỏng riêng thì trả giá trị trung tính chứ không làm hỏng cả trang:
+ * mục đích của trang là cho thấy chỗ nào ĐÃ cấu hình và chỗ nào chưa, nên một
+ * phần chưa cấu hình là thông tin, không phải lỗi.
+ */
+export async function getWorkflowSnapshot(): Promise<WorkflowSnapshot> {
+    const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+        try {
+            return await fn();
+        } catch {
+            return fallback;
+        }
+    };
+
+    const [criteria, settings, prompts, cases, aiConfigRaw, models, reports] = await Promise.all([
+        safe(getCriteria, [] as SimilarityCriterion[]),
+        safe(getSettings, null),
+        safe(getStepPrompts, [] as StepPrompt[]),
+        safe(getLibraryCases, [] as LibraryCase[]),
+        safe(async () => {
+            const r = await axiosInstance.get(`${AI}/getGlobalAiConfig()`);
+            return unwrapAction<Record<string, any>>(r.data) ?? {};
+        }, {} as Record<string, any>),
+        safe(async () => {
+            const r = await axiosInstance.get(`${AI}/AIModels?$select=modelId`);
+            return unwrapList<{ modelId: string }>(r.data);
+        }, [] as { modelId: string }[]),
+        safe(async () => {
+            const r = await axiosInstance.get(`${EIGHTD}/Reports?$select=ID,status`);
+            return unwrapList<{ ID: string; status: string }>(r.data);
+        }, [] as { ID: string; status: string }[]),
+    ]);
+
+    const embedded = cases.filter((c) => c.embeddingModel);
+
+    return {
+        criteriaEnabled: criteria.filter((c) => c.enabled).length,
+        criteriaTotal: criteria.length,
+        maxScore: criteria.filter((c) => c.enabled).reduce((s, c) => s + (c.weight ?? 0), 0),
+        hasVectorStep: criteria.some((c) => c.enabled && c.matchType === 'cosine'),
+
+        minScore: settings?.minScore ?? 0,
+        topN: settings?.topN ?? 0,
+        closedOnly: settings?.closedOnly ?? true,
+
+        libraryCount: cases.length,
+        embeddedCount: embedded.length,
+        embeddingModel: embedded[0]?.embeddingModel ?? null,
+
+        promptsFilled: prompts.filter((p) => (p.systemPrompt ?? '').trim()).length,
+        promptsTotal: prompts.length,
+
+        defaultModel: aiConfigRaw?.model ?? null,
+        activityModels: (aiConfigRaw?.models ?? {}) as Record<string, string>,
+        modelsInRegistry: models.length,
+
+        reportsAnalyzed: reports.filter((r) => r.status === 'Analyzed').length,
+        reportsTotal: reports.length,
+    };
 }

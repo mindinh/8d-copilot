@@ -9,7 +9,8 @@
         "admin": "Administrator",
         "user": "Benutzer",
         "logOut": "Abmelden",
-        "aiSettings": "KI-Einstellungen"
+        "aiSettings": "KI-Einstellungen",
+        "workflow": "Training Center"
     },
     "common": {
         "loading": "Wird geladen...",
