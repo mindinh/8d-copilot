@@ -9,7 +9,8 @@
         "admin": "Administrator",
         "user": "User",
         "logOut": "Log Out",
-        "aiSettings": "AI Settings"
+        "aiSettings": "AI Settings",
+        "workflow": "Training Center"
     },
     "common": {
         "loading": "Loading...",

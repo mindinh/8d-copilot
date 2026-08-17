@@ -4,7 +4,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cnma/react-ui';
 import {
-    COMPARABLE_FIELDS, MATCH_METHODS, type SimilarityCriterion,
+    AVAILABLE_SOURCE_TABLES, COMPARABLE_FIELDS, MATCH_METHODS, type SimilarityCriterion,
 } from '@/services/retrieval-service';
 
 /**
@@ -148,12 +148,18 @@ export function CriterionStepCard({
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-1.5">
                         <Label className="text-xs uppercase text-muted-foreground">
-                            Compare field <span className="normal-case">(on both cases)</span>
+                            Compare field <span className="normal-case font-normal">(DB field to compare)</span>
                         </Label>
                         <Select
                             value={c.sourceField ?? ''}
                             disabled={busy}
-                            onValueChange={(v) => onPatch({ sourceField: v })}
+                            onValueChange={(v) => {
+                                const matched = COMPARABLE_FIELDS.find((f) => f.field === v);
+                                onPatch({
+                                    sourceField: v,
+                                    sourceTable: matched?.sourceTable ?? c.sourceTable,
+                                });
+                            }}
                         >
                             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Pick a column" /></SelectTrigger>
                             <SelectContent>
@@ -171,17 +177,24 @@ export function CriterionStepCard({
 
                     <div className="space-y-1.5">
                         <Label className="text-xs uppercase text-muted-foreground">
-                            Reads from <span className="normal-case">(shown on the criteria list)</span>
+                            Reads from <span className="normal-case font-normal">(Metadata)</span>
                         </Label>
-                        <Input
-                            defaultValue={c.sourceTable ?? ''}
-                            placeholder="e.g. HistoricalCases · GD 4 WorkCenters"
+                        <Select
+                            value={c.sourceTable ?? ''}
                             disabled={busy}
-                            className="h-8 text-sm"
-                            onBlur={(e) => e.target.value !== c.sourceTable && onPatch({ sourceTable: e.target.value })}
-                        />
+                            onValueChange={(v) => onPatch({ sourceTable: v })}
+                        >
+                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select SAP source table" /></SelectTrigger>
+                            <SelectContent>
+                                {AVAILABLE_SOURCE_TABLES.map((t) => (
+                                    <SelectItem key={t.value} value={t.value}>
+                                        {t.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground/70">
-                            Free text — it tells the next person which data this step depends on.
+                            Select target SAP QM entity or historical case reference table.
                         </p>
                     </div>
                 </div>

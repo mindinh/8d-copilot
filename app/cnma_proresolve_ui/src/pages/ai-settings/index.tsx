@@ -7,16 +7,19 @@ import { SimilarityTab } from './similarity-tab';
 import { StepPromptsTab } from './step-prompts-landing';
 
 /**
- * Trang cấu hình AI.
+ * Trang cấu hình AI — gom theo CHỦ ĐỀ.
  *
- *   General Settings — chọn model cho từng bước xử lý (tab mặc định)
+ *   General Settings — chọn model cho từng bước xử lý
  *   Similarity       — tiêu chí chấm điểm tiền lệ, ngưỡng, vector search
- *   Step Prompts     — prompt của từng bước D1–D8
+ *   Step Prompts     — hướng dẫn cho từng discipline D1–D8
  *   Model Registry   — đồng bộ từ AI Core, bật/tắt, giới hạn theo activity
  *
- * Model Registry do CDK cung cấp nguyên trang. Ba tab còn lại là của dự án, vì
- * việc lưu cấu hình ở đâu là chuyện của ứng dụng — CDK chỉ cho component, không
- * cho chỗ lưu.
+ * Trang /workflow trình bày CÙNG những mảnh này nhưng theo thứ tự quy trình 8D,
+ * kèm giải thích mỗi bước phục vụ gì. Hai trang dùng chung `useRetrievalConfig`
+ * và chung các section trong `sections/`, nên không thể lệch nhau.
+ *
+ * Giữ cả hai có chủ đích: trang này để người đã quen tìm nhanh một ô cần sửa;
+ * trang Workflow để người mới hiểu vì sao ô đó tồn tại.
  */
 export function AiSettingsPage() {
     return (
@@ -24,8 +27,8 @@ export function AiSettingsPage() {
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">AI Settings</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Choose which model runs each processing step, and manage the model registry
-                    synced from SAP AI Core.
+                    How the 8D pipeline finds comparable cases and drafts the eight disciplines — and
+                    which parts of it you can change.
                 </p>
             </div>
 

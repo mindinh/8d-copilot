@@ -4,6 +4,7 @@ import {
     LayoutDashboard,
     Building2,
     Bot,
+    Workflow,
     ClipboardList,
     Menu,
     ChevronLeft,
@@ -47,6 +48,7 @@ function useNavTree(): NavEntry[] {
         // Lưu ý: cờ `adminOnly` có trong interface NavLeaf nhưng CHƯA được dùng
         // để lọc ở đâu cả — đặt vào đây sẽ không ẩn mục nào. Khi nào phân quyền
         // sidebar được nối dây thì thêm `adminOnly: true` cho mục này.
+        { type: 'leaf', to: '/workflow', icon: Workflow, label: t('nav.workflow') },
         { type: 'leaf', to: '/ai-settings', icon: Bot, label: t('nav.aiSettings') },
     ];
 }
