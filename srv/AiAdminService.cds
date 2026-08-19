@@ -103,20 +103,106 @@ service AiAdminService {
     ]
     entity StepPrompts as projection on ns.StepPrompts;
 
+    // ── Object Schema: profile chấm điểm theo từng bước D ───────────────────
+    // Ba entity dưới đây là backend của trang Object Schema. Xem
+    // `db/schema/retrieval-config.cds` để biết vì sao mỗi bước cần một bộ trọng
+    // số riêng, và `srv/src/domain/eightd/precedent/profileRepository.ts` để biết
+    // ràng buộc mồ côi được chữa ở đâu.
+
+    /**
+     * Bộ trọng số có tên. Xoá được trừ profile hệ thống — luật đó nằm ở
+     * `deleteRetrievalProfile`, không phải ở đây, vì nó cần kéo ràng buộc về
+     * mặc định trong cùng một lượt.
+     */
+    @restrict: [
+        { grant: 'READ',   to: ['admin', 'Admin'] },
+        { grant: 'UPDATE', to: ['admin', 'Admin'] }
+    ]
+    entity RetrievalProfiles as projection on ns.RetrievalProfiles;
+
+    /**
+     * Tiêu chí bên trong một profile — đây là thứ panel giữa của Object Schema
+     * ghi vào. Mở đủ CREATE/UPDATE/DELETE vì kéo một field từ panel trái sang là
+     * tạo một dòng, và kéo ra là xoá.
+     */
+    @restrict: [
+        { grant: 'READ',   to: ['admin', 'Admin'] },
+        { grant: 'CREATE', to: ['admin', 'Admin'] },
+        { grant: 'UPDATE', to: ['admin', 'Admin'] },
+        { grant: 'DELETE', to: ['admin', 'Admin'] }
+    ]
+    entity ProfileCriteria as projection on ns.ProfileCriteria;
+
+    /** Bước D nào chạy profile nào. Đúng tám dòng; chỉ đổi được profile. */
+    @restrict: [
+        { grant: 'READ',   to: ['admin', 'Admin'] },
+        { grant: 'UPDATE', to: ['admin', 'Admin'] }
+    ]
+    entity StepRetrievalBindings as projection on ns.StepRetrievalBindings;
+
+    /**
+     * Mọi field SAP gửi lên, quét từ payload thật trong kho — nguồn của panel
+     * trái trên trang Object Schema.
+     *
+     * Là function chứ không entity: đây là kết quả suy ra từ dữ liệu, không phải
+     * bảng. Dựng thành entity nghĩa là phải đồng bộ nó mỗi lần kho đổi, và bản
+     * đồng bộ đó sẽ lệch.
+     *
+     * Trả JSON `SourceFieldInfo[]`.
+     */
+    @requires: ['admin', 'Admin']
+    function getSourceFieldCatalog() returns String;
+
+    /**
+     * Tạo profile mới bằng cách nhân bản một profile đang có.
+     *
+     * Nhân bản chứ không tạo rỗng: profile không tiêu chí nào không chấm nổi
+     * điểm nào, nên "tạo mới" theo nghĩa rỗng luôn cho ra một profile hỏng.
+     */
+    @requires: ['admin', 'Admin']
+    action cloneRetrievalProfile(
+        sourceKey   : String,
+        profileKey  : String,
+        label       : String,
+        description : String
+    ) returns String;
+
+    /** Xoá profile; bước nào đang trỏ vào thì kéo về `default` trong cùng lượt. */
+    @requires: ['admin', 'Admin']
+    action deleteRetrievalProfile(profileKey : String) returns String;
+
+    /**
+     * Ghi cả profile trong MỘT lượt: cấu hình, bộ tiêu chí, và bước D trỏ vào nó.
+     *
+     * Màn hình Object Schema sửa ba thứ cùng lúc rồi bấm Save một lần. Gửi từng
+     * thay đổi thành một request nghĩa là một lần Save có thể thành công một nửa
+     * — tiêu chí đã đổi mà ràng buộc bước thì chưa, và không có đường lùi.
+     *
+     * `payload` là JSON `{ label, description, minScore, topN, closedOnly,
+     * criteria[], steps[] }`. Trường vắng mặt ⇒ giữ nguyên; `criteria` và `steps`
+     * có mặt ⇒ THAY THẾ toàn bộ tập cũ.
+     */
+    @requires: ['admin', 'Admin']
+    action saveRetrievalProfile(profileKey : String, payload : LargeString) returns String;
+
     /** Vết đề xuất AI đã hiện / được nhận / bị từ chối. Chỉ đọc. */
     @readonly
     entity SuggestionAudit as projection on ns.SuggestionAudit;
 
     /**
-     * Chấm thử hai case với cấu hình HIỆN TẠI, không chạy pipeline.
+     * Chấm thử hai case bằng MỘT profile, không chạy pipeline.
      *
      * Có mặt để admin chỉnh trọng số rồi thấy ngay hệ quả. Không có nó thì cách
      * duy nhất để biết một thay đổi làm gì là chạy cả lượt phân tích AI.
      *
+     * `profileKey` trống ⇒ profile mặc định. Bỏ tham số này đi thì ô chấm thử
+     * luôn nói về một profile, trong khi tám bước đang chạy nhiều profile — và
+     * con số hiện ra sẽ mâu thuẫn với kết quả thật mà không rõ vì sao.
+     *
      * Trả JSON `ScoreResult` kèm `breakdown` từng tiêu chí.
      */
     @requires: ['admin', 'Admin']
-    function previewScore(caseA : String, caseB : String) returns String;
+    function previewScore(caseA : String, caseB : String, profileKey : String) returns String;
 
     /** Resolve one D1-D4 configuration against a sample case without exposing credentials. */
     @requires: ['admin', 'Admin']

@@ -13,6 +13,8 @@ const CLOSED_STATUSES = ['Completed', 'Closed'];
 export interface CandidateRow extends ScorableCase {
     ID: string;
     notificationId: string;
+    /** Payload đã làm phẳng, dạng chuỗi. `findPrecedents` parse thành `attributes`. */
+    attributesJson: string | null;
     origin: string | null;
     symptomShortText: string | null;
     sapStatus: string | null;
@@ -53,6 +55,9 @@ const CANDIDATE_COLUMNS = [
     // Vector nặng (~30 KB mỗi dòng). Vẫn phải lấy vì cosine tính trong TS —
     // đây là cái giá của việc chạy được cả trên SQLite lẫn HANA.
     'embedding', 'embeddingModel', 'searchText',
+    // Payload đã làm phẳng — nguồn của mọi tiêu chí trỏ vào đường dẫn SAP thay
+    // vì một cột. Không lấy thì các tiêu chí đó lặng lẽ ăn 0 điểm.
+    'attributesJson',
 ];
 
 /**
@@ -97,6 +102,19 @@ export async function fetchCandidates(
     current: ScorableCase,
     criteria: readonly Criterion[],
     opts: { closedOnly: boolean; minScore: number },
+    /**
+     * Bộ nhớ tạm dùng chung TRONG MỘT lượt chạy.
+     *
+     * Tám bước D chạy tối đa tám profile, và các profile khác nhau về trọng số
+     * thường cho ra cùng một câu lọc — nhất là khi tiêu chí ngữ nghĩa bật, lúc
+     * đó mọi profile đều quét toàn bộ kho. Không có cache thì cùng một câu SELECT
+     * chạy tám lần trên một connection SQLite duy nhất.
+     *
+     * Khoá cache do chính hàm này tính, sau khi đã quyết định hình dạng câu truy
+     * vấn — người gọi không cần biết luật lọc, và không có bản sao luật nào để
+     * lệch khỏi bản gốc.
+     */
+    cache?: Map<string, CandidateRow[]>,
 ): Promise<CandidateRow[]> {
     const db = await cds.connect.to('db');
 
@@ -106,6 +124,14 @@ export async function fetchCandidates(
     q = q.where({ notificationId: { '<>': current.notificationId } });
     if (opts.closedOnly) q = q.and({ sapStatus: { in: CLOSED_STATUSES } });
 
+    const run = async (key: string, build: () => any): Promise<CandidateRow[]> => {
+        const hit = cache?.get(key);
+        if (hit) return hit;
+        const rows = (await db.run(build())) as CandidateRow[];
+        cache?.set(key, rows);
+        return rows;
+    };
+
     const reach = nonFilterableReach(criteria);
     if (reach >= opts.minScore) {
         // Trường hợp BÌNH THƯỜNG khi tiêu chí ngữ nghĩa đang bật, không phải sự cố.
@@ -113,12 +139,17 @@ export async function fetchCandidates(
             `Điểm đạt được không cần trùng khoá là ${reach} ≥ ngưỡng ${opts.minScore} `
             + '— quét toàn bộ kho thay vì lọc trước, để không bỏ sót case chỉ giống về ngữ nghĩa.',
         );
-        return (await db.run(q)) as CandidateRow[];
+        return run(`all:${opts.closedOnly}`, () => q);
     }
 
     // Mỗi cột khớp-bằng của tiêu chí đang bật thành một vế OR. `materialFamily`
     // phải có mặt: trùng từ khoá (+2) cộng cùng họ vật tư (+1) là vừa đúng
     // ngưỡng 3, và vế đó chỉ vào được qua cột này.
+    //
+    // Tiêu chí trỏ vào đường dẫn payload KHÔNG vào được vế OR nào: giá trị của
+    // chúng nằm trong `attributesJson`, không có cột để so. Chúng đã được
+    // `nonFilterableReach` tính vào phần "đạt được không cần trùng khoá", nên
+    // hoặc câu lọc vẫn an toàn, hoặc nhánh quét toàn bộ ở trên đã chạy.
     const orFields = new Set<string>();
     for (const c of criteria) {
         if (!c.enabled) continue;
@@ -146,7 +177,8 @@ export async function fetchCandidates(
 
     q = q.and(tokens);
 
-    return (await db.run(q)) as CandidateRow[];
+    const key = `or:${opts.closedOnly}:${orTerms.map((t) => `${t.field}=${t.value}`).sort().join('|')}`;
+    return run(key, () => q);
 }
 
 /** Thành viên nhóm 8D của các case đã trúng. Rỗng khi `caseIds` rỗng. */

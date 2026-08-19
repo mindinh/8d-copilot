@@ -32,6 +32,16 @@ const SUPPORTS_FALLBACK = new Set(['exact', 'keyword']);
 
 export interface CriterionStepCardProps {
     criterion: SimilarityCriterion;
+    /**
+     * Khoá phần ĐỊNH NGHĨA field: cột đem ra so, bảng nguồn, và nút xoá.
+     *
+     * Bật ở tab Similarity của từng bước D. Ở đó bộ field đã được trang Object
+     * Schema dựng từ danh mục field SAP quét trên kho thật; ô chọn cột ở đây chỉ
+     * có một danh sách viết cứng, nên để mở là tạo ra đường thứ hai định nghĩa
+     * field, với một bộ lựa chọn khác. Trọng số, cách so và mức dự phòng vẫn sửa
+     * được — đó mới là thứ khác nhau giữa các bước.
+     */
+    fieldsLocked?: boolean;
     index: number;
     isFirst: boolean;
     isLast: boolean;
@@ -43,7 +53,8 @@ export interface CriterionStepCardProps {
 }
 
 export function CriterionStepCard({
-    criterion: c, index, isFirst, isLast, busy, onPatch, onRemove, onMoveUp, onMoveDown,
+    criterion: c, index, isFirst, isLast, busy, fieldsLocked = false,
+    onPatch, onRemove, onMoveUp, onMoveDown,
 }: CriterionStepCardProps) {
     const method = c.matchType || 'exact';
     const isVector = method === 'cosine';
@@ -133,13 +144,15 @@ export function CriterionStepCard({
                         onCheckedChange={(v) => onPatch({ enabled: v })}
                     />
 
-                    <Button
-                        variant="ghost" size="icon" type="button" disabled={busy}
-                        onClick={onRemove}
-                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                    >
-                        <Trash2 size={14} />
-                    </Button>
+                    {!fieldsLocked && (
+                        <Button
+                            variant="ghost" size="icon" type="button" disabled={busy}
+                            onClick={onRemove}
+                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                        >
+                            <Trash2 size={14} />
+                        </Button>
+                    )}
                 </div>
 
                 <Separator />
@@ -152,7 +165,7 @@ export function CriterionStepCard({
                         </Label>
                         <Select
                             value={c.sourceField ?? ''}
-                            disabled={busy}
+                            disabled={busy || fieldsLocked}
                             onValueChange={(v) => {
                                 const matched = COMPARABLE_FIELDS.find((f) => f.field === v);
                                 onPatch({
@@ -181,7 +194,7 @@ export function CriterionStepCard({
                         </Label>
                         <Select
                             value={c.sourceTable ?? ''}
-                            disabled={busy}
+                            disabled={busy || fieldsLocked}
                             onValueChange={(v) => onPatch({ sourceTable: v })}
                         >
                             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select SAP source table" /></SelectTrigger>
@@ -194,7 +207,9 @@ export function CriterionStepCard({
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground/70">
-                            Select target SAP QM entity or historical case reference table.
+                            {fieldsLocked
+                                ? 'Field của profile được định nghĩa ở trang Object Schema.'
+                                : 'Select target SAP QM entity or historical case reference table.'}
                         </p>
                     </div>
                 </div>

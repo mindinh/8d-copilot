@@ -74,7 +74,7 @@ export function ScorePreviewSection({ cfg }: { cfg: RetrievalConfigState }) {
                         onClick={async () => {
                             setRunning(true);
                             try {
-                                setResult(await previewScore(caseA, caseB));
+                                setResult(await previewScore(caseA, caseB, cfg.profileKey));
                             } catch (e: any) {
                                 toast.error(`Scoring failed: ${e.message}`);
                             } finally {

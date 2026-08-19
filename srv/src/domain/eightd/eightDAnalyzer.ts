@@ -29,9 +29,15 @@ import {
     buildEightDPrompt,
     buildEightDSystemPrompt,
     buildEnrichmentPrompt,
+    type StepRanking,
 } from './prompts';
 import { getDisciplineGuide, getStepPromptRuntimeConfig } from './precedent/configRepository';
-import { findPrecedents, type Precedent } from './precedent/findPrecedents';
+import {
+    emptyPerStepPrecedents,
+    findPrecedentsByStep,
+    type PerStepPrecedents,
+} from './precedent/findPrecedents';
+import { STEP_CODES } from './precedent/profileRepository';
 import { callAndParse } from './jsonExtract';
 import { postProcess } from './postProcess';
 import {
@@ -169,11 +175,33 @@ async function diagnoseIndependently(
 // Bước AI 3 — sinh báo cáo
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Thứ hạng tiền lệ của từng bước D, tính trên danh sách hợp nhất đã đánh số.
+ *
+ * `PerStepPrecedents` giữ tám kết quả đầy đủ; prompt chỉ cần biết bước nào xếp
+ * hạng mã case nào với điểm nào. Chuyển đổi ở đây để `prompts.ts` không phải biết
+ * gì về profile.
+ */
+function toStepRankings(perStep: PerStepPrecedents): Record<string, StepRanking> {
+    return Object.fromEntries(
+        STEP_CODES.map((code) => {
+            const result = perStep.byStep[code];
+            return [code, {
+                profileKey: result.profileKey,
+                profileLabel: result.profileLabel,
+                maxScore: result.maxScore,
+                notificationIds: result.precedents.map((p) => p.notificationId),
+                scores: Object.fromEntries(result.precedents.map((p) => [p.notificationId, p.score])),
+            } satisfies StepRanking];
+        }),
+    );
+}
+
 async function generateReport(
     context: CaseContext,
     enrichment: ContextEnrichment,
     independent: IndependentAnalysis,
-    precedents: Precedent[],
+    perStep: PerStepPrecedents,
 ): Promise<{
     result: EightDResult;
     tokens: number;
@@ -205,8 +233,21 @@ async function generateReport(
         const config = effectiveConfigs[code];
         return config ? [[code, normalizeStepConfig(code, config)]] : [];
     })) as Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
-    const runtimeSources = buildRuntimeSources(context, enrichment, independent, precedents);
-    const resolved = Object.fromEntries(Object.keys(normalizedConfigs).map((code) => [code, { input: runtimeSources, diagnostics: [] }]));
+    // Nguồn dữ liệu runtime tính THEO TỪNG BƯỚC: `precedents` và `precedentTeams`
+    // của D1 là kết quả profile của D1, không phải danh sách hợp nhất. Dùng chung
+    // một bộ cho cả tám bước sẽ vô hiệu hoá toàn bộ tính năng này ở đúng chỗ nó
+    // được đọc — luật `dataBackedWhenInputPresent` của D1 nhìn vào `precedentTeams`.
+    const stepSources = Object.fromEntries(
+        STEP_CODES.map((code) => [
+            code,
+            buildRuntimeSources(context, enrichment, independent, perStep.byStep[code].precedents),
+        ]),
+    ) as Record<string, Record<string, unknown>>;
+    // Bước cấu hình được nhưng không có trong `STEP_CODES` thì rơi về danh sách
+    // hợp nhất — không bao giờ để một bước không có nguồn nào.
+    const unionSources = buildRuntimeSources(context, enrichment, independent, perStep.union);
+    const resolved = Object.fromEntries(Object.keys(normalizedConfigs).map((code) => [code, { input: stepSources[code] ?? unionSources, diagnostics: [] }]));
+    const stepRankings = toStepRankings(perStep);
     const configuredConstraints = Object.fromEntries(configurableCodes.flatMap((code) => {
         const json = effectiveConfigs[code]?.constraintsJson; if (!json) return [];
         try { return (JSON.parse(json) as { enabled?: boolean }).enabled === false ? [] : [[code, json]]; } catch { return []; }
@@ -218,6 +259,12 @@ async function generateReport(
     const inputSchemas = Object.fromEntries(configurableCodes.flatMap((code) => effectiveConfigs[code]?.inputSchemaJson ? [[code, effectiveConfigs[code]!.inputSchemaJson]] : []));
     const formSchemas = Object.fromEntries(configurableCodes.flatMap((code) => effectiveConfigs[code]?.formSchemaJson ? [[code, effectiveConfigs[code]!.formSchemaJson]] : []));
 
+    // Prompt dựng ở ba chỗ (lần đầu, lần sửa, lần sửa theo lỗi cấu hình) và cả ba
+    // phải giống hệt nhau. Ba lời gọi rời nhau đã từng lệch tham số một lần.
+    const renderPrompt = () => buildEightDPrompt(
+        context, enrichment, independent, perStep.union, inputSchemas, formSchemas, stepRankings,
+    );
+
     const responseSchema = buildFlexibleResponseSchema(normalizedConfigs);
     let { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
         const res = await complete(
@@ -226,8 +273,8 @@ async function generateReport(
                 {
                     role: 'user',
                     content: repairHint
-                        ? `${buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas)}\n\n## CORRECTION\n${repairHint}`
-                        : buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas),
+                        ? `${renderPrompt()}\n\n## CORRECTION\n${repairHint}`
+                        : renderPrompt(),
                 },
             ],
             {
@@ -275,7 +322,10 @@ async function generateReport(
                     role: 'user',
                     content: JSON.stringify({
                         contracts: configuredFieldContracts,
-                        verifiedContext: runtimeSources,
+                        // Bước điền form gửi hợp đồng của CẢ D1–D4 trong một lời
+                        // gọi, nên nó phải thấy danh sách hợp nhất: giới hạn ở
+                        // tiền lệ của một bước sẽ làm ba bước còn lại mất nguồn.
+                        verifiedContext: unionSources,
                         report: value.disciplines.filter((discipline) => configurableCodes.includes(discipline.code as typeof configurableCodes[number])),
                         correction: repairHint || undefined,
                     }),
@@ -318,7 +368,7 @@ async function generateReport(
         const repaired = await callAndParse<EightDResult>(`${ACTIVITY_ANALYZE}-configured-repair`, async (repairHint) => {
             const res = await complete([
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `${buildEightDPrompt(context, enrichment, independent, precedents, inputSchemas, formSchemas)}\n\n## CONFIGURATION VALIDATION ERRORS\n${JSON.stringify(errors, null, 2)}\nReturn the complete corrected report.${repairHint ? `\n${repairHint}` : ''}` },
+                { role: 'user', content: `${renderPrompt()}\n\n## CONFIGURATION VALIDATION ERRORS\n${JSON.stringify(errors, null, 2)}\nReturn the complete corrected report.${repairHint ? `\n${repairHint}` : ''}` },
             ], { activity: ACTIVITY_ANALYZE, temperature: 0, max_tokens: BUDGET.analyze.maxTokens, thinkingBudget: BUDGET.analyze.thinkingBudget, responseMimeType: 'application/json', responseSchema });
             tokens += res.usage?.totalTokens ?? 0;
             return { content: res.content, finishReason: res.finishReason };
@@ -398,18 +448,19 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
     //
     // Hỏng thì đi tiếp với danh sách rỗng — mất phần gợi ý theo tiền lệ vẫn còn
     // cả báo cáo, đổi cả lượt phân tích lấy một sự cố truy vấn là quá đắt.
-    let precedents: Precedent[] = [];
+    //
+    // Mỗi bước D chạy profile của riêng nó, nên một bước có thể có tiền lệ trong
+    // khi bước khác không — đó là điều BÌNH THƯỜNG, không phải lỗi. Xem
+    // `findPrecedentsByStep`.
+    let perStep = emptyPerStepPrecedents();
     try {
-        const found = await findPrecedents(context);
-        precedents = found.precedents;
-        LOG.info(
-            found.precedents.length
-                ? `Tiền lệ: ${found.precedents.map((p) => `${p.notificationId} ${p.score}/${p.maxScore}`).join(', ')}`
-                : `Không có tiền lệ — ${found.reason}`,
-        );
+        // Truyền `raw`: tiêu chí trỏ vào một đường dẫn payload SAP chỉ so được khi
+        // case đang mở cũng có payload đã làm phẳng.
+        perStep = await findPrecedentsByStep(context, raw);
     } catch (e: any) {
         LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
     }
+    const precedents = perStep.union;
 
     const {
         result: rawResult,
@@ -418,7 +469,7 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         inputs: runtimeInputs,
         diagnostics: inputDiagnostics,
     } =
-        await generateReport(context, enrichment, independent, precedents);
+        await generateReport(context, enrichment, independent, perStep);
 
     // ── Lưới an toàn ──
     const constraintConfigs = Object.fromEntries((await Promise.all(['D1', 'D2', 'D3', 'D4'].map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {

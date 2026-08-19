@@ -10,6 +10,7 @@
         "user": "User",
         "logOut": "Log Out",
         "aiSettings": "AI Settings",
+        "objectSchema": "Object Schema",
         "workflow": "Training Center"
     },
     "common": {

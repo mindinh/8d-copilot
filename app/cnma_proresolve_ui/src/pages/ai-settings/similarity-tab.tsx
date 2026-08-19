@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Textarea,
 } from '@cnma/react-ui';
-import { Code, LayoutList } from 'lucide-react';
+import { Boxes, Code, LayoutList } from 'lucide-react';
 import { useRetrievalConfig } from '@/hooks/use-retrieval-config';
 import { CriteriaPipelineSection } from './sections/criteria-pipeline';
 import { ThresholdSection } from './sections/threshold-settings';
@@ -30,6 +31,22 @@ export function SimilarityTab() {
 
     return (
         <div className="space-y-5">
+            {/*
+             * Tab này chỉ chỉnh profile "Default". Không nói ra thì người dùng
+             * chỉnh trọng số ở đây rồi thắc mắc vì sao D4 không đổi gì — trong khi
+             * D4 đang chạy một profile khác.
+             */}
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-info/30 bg-info-bg/40 p-3 text-sm">
+                <Boxes size={16} className="shrink-0 text-info" />
+                <span className="text-muted-foreground">
+                    Trang này chỉnh profile <span className="font-medium text-foreground">Default</span>.
+                    Từng bước 8D có thể chạy một profile riêng với bộ trọng số khác.
+                </span>
+                <Button asChild size="sm" variant="outline" className="ml-auto h-7">
+                    <Link to="/object-schema">Mở Object Schema</Link>
+                </Button>
+            </div>
+
             <div className="flex items-center gap-2 rounded-lg border bg-card p-2">
                 <Button
                     variant={view === 'form' ? 'secondary' : 'ghost'} size="sm" type="button"

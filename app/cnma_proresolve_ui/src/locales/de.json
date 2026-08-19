@@ -10,6 +10,7 @@
         "user": "Benutzer",
         "logOut": "Abmelden",
         "aiSettings": "KI-Einstellungen",
+        "objectSchema": "Objektschema",
         "workflow": "Training Center"
     },
     "common": {

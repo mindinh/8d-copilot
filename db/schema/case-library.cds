@@ -66,6 +66,26 @@ entity HistoricalCases : cuid, managed {
     /** JSON gốc của case, giữ nguyên vẹn — dựng lại chi tiết mà không cần bảng phụ. */
     sourcePayload     : LargeString;
 
+    /**
+     * `sourcePayload` đã làm phẳng thành map `đường dẫn → giá trị`, tính lúc nạp.
+     *
+     * ── Vì sao cần cột này khi đã có `sourcePayload` ──
+     * Admin kéo một field bất kỳ của SAP vào profile chấm điểm — kể cả field
+     * không có cột riêng ở trên, ví dụ `causesIshikawa[].category`. Chấm điểm
+     * phải đọc được nó mà KHÔNG phải parse lại cả cây JSON cho từng ứng viên,
+     * từng tiêu chí, từng lần chấm.
+     *
+     * ── Vì sao không thêm cột thật cho mỗi field ──
+     * Payload SAP có ~50 leaf field và còn đổi. Mỗi field mới một cột nghĩa là
+     * mỗi lần SAP thêm trường là một lần migration schema — trong khi giá trị
+     * của tính năng này nằm ở chỗ admin tự cấu hình được mà không cần deploy.
+     *
+     * Đánh đổi đã biết: field trong map này KHÔNG lọc trước được bằng SQL, chỉ
+     * chấm trong TS. Chấp nhận được vì `fetchCandidates` vốn đã quét toàn bộ kho
+     * mỗi khi tiêu chí ngữ nghĩa bật — xem `nonFilterableReach`.
+     */
+    attributesJson    : LargeString;
+
     // ── Tìm theo ngữ nghĩa ───────────────────────────────────────────────────
 
     /**

@@ -7,13 +7,25 @@ import { ENTITIES } from '../config/ai';
 import { getGlobalAiConfigRaw, saveGlobalAiConfig } from '../core/ai/globalModelConfig';
 import {
   clearRetrievalConfigCache,
-  getRetrievalConfig,
   seedRetrievalConfig,
   CRITERIA,
   SETTINGS,
   STEP_PROMPTS,
 } from '../domain/eightd/precedent/configRepository';
+import {
+  clearProfileCache,
+  cloneProfile,
+  deleteProfile,
+  getProfile,
+  getProfileConfig,
+  saveProfile,
+  seedRetrievalProfiles,
+  PROFILES,
+  PROFILE_CRITERIA,
+  STEP_BINDINGS,
+} from '../domain/eightd/precedent/profileRepository';
 import { explainScore, scoreCase, type ScorableCase } from '../domain/eightd/precedent/scoring';
+import { buildSourceFieldCatalog, parseAttributes } from '../domain/eightd/precedent/sourceFields';
 import { HISTORICAL_CASES } from '../domain/eightd/precedent/precedentRepository';
 
 const LOG = cds.log('ai-admin');
@@ -190,12 +202,12 @@ async function getAvailableModels(activity?: string): Promise<string> {
 }
 
 /**
- * Chấm thử hai case bằng cấu hình đang có hiệu lực.
+ * Chấm thử hai case bằng MỘT profile.
  *
  * Nhận mã notification chứ không nhận UUID: admin nhìn thấy mã case trên màn
  * hình, không nhìn thấy khoá kỹ thuật.
  */
-async function previewScore(caseA?: string, caseB?: string): Promise<string> {
+async function previewScore(caseA?: string, caseB?: string, profileKey?: string): Promise<string> {
   if (!caseA?.trim() || !caseB?.trim()) {
     return JSON.stringify({ error: 'caseA và caseB là bắt buộc (mã notification).' });
   }
@@ -208,6 +220,8 @@ async function previewScore(caseA?: string, caseB?: string): Promise<string> {
     // luôn cho 0 điểm — ô chấm thử trên UI sẽ mâu thuẫn với kết quả thật của
     // `findPrecedents`, mà không có gì báo là do đâu.
     'embedding', 'embeddingModel',
+    // Cùng lý do, cho nhóm tiêu chí trỏ vào đường dẫn payload SAP.
+    'attributesJson',
   ];
 
   const [a, b] = await Promise.all([
@@ -220,15 +234,56 @@ async function previewScore(caseA?: string, caseB?: string): Promise<string> {
     return JSON.stringify({ error: `Không có trong kho: ${missing.join(', ')}` });
   }
 
-  const { criteria } = await getRetrievalConfig();
-  const result = scoreCase(a as ScorableCase, b as ScorableCase, criteria);
+  const profile = await getProfile(profileKey);
+  const withAttributes = (row: any): ScorableCase => ({
+    ...row,
+    attributes: parseAttributes(row.attributesJson),
+  });
+  const result = scoreCase(withAttributes(a), withAttributes(b), profile.criteria);
 
+  const { bindings } = await getProfileConfig();
   return JSON.stringify({
     caseA: { notificationId: a.notificationId, symptomShortText: a.symptomShortText },
     caseB: { notificationId: b.notificationId, symptomShortText: b.symptomShortText },
+    profileKey: profile.profileKey,
+    profileLabel: profile.label,
+    minScore: profile.minScore,
+    // Bước nào đang chạy profile này — con số chấm thử chỉ có nghĩa khi biết nó
+    // ảnh hưởng tới bước nào.
+    appliesTo: Object.entries(bindings)
+      .filter(([, key]) => key === profile.profileKey)
+      .map(([code]) => code),
     ...result,
     explanation: explainScore(result),
   });
+}
+
+/**
+ * Mọi field SAP gửi lên, quét từ payload thật trong kho.
+ *
+ * Quét cả kho chứ không lấy mẫu: một field chỉ xuất hiện ở hai case trong mười
+ * hai vẫn là một field so được, và nó chính là loại field mà lấy mẫu sẽ bỏ sót.
+ * Kho ở quy mô này (hàng chục tới hàng trăm case) thì quét hết là rẻ.
+ */
+async function getSourceFieldCatalog(): Promise<string> {
+  const db = await cds.connect.to('db');
+  try {
+    const rows = await db.run(
+      SELECT.from(HISTORICAL_CASES).columns('sourcePayload').orderBy('notificationId'),
+    );
+    const payloads = (rows as Record<string, any>[]).flatMap((r) => {
+      try {
+        return r.sourcePayload ? [JSON.parse(r.sourcePayload)] : [];
+      } catch {
+        // Một payload hỏng không được làm mất cả danh mục — bỏ qua dòng đó.
+        return [];
+      }
+    });
+    return JSON.stringify({ caseCount: payloads.length, fields: buildSourceFieldCatalog(payloads) });
+  } catch (e: any) {
+    LOG.warn(`Không dựng được danh mục field nguồn: ${e.message}`);
+    return JSON.stringify({ caseCount: 0, fields: [], error: e.message });
+  }
 }
 
 /** Ghi lại mặc định cho cấu hình tìm tiền lệ. */
@@ -240,19 +295,31 @@ async function resetRetrievalConfig(scope = 'all'): Promise<string> {
   if (wanted === 'all' || wanted === 'criteria') await wipe(CRITERIA);
   if (wanted === 'all' || wanted === 'settings') await wipe(SETTINGS);
   if (wanted === 'all' || wanted === 'prompts') await wipe(STEP_PROMPTS);
+  if (wanted === 'all' || wanted === 'profiles') {
+    // Xoá tiêu chí TRƯỚC profile: ở tầng db thuần không có cascade nào chạy hộ,
+    // và tiêu chí mồ côi sẽ được `getProfileConfig` gom vào một profile không
+    // còn tồn tại — tức là biến mất khỏi UI mà vẫn chiếm chỗ trong DB.
+    await wipe(PROFILE_CRITERIA);
+    await wipe(STEP_BINDINGS);
+    await wipe(PROFILES);
+  }
   if (wanted.startsWith('prompt:')) {
     const stepCode = wanted.slice('prompt:'.length).toUpperCase();
     if (!/^D[1-8]$/.test(stepCode)) throw new Error(`Invalid step prompt scope: ${scope}`);
     await db.run(DELETE.from(STEP_PROMPTS).where({ stepCode }));
   }
 
-  // `seedRetrievalConfig` chỉ ghi khi bảng rỗng — xoá trước rồi seed lại chính
-  // là "khôi phục mặc định".
+  // Hai hàm seed chỉ ghi phần còn thiếu — xoá trước rồi seed lại chính là "khôi
+  // phục mặc định". Thứ tự bắt buộc: profile `default` dựng từ bảng trọng số
+  // toàn cục, nên bảng đó phải được seed trước.
   await seedRetrievalConfig();
+  await seedRetrievalProfiles();
   clearRetrievalConfigCache();
+  clearProfileCache();
 
   LOG.info(`Đã khôi phục mặc định cấu hình truy hồi (scope=${wanted})`);
-  return JSON.stringify({ reset: wanted, ...(await getRetrievalConfig()) });
+  const { profiles, bindings } = await getProfileConfig();
+  return JSON.stringify({ reset: wanted, profiles, bindings });
 }
 
 /** Gắn handler vào service. Gọi từ hook `serving` trong srv/server.ts. */
@@ -260,7 +327,46 @@ export function registerAiAdminHandlers(srv: any): void {
   srv.on('syncModels', async () => syncModels());
   srv.on('getAvailableModels', async (req: any) => getAvailableModels(req.data?.activity));
 
-  srv.on('previewScore', async (req: any) => previewScore(req.data?.caseA, req.data?.caseB));
+  srv.on('previewScore', async (req: any) =>
+    previewScore(req.data?.caseA, req.data?.caseB, req.data?.profileKey));
+  srv.on('getSourceFieldCatalog', async () => getSourceFieldCatalog());
+
+  srv.on('cloneRetrievalProfile', async (req: any) => {
+    try {
+      await cloneProfile(String(req.data?.sourceKey ?? ''), {
+        profileKey: String(req.data?.profileKey ?? ''),
+        label: String(req.data?.label ?? ''),
+        description: req.data?.description ?? null,
+      });
+      return JSON.stringify(await getProfileConfig());
+    } catch (e: any) {
+      // Khoá trùng hay khoá sai định dạng là lỗi của người gọi, không phải sự cố.
+      return req.reject(e.code ?? 500, e.message);
+    }
+  });
+
+  srv.on('saveRetrievalProfile', async (req: any) => {
+    try {
+      const payload = JSON.parse(String(req.data?.payload ?? '{}'));
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return req.reject(400, 'payload phải là một object JSON.');
+      }
+      await saveProfile(String(req.data?.profileKey ?? ''), payload);
+      return JSON.stringify(await getProfileConfig());
+    } catch (e: any) {
+      // JSON hỏng và cấu hình không hợp lệ đều là lỗi của người gọi.
+      return req.reject(e.code ?? (e instanceof SyntaxError ? 400 : 500), e.message);
+    }
+  });
+
+  srv.on('deleteRetrievalProfile', async (req: any) => {
+    try {
+      const { rebound } = await deleteProfile(String(req.data?.profileKey ?? ''));
+      return JSON.stringify({ rebound, ...(await getProfileConfig()) });
+    } catch (e: any) {
+      return req.reject(e.code ?? 500, e.message);
+    }
+  });
   srv.on('previewStepConfiguration', async (req: any) => {
     const stepCode = String(req.data?.stepCode ?? req.params?.[0]?.stepCode ?? '').toUpperCase();
     if (!/^D[1-4]$/.test(stepCode)) return req.reject(400, 'stepCode must be D1, D2, D3, or D4');
@@ -300,10 +406,45 @@ export function registerAiAdminHandlers(srv: any): void {
     }
   });
 
+  /**
+   * Chặn giá trị mà `scoring.ts` không có nhánh xử lý.
+   *
+   * `matchType` sai chính tả không gây lỗi ở bất kỳ đâu: tiêu chí chỉ đơn giản
+   * không bao giờ ăn điểm, và nó vẫn được cộng vào trần điểm — nên mọi case tự
+   * nhiên tụt hạng và không có gì chỉ về nguyên nhân. Bắt tại cửa ghi là chỗ duy
+   * nhất còn nói được câu gì có ích.
+   */
+  const MATCH_TYPES = new Set(['exact', 'keyword', 'family', 'cosine']);
+  srv.before(['CREATE', 'UPDATE'], 'ProfileCriteria', (req: any) => {
+    const { matchType, fallbackMatch, weight, fallbackWeight, minSimilarity, sourceField } = req.data ?? {};
+
+    if (matchType != null && !MATCH_TYPES.has(String(matchType))) {
+      req.reject(400, `matchType phải là một trong: ${[...MATCH_TYPES].join(', ')}`);
+    }
+    if (fallbackMatch != null && fallbackMatch !== '' && !MATCH_TYPES.has(String(fallbackMatch))) {
+      req.reject(400, `fallbackMatch phải là một trong: ${[...MATCH_TYPES].join(', ')}`);
+    }
+    if (matchType === 'cosine' && sourceField != null && String(sourceField) !== 'embedding') {
+      req.reject(400, 'Tiêu chí cosine phải so trên trường "embedding" — không trường nào khác có vector.');
+    }
+    for (const [name, value] of [['weight', weight], ['fallbackWeight', fallbackWeight]] as const) {
+      if (value == null) continue;
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) req.reject(400, `${name} phải là số không âm.`);
+    }
+    if (minSimilarity != null) {
+      const n = Number(minSimilarity);
+      if (!Number.isFinite(n) || n < 0 || n > 1) req.reject(400, 'minSimilarity phải nằm trong khoảng 0–1.');
+    }
+  });
+
   // Cấu hình có cache 5 phút. Không xoá cache sau khi ghi thì admin sửa trọng số
   // xong bấm chấm thử vẫn ra điểm cũ — và sẽ kết luận là nút lưu bị hỏng.
   for (const entity of ['SimilarityCriteria', 'RetrievalSettings', 'StepPrompts']) {
     srv.after(['UPDATE', 'CREATE', 'DELETE'], entity, () => clearRetrievalConfigCache());
+  }
+  for (const entity of ['RetrievalProfiles', 'ProfileCriteria', 'StepRetrievalBindings']) {
+    srv.after(['UPDATE', 'CREATE', 'DELETE'], entity, () => clearProfileCache());
   }
 
   srv.on('getGlobalAiConfig', async () => getGlobalAiConfigRaw());

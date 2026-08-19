@@ -4,7 +4,6 @@ import {
     DEFAULT_RETRIEVAL_SETTINGS,
     DEFAULT_STEP_PROMPTS,
 } from './defaults';
-import type { Criterion } from './scoring';
 
 const LOG = cds.log('precedent-config');
 
@@ -20,92 +19,17 @@ export interface RetrievalSettings {
     closedOnly: boolean;
 }
 
-export interface RetrievalConfig {
-    criteria: Criterion[];
-    settings: RetrievalSettings;
-}
-
 /**
- * TTL cache — cùng lý do và cùng độ dài với `core/ai/globalModelConfig.ts`.
+ * Xoá cache cấu hình prompt.
  *
- * Driver SQLite của CAP chỉ có MỘT connection mỗi tenant. Một lần đọc DB rơi vào
- * giữa job nền sẽ mở transaction của job đó và giữ connection đến hết job, chặn
- * mọi request khác. Cache đủ dài để phủ trọn một lượt chạy thì job nền không
- * chạm DB lần nào.
- *
- * TTL chỉ là lưới dự phòng: mọi đường ghi đều gọi `clearRetrievalConfigCache()`.
+ * Giữ tên cũ vì nhiều nơi gọi nó sau mỗi lượt ghi. Cache trọng số chấm điểm giờ
+ * nằm ở `profileRepository.clearProfileCache()` — hai vòng đời khác nhau, và gộp
+ * chúng lại nghĩa là sửa một prompt cũng bắt nạp lại toàn bộ profile.
  */
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-let cached: RetrievalConfig | null = null;
-let cachedAt = 0;
-
-/** Xoá cache — gọi ngay sau khi admin lưu cấu hình. */
 export function clearRetrievalConfigCache(): void {
-    cached = null;
-    cachedAt = 0;
-}
-
-/** Mặc định dùng khi DB chưa seed hoặc đọc lỗi. Không bao giờ trả về rỗng. */
-function fallbackConfig(): RetrievalConfig {
-    return {
-        criteria: DEFAULT_CRITERIA.map((c) => ({ ...c })),
-        settings: {
-            minScore: DEFAULT_RETRIEVAL_SETTINGS.minScore,
-            topN: DEFAULT_RETRIEVAL_SETTINGS.topN,
-            closedOnly: DEFAULT_RETRIEVAL_SETTINGS.closedOnly,
-        },
-    };
-}
-
-/**
- * Cấu hình chấm điểm đang có hiệu lực.
- *
- * Đọc lỗi hoặc bảng rỗng ⇒ rơi về mặc định trong `defaults.ts` thay vì ném lỗi.
- * Tìm tiền lệ bằng trọng số mặc định vẫn tốt hơn nhiều so với không tìm được gì
- * chỉ vì một bảng cấu hình chưa kịp seed.
- */
-export async function getRetrievalConfig(): Promise<RetrievalConfig> {
-    if (cached && Date.now() - cachedAt < CACHE_TTL_MS) return cached;
-
-    try {
-        const db = await cds.connect.to('db');
-        const [rows, settingsRow] = await Promise.all([
-            db.run(SELECT.from(CRITERIA).orderBy('sortOrder')),
-            db.run(SELECT.one.from(SETTINGS).where({ ID: GLOBAL_SETTINGS_ID })),
-        ]);
-
-        const criteria: Criterion[] = (rows as Record<string, any>[]).map((r) => ({
-            criterionKey: r.criterionKey,
-            label: r.label,
-            sourceField: r.sourceField,
-            matchType: r.matchType || 'exact',
-            weight: Number(r.weight) || 0,
-            fallbackField: r.fallbackField ?? null,
-            fallbackMatch: r.fallbackMatch ?? null,
-            fallbackWeight: r.fallbackWeight == null ? null : Number(r.fallbackWeight),
-            minSimilarity: r.minSimilarity == null ? null : Number(r.minSimilarity),
-            enabled: r.enabled !== false,
-            sortOrder: Number(r.sortOrder) || 0,
-        }));
-
-        cached = criteria.length
-            ? {
-                criteria,
-                settings: {
-                    minScore: Number(settingsRow?.minScore ?? DEFAULT_RETRIEVAL_SETTINGS.minScore),
-                    topN: Number(settingsRow?.topN ?? DEFAULT_RETRIEVAL_SETTINGS.topN),
-                    closedOnly: settingsRow?.closedOnly !== false,
-                },
-            }
-            : fallbackConfig();
-    } catch (e: any) {
-        LOG.warn(`Không đọc được cấu hình truy hồi, dùng mặc định: ${e.message}`);
-        cached = fallbackConfig();
-    }
-
-    cachedAt = Date.now();
-    return cached;
+    // Prompt đọc thẳng DB mỗi lần (`getStepPromptRuntimeConfig`), nên ở đây chưa
+    // có gì để xoá. Hàm vẫn tồn tại như một điểm móc: thêm cache cho prompt mà
+    // quên đường xoá là lỗi "admin lưu xong vẫn thấy giá trị cũ" kinh điển.
 }
 
 /**
@@ -186,6 +110,14 @@ export async function getStepPrompt(
 
 /**
  * Nạp mặc định vào ba bảng cấu hình — CHỈ khi bảng còn rỗng.
+ *
+ * ── Vai trò của `SimilarityCriteria` và `RetrievalSettings` sau khi có profile ──
+ * Hai bảng này KHÔNG còn được đọc lúc chạy. `seedRetrievalProfiles()` đọc chúng
+ * đúng một lần để dựng profile `default`, nhờ vậy trọng số admin đã chỉnh trên
+ * bản trước đi thẳng sang bộ mới thay vì bị kéo về mặc định của code.
+ *
+ * Vẫn seed chúng vì hai lý do: DB mới có sẵn nguồn để profile `default` sinh ra,
+ * và bản ghi cũ còn nguyên nếu cần quay về. Xem `profileRepository.ts`.
  *
  * Idempotent: chạy mỗi lần khởi động, lần thứ hai trở đi không làm gì. Đây là lý
  * do không dùng CSV trong `db/data/`: CSV bị HDI ghi đè mỗi lần deploy, còn cách

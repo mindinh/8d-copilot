@@ -13,6 +13,7 @@ import { registerAiAdminHandlers } from './src/services/aiAdminService';
 import { registerIdentityHandlers } from './src/services/identityService';
 import { registerEightDHandlers, sweepOnStartup } from './src/services/eightDService';
 import { seedRetrievalConfig } from './src/domain/eightd/precedent/configRepository';
+import { seedRetrievalProfiles } from './src/domain/eightd/precedent/profileRepository';
 import {
     embedLibraryInBackground,
     seedLibraryFromBundle,
@@ -115,6 +116,13 @@ cds.on('served', async () => {
     // lần deploy, nên trọng số admin chỉnh trên UI sẽ bị xoá mà không ai được
     // báo. Hàm này idempotent — chỉ ghi khi bảng còn rỗng.
     await seedRetrievalConfig();
+
+    // Profile chấm điểm và ràng buộc bước D → profile.
+    //
+    // PHẢI chạy sau `seedRetrievalConfig()`: profile `default` được dựng từ bộ
+    // trọng số toàn cục đang có trong DB, nên bảng đó phải tồn tại trước. Đảo thứ
+    // tự thì trên một DB mới, profile mặc định sinh ra rỗng.
+    await seedRetrievalProfiles();
 
     // Kho case tiền lệ. Chỉ BÙ case còn thiếu, không đụng case đã có — nên deploy
     // lại vừa mang được case mới lên, vừa giữ nguyên dữ liệu thật. Đây là đường
