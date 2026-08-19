@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-    getCriteria, getLibraryCases, getSettings,
+    getLibraryCases, getProfileCriteria, getProfiles,
     type LibraryCase, type RetrievalSettings, type SimilarityCriterion,
 } from '@/services/retrieval-service';
 
@@ -16,7 +16,17 @@ import {
  * ── Vì sao mọi thao tác ghi đều nạp lại cả bộ ──
  * Trần điểm phụ thuộc MỌI tiêu chí đang bật, nên đổi một dòng là đổi con số của
  * cả bảng. Cập nhật cục bộ sẽ cho ra một trần sai mà nhìn không biết.
+ *
+ * ── Vì sao đọc profile `default` chứ không bảng cấu hình toàn cục ──
+ * Trọng số chấm điểm giờ thuộc về profile, và mỗi bước D chạy profile của riêng
+ * nó — xem trang Object Schema. Bảng toàn cục cũ chỉ còn là nguồn để dựng profile
+ * `default` một lần lúc migrate; đọc nó ở đây nghĩa là hai trang hiện hai con số
+ * cho cùng một thứ, và trang này sẽ hiện con số không còn ai dùng.
+ *
+ * Hook này cố ý CHỈ nói về profile mặc định: nó phục vụ hai màn hình tổng quan,
+ * và tổng quan theo tám profile là việc của trang Object Schema.
  */
+export const DEFAULT_PROFILE_KEY = 'default';
 export interface RetrievalConfigState {
     criteria: SimilarityCriterion[];
     settings: RetrievalSettings | null;
@@ -35,21 +45,53 @@ export interface RetrievalConfigState {
     notEmbedded: number;
     embeddingModel: string | null;
     hasVectorStep: boolean;
+
+    /** Profile mà state này đang nói về. Mọi thao tác ghi phải dùng khoá này. */
+    profileKey: string;
 }
 
-export function useRetrievalConfig(): RetrievalConfigState {
+/**
+ * @param profileKey profile cần đọc. Bỏ trống ⇒ profile mặc định.
+ *
+ * Tham số này tồn tại để tab "Similarity search" của từng bước D dùng lại đúng
+ * những section mà Training Center dùng, chỉ khác profile. Viết một bộ section
+ * thứ hai cho từng bước là hai bản sao của cùng một màn hình, và chúng sẽ lệch.
+ */
+export function useRetrievalConfig(profileKey: string = DEFAULT_PROFILE_KEY): RetrievalConfigState {
     const [criteria, setCriteria] = useState<SimilarityCriterion[]>([]);
     const [settings, setSettings] = useState<RetrievalSettings | null>(null);
     const [cases, setCases] = useState<LibraryCase[]>([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
+    // Khoá THỰC SỰ đang được đọc. Khác `profileKey` khi profile đó đã bị xoá —
+    // ghi bằng khoá không tồn tại sẽ ném 404 mà không rõ vì sao.
+    const [resolvedKey, setResolvedKey] = useState(profileKey);
 
     const reload = useCallback(async () => {
-        const [c, s, l] = await Promise.all([getCriteria(), getSettings(), getLibraryCases()]);
-        setCriteria(c);
-        setSettings(s);
+        const [allCriteria, profiles, l] = await Promise.all([
+            getProfileCriteria(), getProfiles(), getLibraryCases(),
+        ]);
+        const profile = profiles.find((p) => p.profileKey === profileKey)
+            ?? profiles.find((p) => p.profileKey === DEFAULT_PROFILE_KEY)
+            ?? profiles[0]
+            ?? null;
+        setResolvedKey(profile?.profileKey ?? DEFAULT_PROFILE_KEY);
+
+        setCriteria(
+            allCriteria
+                .filter((c) => c.profile_profileKey === profile?.profileKey)
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+        );
+        setSettings(profile
+            ? {
+                ID: profile.profileKey,
+                minScore: profile.minScore,
+                topN: profile.topN,
+                closedOnly: profile.closedOnly,
+            }
+            : null);
         setCases(l);
-    }, []);
+    }, [profileKey]);
 
     useEffect(() => {
         reload()
@@ -89,5 +131,6 @@ export function useRetrievalConfig(): RetrievalConfigState {
         notEmbedded: cases.length - embedded.length,
         embeddingModel: embedded[0]?.embeddingModel ?? null,
         hasVectorStep: enabled.some((c) => c.matchType === 'cosine'),
+        profileKey: resolvedKey,
     };
 }

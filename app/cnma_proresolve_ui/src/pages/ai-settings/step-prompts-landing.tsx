@@ -17,10 +17,13 @@ export function StepPromptsTab() {
     if (loading) return <div className="flex items-center justify-center rounded-lg border p-10 text-sm text-muted-foreground"><Spinner className="mr-2 h-4 w-4" /> Loading disciplines...</div>;
     return <div className="grid gap-4 md:grid-cols-2">
         {prompts.map((prompt) => {
-            const available = ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode);
-            return <Card key={prompt.stepCode} className={available ? 'transition-shadow hover:shadow-md' : 'opacity-70'}>
-                <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Blocks className="h-5 w-5 text-primary" /> {prompt.stepCode} - {prompt.label}</CardTitle><CardDescription className="mt-2">{prompt.description}</CardDescription></div><Badge variant={available ? 'secondary' : 'outline'}>{available ? 'Configurable' : 'Planned'}</Badge></div></CardHeader>
-                <CardContent className="flex items-center justify-between"><p className="text-sm text-muted-foreground">{available ? 'Data schema, prompt, form editor, and constraints.' : 'This step keeps its current runtime configuration.'}</p><Button disabled={!available} onClick={() => navigate(`/ai-settings/step-prompts/${prompt.stepCode}`)}>Open editor <ArrowRight className="h-4 w-4" /></Button></CardContent>
+            // D5–D8 chưa có editor prompt cấu trúc, nhưng chúng VẪN tìm tiền lệ —
+            // và bộ trọng số tìm tiền lệ của chúng cấu hình được. Để nút disabled
+            // là giấu mất một nửa cấu hình của bốn bước.
+            const enriched = ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode);
+            return <Card key={prompt.stepCode} className="transition-shadow hover:shadow-md">
+                <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Blocks className="h-5 w-5 text-primary" /> {prompt.stepCode} - {prompt.label}</CardTitle><CardDescription className="mt-2">{prompt.description}</CardDescription></div><Badge variant={enriched ? 'secondary' : 'outline'}>{enriched ? 'Full editor' : 'Similarity only'}</Badge></div></CardHeader>
+                <CardContent className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{enriched ? 'Data schema, prompt, form editor, constraints, and similarity search.' : 'Similarity search profile — which precedents this step gets.'}</p><Button onClick={() => navigate(`/ai-settings/step-prompts/${prompt.stepCode}`)}>Open editor <ArrowRight className="h-4 w-4" /></Button></CardContent>
             </Card>;
         })}
     </div>;

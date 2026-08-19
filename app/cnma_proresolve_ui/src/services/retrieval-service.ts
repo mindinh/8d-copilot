@@ -142,16 +142,16 @@ export async function swapCriterionOrder(
  * mãi 0 điểm.
  */
 export const COMPARABLE_FIELDS = [
-    { field: 'workCenterId', label: 'Work centre', note: 'Nơi sản xuất', sourceTable: 'HistoricalCases · GD 4 WorkCenters' },
-    { field: 'defectCode', label: 'Defect code', note: 'Mã lỗi trong danh mục', sourceTable: 'HistoricalCases · GD 3 Defects' },
-    { field: 'defectKeywords', label: 'Defect keywords', note: 'Từ khoá đã tách từ mô tả lỗi', sourceTable: 'HistoricalCases · GD 3 Defects (Keywords)' },
-    { field: 'materialId', label: 'Material', note: 'Mã vật tư', sourceTable: 'HistoricalCases · GD 1 Materials' },
-    { field: 'materialFamily', label: 'Material group', note: 'Nhóm vật tư (MATKL)', sourceTable: 'HistoricalCases · GD 1 Materials (Family)' },
-    { field: 'batchId', label: 'Batch', note: 'Số lô', sourceTable: 'HistoricalCases · Batch Records' },
-    { field: 'rootCauseCategory', label: 'Root cause category', note: 'Nhánh Ishikawa', sourceTable: 'HistoricalCases · 5-Why & Ishikawa' },
-    { field: 'origin', label: 'Origin', note: 'Q1 khiếu nại / Q3 nội bộ', sourceTable: 'HistoricalCases · Case Header (Q1/Q3)' },
-    { field: 'fmeaId', label: 'FMEA', note: 'Liên kết FMEA', sourceTable: 'HistoricalCases · FMEA Registry' },
-    { field: 'embedding', label: 'Case narrative (vector)', note: 'Chỉ dùng với phương pháp cosine', sourceTable: 'HistoricalCases.searchText (embedding)' },
+    { field: 'workCenterId', label: 'Work centre', note: 'Production work center', sourceTable: 'HistoricalCases · GD 4 WorkCenters' },
+    { field: 'defectCode', label: 'Defect code', note: 'Catalogued defect code', sourceTable: 'HistoricalCases · GD 3 Defects' },
+    { field: 'defectKeywords', label: 'Defect keywords', note: 'Extracted keywords from defect description', sourceTable: 'HistoricalCases · GD 3 Defects (Keywords)' },
+    { field: 'materialId', label: 'Material', note: 'Material part number', sourceTable: 'HistoricalCases · GD 1 Materials' },
+    { field: 'materialFamily', label: 'Material group', note: 'Material group classification (MATKL)', sourceTable: 'HistoricalCases · GD 1 Materials (Family)' },
+    { field: 'batchId', label: 'Batch', note: 'Batch number', sourceTable: 'HistoricalCases · Batch Records' },
+    { field: 'rootCauseCategory', label: 'Root cause category', note: 'Ishikawa root cause branch', sourceTable: 'HistoricalCases · 5-Why & Ishikawa' },
+    { field: 'origin', label: 'Origin', note: 'Q1 customer complaint / Q3 internal defect', sourceTable: 'HistoricalCases · Case Header (Q1/Q3)' },
+    { field: 'fmeaId', label: 'FMEA', note: 'FMEA record link', sourceTable: 'HistoricalCases · FMEA Registry' },
+    { field: 'embedding', label: 'Case narrative (vector)', note: 'Used for cosine vector similarity matching', sourceTable: 'HistoricalCases.searchText (embedding)' },
 ] as const;
 
 export const AVAILABLE_SOURCE_TABLES = [
@@ -170,22 +170,22 @@ export const AVAILABLE_SOURCE_TABLES = [
     { value: 'InspectionLot · SAP QM', label: 'InspectionLot · SAP QM' },
 ] as const;
 
-/** Phương pháp so khớp CÓ nhánh xử lý trong `scoring.ts`. */
+/** Matching methods handled in `scoring.ts`. */
 export const MATCH_METHODS = [
     {
         value: 'exact',
         label: 'Exact',
-        hint: 'So bằng, đã cắt khoảng trắng và bỏ qua hoa thường. Rỗng không khớp rỗng.',
+        hint: 'Exact string match (trimmed, case-insensitive). Empty values do not match empty values.',
     },
     {
         value: 'keyword',
         label: 'Keyword',
-        hint: 'Trùng ít nhất một từ khoá sau khi bỏ từ nối và từ ngắn.',
+        hint: 'Matches at least one token after removing stop words and short terms.',
     },
     {
         value: 'cosine',
         label: 'Vector',
-        hint: 'Độ gần ngữ nghĩa giữa hai đoạn mô tả. Điểm = trọng số × cosine.',
+        hint: 'Semantic similarity between narratives. Score = weight × cosine.',
     },
 ] as const;
 
@@ -198,16 +198,216 @@ export async function updateSettings(patch: Partial<RetrievalSettings>): Promise
     await axiosInstance.patch(`${AI}/RetrievalSettings(ID='GLOBAL')`, patch);
 }
 
-export async function previewScore(caseA: string, caseB: string): Promise<ScorePreview> {
+export async function previewScore(
+    caseA: string,
+    caseB: string,
+    profileKey = 'default',
+): Promise<ScorePreview> {
     const a = encodeURIComponent(caseA);
     const b = encodeURIComponent(caseB);
-    const res = await axiosInstance.get(`${AI}/previewScore(caseA='${a}',caseB='${b}')`);
+    const p = encodeURIComponent(profileKey);
+    const res = await axiosInstance.get(
+        `${AI}/previewScore(caseA='${a}',caseB='${b}',profileKey='${p}')`,
+    );
     return unwrapAction<ScorePreview>(res.data);
 }
 
-export async function resetRetrievalConfig(scope: 'criteria' | 'settings' | 'prompts' | 'all' | `prompt:${string}`) {
+export async function resetRetrievalConfig(
+    scope: 'criteria' | 'settings' | 'prompts' | 'profiles' | 'all' | `prompt:${string}`,
+) {
     const res = await axiosInstance.post(`${AI}/resetRetrievalConfig`, { scope });
     return unwrapAction<unknown>(res.data);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Object Schema — profile chấm điểm theo từng bước D
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Một field SAP gửi lên, đã đo trên kho thật.
+ *
+ * `occurrence`, `distinctValues` và `note` không phải trang trí: chúng là thứ
+ * duy nhất cho biết một field có phân biệt được gì không TRƯỚC khi admin gán
+ * trọng số cho nó. Xem `srv/src/domain/eightd/precedent/sourceFields.ts`.
+ */
+export interface SourceFieldInfo {
+    path: string;
+    label: string;
+    group: string;
+    multiValued: boolean;
+    occurrence: number;
+    caseCount: number;
+    distinctValues: number;
+    sampleValues: string[];
+    column: string | null;
+    /** Lọc trước được bằng SQL. Field chỉ nằm trong JSON thì phải quét cả kho. */
+    indexed: boolean;
+    origin: 'sap' | 'derived';
+    sourceTable: string;
+    methods: string[];
+    note: string;
+}
+
+export interface SourceFieldCatalog {
+    caseCount: number;
+    fields: SourceFieldInfo[];
+    error?: string;
+}
+
+export interface RetrievalProfile {
+    profileKey: string;
+    label: string;
+    description: string | null;
+    minScore: number;
+    topN: number;
+    closedOnly: boolean;
+    isSystem: boolean;
+    sortOrder: number;
+}
+
+/** Cùng hình dạng với `SimilarityCriterion`, thêm khoá profile. */
+export interface ProfileCriterion extends SimilarityCriterion {
+    profile_profileKey: string;
+}
+
+export interface StepBinding {
+    stepCode: string;
+    label: string | null;
+    profile_profileKey: string;
+    sortOrder: number | null;
+}
+
+export const STEP_CODES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] as const;
+
+export async function getSourceFieldCatalog(): Promise<SourceFieldCatalog> {
+    const res = await axiosInstance.get(`${AI}/getSourceFieldCatalog()`);
+    return unwrapAction<SourceFieldCatalog>(res.data);
+}
+
+export async function getProfiles(): Promise<RetrievalProfile[]> {
+    const res = await axiosInstance.get(`${AI}/RetrievalProfiles?$orderby=sortOrder`);
+    return unwrapList<RetrievalProfile>(res.data);
+}
+
+export async function updateProfile(
+    profileKey: string,
+    patch: Partial<RetrievalProfile>,
+): Promise<void> {
+    await axiosInstance.patch(`${AI}/RetrievalProfiles(profileKey='${profileKey}')`, patch);
+}
+
+export async function getProfileCriteria(): Promise<ProfileCriterion[]> {
+    const res = await axiosInstance.get(`${AI}/ProfileCriteria?$orderby=sortOrder`);
+    return unwrapList<ProfileCriterion>(res.data);
+}
+
+/**
+ * Khoá OData của một tiêu chí. Khoá ghép (profile, criterionKey) chứ không phải
+ * UUID — nó nói thẳng ra bất biến "một khoá tiêu chí chỉ xuất hiện một lần trong
+ * một profile", thay vì để bất biến đó nằm ngầm trong một ràng buộc unique.
+ */
+function criterionRef(profileKey: string, criterionKey: string): string {
+    return `${AI}/ProfileCriteria(profile_profileKey='${encodeURIComponent(profileKey)}'`
+        + `,criterionKey='${encodeURIComponent(criterionKey)}')`;
+}
+
+export async function createProfileCriterion(row: Partial<ProfileCriterion>): Promise<void> {
+    await axiosInstance.post(`${AI}/ProfileCriteria`, row);
+}
+
+export async function updateProfileCriterion(
+    profileKey: string,
+    criterionKey: string,
+    patch: Partial<ProfileCriterion>,
+): Promise<void> {
+    await axiosInstance.patch(criterionRef(profileKey, criterionKey), patch);
+}
+
+export async function deleteProfileCriterion(
+    profileKey: string,
+    criterionKey: string,
+): Promise<void> {
+    await axiosInstance.delete(criterionRef(profileKey, criterionKey));
+}
+
+/**
+ * Đổi chỗ hai tiêu chí. Ghi tuần tự, cùng lý do với `swapCriterionOrder`:
+ * driver SQLite của CAP chỉ có một connection.
+ */
+export async function swapProfileCriterionOrder(
+    profileKey: string,
+    a: ProfileCriterion,
+    b: ProfileCriterion,
+): Promise<void> {
+    await updateProfileCriterion(profileKey, a.criterionKey, { sortOrder: b.sortOrder });
+    await updateProfileCriterion(profileKey, b.criterionKey, { sortOrder: a.sortOrder });
+}
+
+export async function getStepBindings(): Promise<StepBinding[]> {
+    const res = await axiosInstance.get(`${AI}/StepRetrievalBindings?$orderby=stepCode`);
+    return unwrapList<StepBinding>(res.data);
+}
+
+export async function updateStepBinding(stepCode: string, profileKey: string): Promise<void> {
+    await axiosInstance.patch(`${AI}/StepRetrievalBindings(stepCode='${stepCode}')`, {
+        profile_profileKey: profileKey,
+    });
+}
+
+export async function cloneRetrievalProfile(input: {
+    sourceKey: string;
+    profileKey: string;
+    label: string;
+    description?: string;
+}): Promise<void> {
+    await axiosInstance.post(`${AI}/cloneRetrievalProfile`, {
+        sourceKey: input.sourceKey,
+        profileKey: input.profileKey,
+        label: input.label,
+        description: input.description ?? '',
+    });
+}
+
+/**
+ * Trạng thái MONG MUỐN của một profile. Server làm cho khớp.
+ *
+ * `criteria` và `steps` thay thế toàn bộ tập cũ — client gửi trạng thái muốn có
+ * chứ không gửi diff. Diff phía client là dựng lại một bộ đồng bộ hoá ở tầng UI,
+ * và bộ đó sẽ lệch khỏi server ngay lần đầu có hai tab cùng mở.
+ */
+export interface SaveProfilePayload {
+    label?: string;
+    description?: string | null;
+    minScore?: number;
+    topN?: number;
+    closedOnly?: boolean;
+    criteria?: Array<Partial<ProfileCriterion>>;
+    /**
+     * Thành viên field — thay thế danh sách field, GIỮ NGUYÊN trọng số/cách so
+     * của những field đã có. Đây là đường mà trang Object Schema dùng.
+     *
+     * Gửi `criteria` từ Object Schema sẽ ghi đè trọng số bằng bản đã nạp lúc mở
+     * trang, tức là xoá mọi chỉnh sửa từ tab Similarity kể từ lúc đó — âm thầm,
+     * chỉ vì ai đó kéo thêm một field.
+     */
+    criteriaFields?: Array<Pick<ProfileCriterion,
+        'criterionKey' | 'label' | 'description' | 'sourceTable' | 'sourceField' | 'matchType'>>;
+    steps?: string[];
+}
+
+export async function saveRetrievalProfile(
+    profileKey: string,
+    payload: SaveProfilePayload,
+): Promise<void> {
+    await axiosInstance.post(`${AI}/saveRetrievalProfile`, {
+        profileKey,
+        payload: JSON.stringify(payload),
+    });
+}
+
+export async function deleteRetrievalProfile(profileKey: string): Promise<{ rebound: string[] }> {
+    const res = await axiosInstance.post(`${AI}/deleteRetrievalProfile`, { profileKey });
+    return unwrapAction<{ rebound: string[] }>(res.data);
 }
 
 // ── Prompt từng bước D ───────────────────────────────────────────────────────

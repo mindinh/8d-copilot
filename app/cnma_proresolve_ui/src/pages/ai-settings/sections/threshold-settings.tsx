@@ -3,12 +3,12 @@ import {
 } from '@cnma/react-ui';
 import { RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { resetRetrievalConfig, updateSettings } from '@/services/retrieval-service';
+import { resetRetrievalConfig, updateProfile } from '@/services/retrieval-service';
 import type { RetrievalConfigState } from '@/hooks/use-retrieval-config';
 
 /** Ngưỡng điểm, số tiền lệ lấy ra, và nút khôi phục mặc định. */
 export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
-    const { settings, busy, run, maxScore } = cfg;
+    const { settings, busy, run, maxScore, profileKey } = cfg;
     const maxLimit = maxScore || 16;
 
     return (
@@ -34,7 +34,7 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                                 v = Math.max(0, Math.min(v, maxLimit));
                                 e.target.value = String(v);
                                 if (v !== settings?.minScore) {
-                                    void run('settings', () => updateSettings({ minScore: v }));
+                                    void run('settings', () => updateProfile(profileKey, { minScore: v }));
                                 }
                             }}
                         />
@@ -57,7 +57,7 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                                 v = Math.max(1, Math.min(v, 20));
                                 e.target.value = String(v);
                                 if (v !== settings?.topN) {
-                                    void run('settings', () => updateSettings({ topN: v }));
+                                    void run('settings', () => updateProfile(profileKey, { topN: v }));
                                 }
                             }}
                         />
@@ -73,7 +73,7 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                             id="closedOnly"
                             checked={settings?.closedOnly ?? true}
                             disabled={busy !== null}
-                            onCheckedChange={(v) => void run('settings', () => updateSettings({ closedOnly: v }))}
+                            onCheckedChange={(v) => void run('settings', () => updateProfile(profileKey, { closedOnly: v }))}
                         />
                         <Label htmlFor="closedOnly" className="cursor-pointer text-xs font-medium">
                             Closed Cases Only
@@ -89,8 +89,7 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                         onClick={() => {
                             if (!window.confirm('Discard every change to the pipeline and thresholds?')) return;
                             void run('settings', async () => {
-                                await resetRetrievalConfig('criteria');
-                                await resetRetrievalConfig('settings');
+                                await resetRetrievalConfig('profiles');
                                 toast.success('Restored the measured defaults');
                             });
                         }}

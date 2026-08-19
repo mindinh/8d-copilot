@@ -1,7 +1,8 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@cnma/react-ui';
 import { GitBranch, Plus } from 'lucide-react';
 import {
-    createCriterion, deleteCriterion, swapCriterionOrder, updateCriterion,
+    createProfileCriterion, deleteProfileCriterion, swapProfileCriterionOrder,
+    updateProfileCriterion, type ProfileCriterion,
 } from '@/services/retrieval-service';
 import type { RetrievalConfigState } from '@/hooks/use-retrieval-config';
 import { CriterionStepCard } from '../criterion-step-card';
@@ -25,8 +26,19 @@ function slugify(label: string, taken: Set<string>): string {
  * Dùng ở hai nơi: tab Similarity trong AI Settings, và bước "Find comparable
  * cases" của trang Workflow. Cùng một component nên hai chỗ không thể lệch nhau.
  */
-export function CriteriaPipelineSection({ cfg }: { cfg: RetrievalConfigState }) {
-    const { criteria, busy, run, maxScore } = cfg;
+export function CriteriaPipelineSection({ cfg, allowAdd = true }: {
+    cfg: RetrievalConfigState;
+    /**
+     * Cho phép thêm tiêu chí ngay tại đây.
+     *
+     * Tắt ở tab similarity của từng bước D: bộ field của một profile được dựng ở
+     * trang Object Schema, nơi có cả danh mục field SAP để chọn. Thêm ở đây thì
+     * chỉ chọn được từ một danh sách cột viết cứng — hai đường tạo tiêu chí với
+     * hai bộ field khác nhau.
+     */
+    allowAdd?: boolean;
+}) {
+    const { criteria, busy, run, maxScore, profileKey } = cfg;
 
     return (
         <Card>
@@ -44,13 +56,14 @@ export function CriteriaPipelineSection({ cfg }: { cfg: RetrievalConfigState }) 
                             <span className="font-mono font-medium">{maxScore}</span>.
                         </CardDescription>
                     </div>
-                    <Button
+                    {allowAdd && <Button
                         size="sm" className="h-8 shrink-0 gap-1"
                         disabled={busy !== null}
                         onClick={() => {
                             const taken = new Set(criteria.map((c) => c.criterionKey));
                             const label = 'New criterion';
-                            void run('new', () => createCriterion({
+                            void run('new', () => createProfileCriterion({
+                                profile_profileKey: profileKey,
                                 criterionKey: slugify(label, taken),
                                 label,
                                 description: '',
@@ -66,7 +79,7 @@ export function CriteriaPipelineSection({ cfg }: { cfg: RetrievalConfigState }) 
                         }}
                     >
                         <Plus size={12} /> Add step
-                    </Button>
+                    </Button>}
                 </div>
             </CardHeader>
 
@@ -88,13 +101,18 @@ export function CriteriaPipelineSection({ cfg }: { cfg: RetrievalConfigState }) 
                             isFirst={i === 0}
                             isLast={i === criteria.length - 1}
                             busy={busy !== null}
-                            onPatch={(patch) => void run(c.criterionKey, () => updateCriterion(c.criterionKey, patch))}
+                            fieldsLocked={!allowAdd}
+                            onPatch={(patch) => void run(c.criterionKey, () =>
+                                updateProfileCriterion(profileKey, c.criterionKey, patch))}
                             onRemove={() => {
                                 if (!window.confirm(`Remove the step "${c.label}"?`)) return;
-                                void run(c.criterionKey, () => deleteCriterion(c.criterionKey));
+                                void run(c.criterionKey, () =>
+                                    deleteProfileCriterion(profileKey, c.criterionKey));
                             }}
-                            onMoveUp={() => void run(c.criterionKey, () => swapCriterionOrder(c, criteria[i - 1]))}
-                            onMoveDown={() => void run(c.criterionKey, () => swapCriterionOrder(c, criteria[i + 1]))}
+                            onMoveUp={() => void run(c.criterionKey, () => swapProfileCriterionOrder(
+                                profileKey, c as ProfileCriterion, criteria[i - 1] as ProfileCriterion))}
+                            onMoveDown={() => void run(c.criterionKey, () => swapProfileCriterionOrder(
+                                profileKey, c as ProfileCriterion, criteria[i + 1] as ProfileCriterion))}
                         />
                     ))
                 )}

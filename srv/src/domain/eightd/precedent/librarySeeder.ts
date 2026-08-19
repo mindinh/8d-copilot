@@ -18,6 +18,7 @@ import path from 'node:path';
 import cds from '@sap/cds';
 import { extractDeepCase, classifyAction, mapCase } from '../caseMapper';
 import { tokenizeDefectText } from './scoring';
+import { flattenPayload } from './sourceFields';
 import { buildSearchText } from './searchText';
 import { batchEmbed, currentEmbeddingModel } from '../../../core/ai/llmClient';
 import {
@@ -124,6 +125,11 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
                     fmeaId: ctx.fmea?.fmeaId ?? null,
 
                     sourcePayload: JSON.stringify(raw),
+
+                    // Làm phẳng NGAY lúc nạp, không parse lại lúc chấm: một lần
+                    // chấm duyệt cả kho × mọi tiêu chí, parse `sourcePayload`
+                    // trong vòng lặp đó là trả giá cho cùng một việc hàng nghìn lần.
+                    attributesJson: JSON.stringify(flattenPayload(raw)),
                 }),
             );
 
@@ -223,7 +229,7 @@ export async function seedLibraryFromBundle(): Promise<SeedReport | null> {
     if (!files.length) return null;
 
     const existing = await db.run(
-        SELECT.from(HISTORICAL_CASES).columns('notificationId', 'searchText'),
+        SELECT.from(HISTORICAL_CASES).columns('notificationId', 'searchText', 'attributesJson'),
     );
     /**
      * Chỉ coi là "đã có" khi dòng đó CÓ ĐỦ dữ liệu của schema hiện tại.
@@ -233,11 +239,15 @@ export async function seedLibraryFromBundle(): Promise<SeedReport | null> {
      * không có gì để nhúng. Kết quả: tiêu chí ngữ nghĩa im lặng không hoạt động,
      * và không có một dòng log nào nói tại sao.
      *
+     * `attributesJson` nằm trong phép kiểm vì lý do y hệt: dòng cũ không có nó,
+     * và mọi tiêu chí trỏ vào một đường dẫn payload sẽ lặng lẽ ăn 0 điểm trên
+     * đúng những case đó — nhìn ra ngoài giống hệt "không có case nào giống".
+     *
      * Nạp lại từ bundle là an toàn: case thật không nằm trong bundle.
      */
     const complete = new Set(
         existing
-            .filter((r: any) => r.searchText)
+            .filter((r: any) => r.searchText && r.attributesJson)
             .map((r: any) => String(r.notificationId)),
     );
     const stale = existing.length - complete.size;

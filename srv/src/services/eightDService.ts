@@ -41,7 +41,7 @@ import {
     sweepStuckAnalyzing,
 } from '../domain/eightd/eightDRepository';
 import { PipelineError, type CaseContext } from '../domain/eightd/types';
-import { findPrecedents } from '../domain/eightd/precedent/findPrecedents';
+import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
 
 const LOG = cds.log('eightd-service');
@@ -199,7 +199,22 @@ export function registerEightDHandlers(srv: any): void {
             return req.error(422, `Report ${reportID} không dựng lại được case context: ${e.message}`);
         }
 
-        return JSON.stringify(await findPrecedents(context));
+        // Bước D nào chạy profile nào là do `StepRetrievalBindings` quyết, nên
+        // action này trả về CẢ TÁM kết quả chứ không một. Trả đúng một bộ nghĩa
+        // là chọn hộ người gọi một trong tám, và lựa chọn đó sẽ sai với bảy bước.
+        //
+        // `sourcePayload` đi kèm để tiêu chí trỏ vào đường dẫn payload SAP có dữ
+        // liệu mà so — thiếu nó thì chúng lặng lẽ ăn 0 điểm.
+        let raw: unknown;
+        try {
+            raw = row.sourcePayload ? JSON.parse(row.sourcePayload) : undefined;
+        } catch {
+            // Payload hỏng chỉ làm mất nhóm tiêu chí theo đường dẫn, không đáng
+            // để hỏng cả lời gọi — các tiêu chí theo cột vẫn chấm được.
+            raw = undefined;
+        }
+
+        return JSON.stringify(await findPrecedentsByStep(context, raw));
     });
 
     // ── seedCaseLibrary ──────────────────────────────────────────────────────

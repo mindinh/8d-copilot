@@ -361,6 +361,67 @@ function renderPrecedents(precedents: PromptPrecedent[]): string {
     }).join('\n\n');
 }
 
+/**
+ * Xếp hạng riêng của từng bước D trên CÙNG danh sách đã đánh số.
+ *
+ * ── Vì sao không in lại chi tiết tiền lệ cho từng bước ──
+ * Tám bước × ba tiền lệ × mười dòng chi tiết là gấp tám lần token cho cùng một
+ * nội dung, và tệ hơn: cùng một case xuất hiện tám lần với tám cách đánh số thì
+ * trích dẫn `precedents#N` không còn nghĩa xác định.
+ *
+ * Danh sách chi tiết in MỘT lần, đánh số một lần. Mỗi bước chỉ nói nó xếp hạng
+ * những số nào, theo thứ tự nào, với điểm bao nhiêu — đúng phần thật sự khác nhau.
+ */
+function renderStepRanking(
+    precedents: PromptPrecedent[],
+    stepRankings: Record<string, StepRanking> | undefined,
+): string {
+    if (!stepRankings || !precedents.length) return '';
+
+    const indexById = new Map(precedents.map((p, i) => [p.notificationId, i + 1]));
+    const lines: string[] = [];
+
+    for (const code of DISCIPLINE_CODES) {
+        const ranking = stepRankings[code];
+        if (!ranking) continue;
+
+        const ranked = ranking.notificationIds
+            .map((id) => ({ id, index: indexById.get(id), score: ranking.scores[id] }))
+            .filter((r) => r.index !== undefined);
+
+        lines.push(
+            ranked.length
+                ? `- ${code} (profile "${ranking.profileLabel}"): `
+                  + ranked.map((r) => `precedents#${r.index} at ${r.score}/${ranking.maxScore}`).join(', ')
+                : `- ${code} (profile "${ranking.profileLabel}"): none scored high enough. `
+                  + 'Do not borrow from any precedent for this discipline.',
+        );
+    }
+
+    if (!lines.length) return '';
+
+    return [
+        '',
+        '## PRECEDENT RANKING PER DISCIPLINE',
+        'Each discipline scores the library by its own criteria, so the same case can',
+        'rank differently — or not qualify at all — depending on the discipline. Use only',
+        'the precedents listed for the discipline you are writing, and cite them by the',
+        'numbers above, which are the same across all disciplines.',
+        ...lines,
+    ].join('\n');
+}
+
+/** Thứ hạng tiền lệ của một bước D, tính bằng profile của riêng bước đó. */
+export interface StepRanking {
+    profileKey: string;
+    profileLabel: string;
+    maxScore: number;
+    /** Mã case theo thứ tự bước này xếp hạng, tốt nhất trước. */
+    notificationIds: string[];
+    /** Điểm của bước này cho từng mã case. */
+    scores: Record<string, number>;
+}
+
 export function buildEightDPrompt(
     context: CaseContext,
     enrichment: ContextEnrichment,
@@ -368,6 +429,7 @@ export function buildEightDPrompt(
     precedents: PromptPrecedent[] = [],
     inputSchemas?: Partial<Record<DisciplineCode, string>>,
     formSchemas?: Partial<Record<DisciplineCode, string>>,
+    stepRankings?: Record<string, StepRanking>,
 ): string {
     const gapNotice = context.gaps.length
         ? [
@@ -430,6 +492,7 @@ export function buildEightDPrompt(
         'Closed cases scored as similar to this one, best match first. See rule 6.',
         '',
         renderPrecedents(precedents),
+        renderStepRanking(precedents, stepRankings),
         ...configuredDataSchemas,
         ...configuredOutputs,
     ].filter(Boolean).join('\n');

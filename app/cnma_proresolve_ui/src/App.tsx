@@ -9,6 +9,7 @@ import {
     HomePage,
     OrganizationPage,
     AiSettingsPage,
+    ObjectSchemaPage,
     StepPromptEditorPage,
     WorkflowPage,
     EightDListPage,
@@ -55,6 +56,7 @@ export default function App() {
                             <Route path="/8d/:id" element={<EightDDetailPage />} />
                             <Route path="/organization" element={<OrganizationPage />} />
                             <Route path="/workflow" element={<WorkflowPage />} />
+                            <Route path="/object-schema" element={<ObjectSchemaPage />} />
                             <Route path="/ai-settings" element={<AiSettingsPage />} />
 
                             <Route path="*" element={<Navigate to="/" replace />} />

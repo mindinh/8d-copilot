@@ -21,6 +21,8 @@
  * chỉnh trên UI phải có hiệu lực ngay.
  */
 
+import type { AttributeMap } from './sourceFields';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Chuẩn hoá
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,6 +171,15 @@ export interface ScorableCase {
     embedding?: string | number[] | null;
     /** Model đã sinh vector. Khác nhau ⇒ không so, xem `cosineSimilarity`. */
     embeddingModel?: string | null;
+
+    /**
+     * Payload SAP đã làm phẳng — mọi field KHÔNG có cột riêng ở trên.
+     *
+     * Chỉ đọc tới khi `sourceField` không phải một cột ở trên. Nhờ vậy tiêu chí
+     * cũ chấm y hệt như trước, còn tiêu chí trỏ vào một đường dẫn SAP thì chấm
+     * được mà không cần thêm cột nào. Xem `sourceFields.ts`.
+     */
+    attributes?: AttributeMap | null;
 }
 
 /** Một tiêu chí, đúng hình dạng của entity `SimilarityCriteria`. */
@@ -211,20 +222,50 @@ export interface ScoreResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Đọc một cột theo tên lấy từ cấu hình.
+ * Đọc một field theo tên lấy từ cấu hình, trả về TẬP giá trị đã chuẩn hoá.
  *
  * `sourceField` là dữ liệu do admin cấu hình, không phải hằng số trong code, nên
  * không có cách nào để TypeScript kiểm nó lúc biên dịch. Gom việc ép kiểu vào
  * đúng một chỗ có tên rõ ràng, thay vì rải cast khắp nơi.
+ *
+ * Hai nguồn, xét theo đúng thứ tự này:
+ *   1. cột trên `HistoricalCases` — nhanh, và là đường của mọi tiêu chí sẵn có
+ *   2. `attributes` — payload SAP đã làm phẳng, cho field không có cột riêng
+ *
+ * Trả mảng vì một đường dẫn đi qua mảng có nhiều giá trị: `inspections[].
+ * characteristic` của một case là cả tập đặc tính đã đo. Cột thường ra mảng một
+ * phần tử, nên phép so bên dưới không cần biết mình đang xử lý loại nào.
  */
-function fieldOf(c: ScorableCase, field: string): unknown {
-    return (c as unknown as Record<string, unknown>)[field];
+function valuesOf(c: ScorableCase, field: string): string[] {
+    const direct = (c as unknown as Record<string, unknown>)[field];
+    const raw = direct === undefined && c.attributes ? c.attributes[field] : direct;
+
+    if (raw == null) return [];
+    if (Array.isArray(raw)) {
+        return (raw as unknown[]).map((v) => String(v ?? '').trim()).filter(Boolean);
+    }
+    const single = String(raw).trim();
+    return single ? [single] : [];
 }
 
-/** Lấy từ khoá đã tách; tự tách từ `defectText` nếu chưa có. */
-function keywordsOf(c: ScorableCase): string {
-    if (c.defectKeywords != null && c.defectKeywords !== '') return c.defectKeywords;
-    return tokenizeDefectText(c.defectText);
+/**
+ * Từ khoá của một field, dạng chuỗi token ngăn bằng khoảng trắng.
+ *
+ * `defectKeywords` là trường hợp riêng và phải giữ nguyên: kho lịch sử đã tách
+ * sẵn cột này lúc nạp, tách lại là làm hai lần cùng một việc — và nếu hai lần
+ * cho ra kết quả khác nhau thì tiêu chí trượt im lặng.
+ *
+ * Mọi field khác thì tách tại đây bằng CHÍNH hàm đó. Trước đây nhánh keyword bỏ
+ * qua `sourceField` và luôn so từ khoá lỗi; giờ admin trỏ được keyword vào bất
+ * kỳ field nào, nên nó phải thật sự đọc field được cấu hình — nếu không, một
+ * tiêu chí keyword trên `symptomShortText` sẽ lặng lẽ chấm trên mô tả lỗi.
+ */
+function keywordsOf(c: ScorableCase, field: string): string {
+    if (field === 'defectKeywords') {
+        if (c.defectKeywords != null && c.defectKeywords !== '') return c.defectKeywords;
+        return tokenizeDefectText(c.defectText);
+    }
+    return tokenizeDefectText(valuesOf(c, field).join(' '));
 }
 
 /**
@@ -241,18 +282,27 @@ function matchValue(
     field: string,
 ): string | null {
     if (matchType === 'keyword') {
-        const shared = sharedKeywordCount(keywordsOf(current), keywordsOf(candidate));
-        if (shared < MIN_SHARED_KEYWORDS) return null;
-        const left = new Set(keywordsOf(current).split(' ').filter(Boolean));
-        const common = keywordsOf(candidate).split(' ').filter((t) => t && left.has(t));
-        return common.join(', ');
+        const left = keywordsOf(current, field);
+        const right = keywordsOf(candidate, field);
+        if (sharedKeywordCount(left, right) < MIN_SHARED_KEYWORDS) return null;
+        const leftSet = new Set(left.split(' ').filter(Boolean));
+        return right.split(' ').filter((t) => t && leftSet.has(t)).join(', ');
     }
 
-    // exact và family cùng là so bằng; khác nhau ở chỗ so cột nào.
-    const a = normalizeId(fieldOf(current, field));
-    const b = normalizeId(fieldOf(candidate, field));
-    if (!a || !b || a !== b) return null;
-    return String(fieldOf(candidate, field) ?? '').trim();
+    // exact và family cùng là so bằng; khác nhau ở chỗ so field nào.
+    //
+    // So theo TẬP chứ không theo một giá trị: một đường dẫn đi qua mảng cho
+    // nhiều giá trị, và câu hỏi đúng là "hai case có chung ít nhất một giá trị
+    // không". Với cột thường thì tập chỉ có một phần tử, nên phép này rút về
+    // đúng phép so bằng cũ.
+    const candidateValues = valuesOf(candidate, field);
+    if (!candidateValues.length) return null;
+
+    const currentIds = new Set(valuesOf(current, field).map(normalizeId).filter(Boolean));
+    if (!currentIds.size) return null;
+
+    const shared = candidateValues.filter((v) => currentIds.has(normalizeId(v)));
+    return shared.length ? shared.join(', ') : null;
 }
 
 /**

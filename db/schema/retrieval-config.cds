@@ -87,6 +87,116 @@ entity RetrievalSettings : managed {
         closedOnly : Boolean     default true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile chấm điểm — một bộ trọng số cho MỘT nhóm bước D
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Một bộ tiêu chí + ngưỡng, đặt tên được, gán được cho từng bước D.
+ *
+ * ── Vì sao không dùng chung một bộ trọng số cho cả 8 bước ──
+ * Tám bước 8D hỏi tám câu khác nhau, nên "case nào giống case này" cũng có tám
+ * nghĩa khác nhau:
+ *
+ *     D1 cần NGƯỜI đã làm loại lỗi này    ⇒ work center và họ vật tư nặng ký
+ *     D3 cần HÀNH ĐỘNG chặn cùng kiểu lỗi ⇒ defect code nặng ký
+ *     D4 cần CÙNG CƠ CHẾ HỎNG             ⇒ ngữ nghĩa nặng ký, mã lỗi nhẹ đi
+ *                                            (cùng cơ chế thường khác mã lỗi)
+ *
+ * Một bộ trọng số duy nhất buộc cả tám bước dùng chung một thoả hiệp, và thoả
+ * hiệp đó không tối ưu cho bước nào. Chỉnh nó cho D4 tốt lên là làm D1 xấu đi —
+ * chính xác cái vòng luẩn quẩn đã đẩy tới thiết kế này.
+ *
+ * ── Vì sao là profile có tên, không phải "mỗi bước một bộ" ──
+ * Tám bộ độc lập nghĩa là sửa một nguyên tắc chung phải sửa tám chỗ. Thực tế
+ * D3/D5/D7 (hành động) dùng chung một định nghĩa tương đồng, D2/D4 (chẩn đoán)
+ * dùng chung một định nghĩa khác. Profile có tên cho phép ba bước trỏ vào MỘT
+ * bộ — sửa một lần, cả ba bước đổi theo.
+ */
+entity RetrievalProfiles : managed {
+
+    /** default | actions | diagnosis … — mã ổn định, binding tra theo cột này. */
+    key profileKey  : String(40);
+
+        label       : String(100);
+        description : String(500);
+
+        /**
+         * Ngưỡng riêng của profile. Decimal chứ không Integer: tiêu chí ngữ nghĩa
+         * cho điểm liên tục (trọng số × cosine), nên một profile thiên về ngữ
+         * nghĩa cần đặt ngưỡng ở 3.5 chứ không phải làm tròn về 3 hay 4.
+         */
+        minScore    : Decimal(5, 2) default 3;
+        topN        : Integer       default 3;
+        closedOnly  : Boolean       default true;
+
+        /** Profile hệ thống không xoá được — luôn còn một bộ để mọi bước rơi về. */
+        isSystem    : Boolean       default false;
+        sortOrder   : Integer       default 100;
+
+        criteria    : Composition of many ProfileCriteria
+                          on criteria.profile = $self;
+}
+
+/**
+ * Một tiêu chí chấm điểm bên trong một profile.
+ *
+ * Cùng hình dạng với `SimilarityCriteria` — cố ý, để `scoring.ts` chấm được cả
+ * hai bằng đúng một hàm. Khác đúng một chỗ: `sourceField` ở đây nhận CẢ đường
+ * dẫn trong payload SAP (`causesIshikawa[].category`) chứ không chỉ tên cột trên
+ * `HistoricalCases`. Xem `sourceFields.ts` để biết đường dẫn được phân giải ra sao.
+ */
+entity ProfileCriteria : managed {
+
+    key profile        : Association to RetrievalProfiles;
+    /** Khoá trong phạm vi profile. Hai profile được phép dùng lại cùng một khoá. */
+    key criterionKey   : String(40);
+
+        label          : String(100);
+        description    : String(500);
+        sourceTable    : String(60);
+
+        /**
+         * Cột trên `HistoricalCases`, HOẶC đường dẫn trong payload SAP đã làm
+         * phẳng. Cột có index thì lọc được bằng SQL; đường dẫn thì chỉ chấm được
+         * trong TS — `sourceFields.ts` phân biệt hai loại và UI hiện rõ.
+         */
+        sourceField    : String(200);
+        /** exact | keyword | family | cosine — đúng những nhánh có trong `scoring.ts`. */
+        matchType      : String(20)  default 'exact';
+        weight         : Integer;
+
+        fallbackField  : String(200);
+        fallbackMatch  : String(20);
+        fallbackWeight : Integer;
+
+        /** Sàn cosine, chỉ dùng với `matchType = 'cosine'`. Xem `SimilarityCriteria`. */
+        minSimilarity  : Decimal(3, 2);
+
+        enabled        : Boolean     default true;
+        sortOrder      : Integer;
+}
+
+/**
+ * Bước D nào chạy profile nào. Đúng tám dòng, D1…D8.
+ *
+ * ── Vì sao là bảng riêng chứ không phải cột trên `StepPrompts` ──
+ * `StepPrompts` nói bước D *viết* thế nào; bảng này nói bước D *tìm* thế nào.
+ * Hai vòng đời khác nhau: reset prompt về mặc định là chuyện thường, và nó không
+ * được phép kéo theo việc mất cấu hình tìm kiếm.
+ *
+ * Thiếu dòng hoặc profile đã bị xoá ⇒ rơi về profile `default`. Không bao giờ để
+ * một bước không có profile: như thế là bước đó im lặng mất hết tiền lệ.
+ */
+entity StepRetrievalBindings : managed {
+    /** D1 … D8. */
+    key stepCode  : String(4);
+
+        label     : String(100);
+        profile   : Association to RetrievalProfiles;
+        sortOrder : Integer;
+}
+
 /**
  * Prompt cho từng bước D — sửa trên UI.
  *

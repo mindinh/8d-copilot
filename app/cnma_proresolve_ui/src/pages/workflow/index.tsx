@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-    Badge, Button, Card, CardContent, CardHeader, CardTitle,
-} from '@cnma/react-ui';
+import { Button } from '@cnma/react-ui';
 import {
     BookOpen, Cpu, FileText, Network, Sliders, Sparkles,
 } from 'lucide-react';
@@ -122,6 +120,17 @@ export function WorkflowPage() {
                         <h2 className="text-lg font-semibold tracking-tight">Precedent Search & Similarity Engine</h2>
                         <p className="text-xs text-muted-foreground">
                             Tune vector embedding models, matching criteria weights, and minimum score thresholds for retrieving closed 8D cases.
+                        </p>
+                        {/*
+                         * Nói rõ đây là profile NÀO. Không có câu này thì người
+                         * dùng chỉnh trọng số ở đây rồi thắc mắc vì sao D4 không
+                         * đổi gì — trong khi D4 đang chạy một profile khác.
+                         */}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Trang này chỉnh profile <span className="font-medium text-foreground">Default</span>.
+                            Bước D nào chạy profile riêng thì chỉnh ở tab{' '}
+                            <span className="font-medium text-foreground">Similarity search</span> của bước đó,
+                            trong 8D Disciplines Configuration.
                         </p>
                     </div>
 
