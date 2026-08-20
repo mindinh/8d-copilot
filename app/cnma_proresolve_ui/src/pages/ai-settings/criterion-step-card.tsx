@@ -60,6 +60,25 @@ export function CriterionStepCard({
     const isVector = method === 'cosine';
     const hasFallback = Boolean(c.fallbackMatch);
 
+    /**
+     * Khi field bị khoá (đến từ Object Schema), 2 Select "Compare field"/
+     * "Reads from" không còn dùng được — danh sách của chúng chỉ có đúng bộ
+     * field cũ (`COMPARABLE_FIELDS`/`AVAILABLE_SOURCE_TABLES`), trong khi
+     * Object Schema có thể tạo ra bất kỳ `sourceField`/`sourceTable` nào quét
+     * được từ payload SAP thật. Giá trị thật VẪN có trên `c`, chỉ là Select
+     * không tìm được item khớp nên hiện trống — trông như thiếu dữ liệu dù
+     * không phải vậy. Ở đây tính sẵn chuỗi để hiển thị thô, khớp thì dùng
+     * nhãn đẹp, không khớp thì hiện đúng giá trị thật thay vì im lặng.
+     */
+    const compareMatch = COMPARABLE_FIELDS.find((f) => f.field === c.sourceField);
+    const compareFieldDisplay = c.sourceField
+        ? (compareMatch ? `${compareMatch.label} · ${compareMatch.field}` : c.sourceField)
+        : '—';
+    const tableMatch = AVAILABLE_SOURCE_TABLES.find((t) => t.value === c.sourceTable);
+    const readsFromDisplay = c.sourceTable
+        ? (tableMatch ? tableMatch.label : c.sourceTable)
+        : '—';
+
     return (
         <Card className={`relative border-border transition-colors hover:border-primary/30 ${c.enabled ? '' : 'opacity-60'}`}>
             <CardContent className="space-y-4 p-4">
@@ -163,26 +182,35 @@ export function CriterionStepCard({
                         <Label className="text-xs uppercase text-muted-foreground">
                             Compare field <span className="normal-case font-normal">(DB field to compare)</span>
                         </Label>
-                        <Select
-                            value={c.sourceField ?? ''}
-                            disabled={busy || fieldsLocked}
-                            onValueChange={(v) => {
-                                const matched = COMPARABLE_FIELDS.find((f) => f.field === v);
-                                onPatch({
-                                    sourceField: v,
-                                    sourceTable: matched?.sourceTable ?? c.sourceTable,
-                                });
-                            }}
-                        >
-                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Pick a column" /></SelectTrigger>
-                            <SelectContent>
-                                {COMPARABLE_FIELDS.map((f) => (
-                                    <SelectItem key={f.field} value={f.field}>
-                                        {f.label} <span className="text-muted-foreground">· {f.field}</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {fieldsLocked ? (
+                            <div
+                                className="flex h-8 items-center truncate rounded-md border border-input bg-muted/40 px-3 text-sm text-foreground/80"
+                                title={compareFieldDisplay}
+                            >
+                                {compareFieldDisplay}
+                            </div>
+                        ) : (
+                            <Select
+                                value={c.sourceField ?? ''}
+                                disabled={busy}
+                                onValueChange={(v) => {
+                                    const matched = COMPARABLE_FIELDS.find((f) => f.field === v);
+                                    onPatch({
+                                        sourceField: v,
+                                        sourceTable: matched?.sourceTable ?? c.sourceTable,
+                                    });
+                                }}
+                            >
+                                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Pick a column" /></SelectTrigger>
+                                <SelectContent>
+                                    {COMPARABLE_FIELDS.map((f) => (
+                                        <SelectItem key={f.field} value={f.field}>
+                                            {f.label} <span className="text-muted-foreground">· {f.field}</span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                         <p className="text-xs text-muted-foreground/70">
                             {MATCH_METHODS.find((m) => m.value === method)?.hint}
                         </p>
@@ -192,20 +220,29 @@ export function CriterionStepCard({
                         <Label className="text-xs uppercase text-muted-foreground">
                             Reads from <span className="normal-case font-normal">(Metadata)</span>
                         </Label>
-                        <Select
-                            value={c.sourceTable ?? ''}
-                            disabled={busy || fieldsLocked}
-                            onValueChange={(v) => onPatch({ sourceTable: v })}
-                        >
-                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select SAP source table" /></SelectTrigger>
-                            <SelectContent>
-                                {AVAILABLE_SOURCE_TABLES.map((t) => (
-                                    <SelectItem key={t.value} value={t.value}>
-                                        {t.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {fieldsLocked ? (
+                            <div
+                                className="flex h-8 items-center truncate rounded-md border border-input bg-muted/40 px-3 text-sm text-foreground/80"
+                                title={readsFromDisplay}
+                            >
+                                {readsFromDisplay}
+                            </div>
+                        ) : (
+                            <Select
+                                value={c.sourceTable ?? ''}
+                                disabled={busy}
+                                onValueChange={(v) => onPatch({ sourceTable: v })}
+                            >
+                                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select SAP source table" /></SelectTrigger>
+                                <SelectContent>
+                                    {AVAILABLE_SOURCE_TABLES.map((t) => (
+                                        <SelectItem key={t.value} value={t.value}>
+                                            {t.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                         <p className="text-xs text-muted-foreground/70">
                             {fieldsLocked
                                 ? 'Field của profile được định nghĩa ở trang Object Schema.'

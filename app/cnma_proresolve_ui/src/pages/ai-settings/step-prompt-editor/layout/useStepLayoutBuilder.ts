@@ -32,13 +32,28 @@ export function useStepLayoutBuilder(value: FormSchemaConfig, onChange: (value: 
     const onDragEnd = ({ active, over }: DragEndEvent) => {
         setActiveField(null); setOverId(null); if (!over) return;
         const key = String(active.id).replace('field-', ''); const targetId = String(over.id);
-        if (targetId === 'unassigned') { removeFromLayout(key); return; }
+        if (targetId === 'unassigned') { removeFromLayout(key); setSelectedField(key); return; }
+        if (targetId === 'canvas') {
+            if (groups.length === 0) {
+                const newGroupId = 'group-1';
+                const newGroup: FormGroupConfig = { id: newGroupId, label: 'General', fieldKeys: [key], width: '100', columns: 2 };
+                setGroups([newGroup]); setSelectedGroup(newGroupId); setSelectedField(key); return;
+            } else {
+                const targetGroup = groups[groups.length - 1];
+                if (targetGroup) {
+                    setGroups(groups.map((g) => g.id === targetGroup.id ? { ...g, fieldKeys: [...g.fieldKeys.filter((k) => k !== key), key] } : { ...g, fieldKeys: g.fieldKeys.filter((k) => k !== key) }));
+                    setSelectedGroup(targetGroup.id); setSelectedField(key);
+                }
+                return;
+            }
+        }
         const source = groups.find((group) => group.fieldKeys.includes(key));
         const target = groups.find((group) => targetId === `group-${group.id}` || group.fieldKeys.some((fieldKey) => targetId === `field-${fieldKey}`));
         if (!target) return;
         const overKey = targetId.replace('field-', '');
-        if (source?.id === target.id && target.fieldKeys.includes(overKey)) { updateGroup(target.id, { fieldKeys: arrayMove(target.fieldKeys, target.fieldKeys.indexOf(key), target.fieldKeys.indexOf(overKey)) }); return; }
+        if (source?.id === target.id && target.fieldKeys.includes(overKey)) { updateGroup(target.id, { fieldKeys: arrayMove(target.fieldKeys, target.fieldKeys.indexOf(key), target.fieldKeys.indexOf(overKey)) }); setSelectedField(key); return; }
         setGroups(groups.map((group) => group.id === target.id ? { ...group, fieldKeys: [...group.fieldKeys.filter((item) => item !== key), key] } : { ...group, fieldKeys: group.fieldKeys.filter((item) => item !== key) }));
+        setSelectedField(key);
     };
     return { sensors, groups, spacers, unassignedFields, selectedField, selectedGroup, selectedFieldConfig, selectedGroupConfig, activeField, overId, addGroupOpen, setSelectedField, setSelectedGroup, setAddGroupOpen, updateField, addGroup, updateGroup, deleteGroup, moveGroup, removeFromLayout, moveField, addSpacer, deleteSpacer, onDragStart, onDragOver, onDragEnd };
 }

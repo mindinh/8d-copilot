@@ -533,6 +533,9 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
         if (new Set(steps).size !== steps.length) {
             throw Object.assign(new Error('Một bước D chỉ được trỏ vào một profile.'), { code: 400 });
         }
+        if (steps.length > 1) {
+            throw Object.assign(new Error('Mỗi profile chỉ được chọn tối đa một bước 8D để gán.'), { code: 400 });
+        }
     }
 
     // ── Ghi ──────────────────────────────────────────────────────────────────

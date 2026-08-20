@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { closestCenter, DndContext, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@cnma/react-ui';
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@cnma/react-ui';
 import { Eye, GripVertical } from 'lucide-react';
 import type { FormFieldConfig, FormSchemaConfig } from './types';
 import { EditorModeToolbar } from './EditorModeToolbar';
@@ -28,7 +28,15 @@ export function FormMappingEditor({ stepCode, value, onChange }: { stepCode: str
         <div className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-card">
             {mode === 'json' ? <div className="relative h-full min-h-0 overflow-hidden">{jsonError && <p className="absolute bottom-4 right-4 z-10 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">JSON error: {jsonError}</p>}<Editor height="100%" language="json" value={jsonText} onChange={(text) => { const next = text ?? ''; setJsonText(next); try { onChange(JSON.parse(next) as FormSchemaConfig); setJsonError(null); } catch (error) { setJsonError(error instanceof Error ? error.message : 'Invalid JSON'); } }} options={{ minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false, automaticLayout: true }} /></div> : <DndContext sensors={builder.sensors} collisionDetection={collisionDetection} onDragStart={builder.onDragStart} onDragOver={builder.onDragOver} onDragEnd={builder.onDragEnd}>
                 <div className="flex h-full min-h-0 overflow-hidden"><LayoutFieldsPanel fields={builder.unassignedFields} selectedField={builder.selectedField} isDragging={Boolean(builder.activeField)} overId={builder.overId} onSelect={(key) => { builder.setSelectedField(key); builder.setSelectedGroup(null); }} onAddGroup={() => builder.setAddGroupOpen(true)} /><LayoutCanvasPanel groups={builder.groups} allFields={value.fields} spacers={builder.spacers} selectedField={builder.selectedField} selectedGroup={builder.selectedGroup} overId={builder.overId} onSelectField={(key) => { builder.setSelectedField(key); builder.setSelectedGroup(null); }} onSelectGroup={(id) => { builder.setSelectedGroup(id); builder.setSelectedField(null); }} onRemoveField={builder.removeFromLayout} onDeleteGroup={builder.deleteGroup} onMoveGroup={builder.moveGroup} onMoveField={builder.moveField} onAddSpacer={builder.addSpacer} onDeleteSpacer={builder.deleteSpacer} /><LayoutConfigPanel field={builder.selectedFieldConfig} group={builder.selectedGroupConfig} onFieldChange={(patch) => builder.selectedField && builder.updateField(builder.selectedField, patch)} onGroupChange={(patch) => builder.selectedGroup && builder.updateGroup(builder.selectedGroup, patch)} /></div>
-                <DragOverlay>{builder.activeField && <div className="flex items-center gap-2 rounded-md border bg-card p-3 shadow-xl"><GripVertical className="h-4 w-4" /><span className="font-medium">{builder.activeField.label ?? builder.activeField.key}</span></div>}</DragOverlay>
+                <DragOverlay dropAnimation={{ duration: 150, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+                    {builder.activeField && (
+                        <div className="flex min-h-9 h-auto w-[220px] select-none cursor-grabbing items-start gap-2 rounded-md border border-info bg-card px-2.5 py-2 text-xs shadow-lg ring-1 ring-info/30">
+                            <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 font-medium leading-normal break-words whitespace-normal text-foreground">{builder.activeField.label ?? builder.activeField.key}</span>
+                            <Badge variant="outline" className="mt-0.5 shrink-0 text-[10px] px-1.5 py-0">{builder.activeField.widget}</Badge>
+                        </div>
+                    )}
+                </DragOverlay>
             </DndContext>}
         </div>
         <AddLayoutGroupDialog open={builder.addGroupOpen} onOpenChange={builder.setAddGroupOpen} onAdd={builder.addGroup} />

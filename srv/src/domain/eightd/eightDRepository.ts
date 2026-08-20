@@ -182,3 +182,127 @@ export async function sweepStuckAnalyzing(): Promise<number> {
 
     return stuck.length;
 }
+
+/** Mot dong nhom 8D nguoi dung da chot cho D1. */
+export interface AssignedTeamRow {
+    partnerId: string;
+    partnerName: string;
+    functionTitle: string;
+    partnerRole: string;
+}
+
+/**
+ * Ghi nhom 8D da chot vao `team.assignedRoster` cua discipline D1.
+ *
+ * -- Vi sao merge chu khong ghi de ca resultJson --
+ * `resultJson` chua toan bo ket luan cua AI cho buoc do. Client gui len ca cuc
+ * roi ghi de nghia la moi lan luu nhom, moi phan con lai deu bi thay bang ban
+ * ma trinh duyet dang giu - va mot tab mo tu truoc se lang le keo du lieu cu ve.
+ * Doc-sua-ghi o server chi dung mot khoa thi khong co duong nao de chuyen do xay ra.
+ *
+ * `aiGenerated` giu nguyen `true`: buoc nay VAN do AI sinh, chi rieng danh sach
+ * nguoi la do con nguoi chot. Ha co xuong `false` se noi doi ve phan con lai.
+ */
+export async function saveAssignedTeam(
+    disciplineID: string,
+    roster: AssignedTeamRow[],
+): Promise<void> {
+    const row = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'resultJson')
+        .where({ ID: disciplineID });
+    if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (row.code !== 'D1') {
+        throw Object.assign(
+            new Error(`Only D1 has a team roster to save; this discipline is ${row.code}.`),
+            { code: 400 },
+        );
+    }
+
+    // resultJson hong hoac rong khong duoc lam hong luon thao tac luu: nhom nguoi
+    // dung vua gan la du lieu that, con phan AI thi da hong san tu truoc.
+    let data: Record<string, unknown> = {};
+    try {
+        const parsed = JSON.parse(String(row.resultJson ?? '{}'));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            data = parsed as Record<string, unknown>;
+        }
+    } catch { /* bat dau tu object rong */ }
+
+    const team = data.team && typeof data.team === 'object' && !Array.isArray(data.team)
+        ? { ...(data.team as Record<string, unknown>) }
+        : {};
+    team.assignedRoster = roster;
+
+    await UPDATE(DISCIPLINES)
+        .set({ resultJson: JSON.stringify({ ...data, team }) })
+        .where({ ID: disciplineID });
+
+    cds.log('eightd-repo').info(`Saved 8D team for discipline ${disciplineID}: ${roster.length} member(s)`);
+}
+
+
+/**
+ * Nhung khoa trong `resultJson` ma NGUOI DUNG duoc ghi, theo tung buoc D.
+ *
+ * Danh sach trang, khong phai danh sach den: them mot buoc D moi thi phai chu y
+ * khai bao o day. Khoa nao khong co trong danh sach thi bi tu choi - ke ca khi
+ * client gui len dung ten.
+ *
+ * Moi khoa deu la khoa RIENG cua nguoi dung. Khong khoa nao trung voi khoa AI
+ * ghi, nen mot lan luu khong bao gio de mat ket luan cua may.
+ */
+const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
+    D1: new Set(['team.assignedRoster']),
+    D2: new Set(['problem.statementOverride']),
+});
+
+/**
+ * Ghi mot khoa vao `resultJson` cua mot discipline.
+ *
+ * Doc-sua-ghi o SERVER chu khong nhan ca cuc `resultJson` tu client: nhan ca cuc
+ * nghia la mot tab mo tu truoc bam Save se lang le keo moi thu khac ve ban cu.
+ */
+export async function saveDisciplineFieldValue(
+    disciplineID: string,
+    fieldKey: string,
+    value: unknown,
+): Promise<void> {
+    const row = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'resultJson')
+        .where({ ID: disciplineID });
+    if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+
+    const allowed = HUMAN_WRITABLE_FIELDS[String(row.code)];
+    if (!allowed?.has(fieldKey)) {
+        throw Object.assign(
+            new Error(`"${fieldKey}" is not user-writable on ${row.code}. `
+                + `Allowed: ${allowed ? [...allowed].join(', ') || 'none' : 'none'}.`),
+            { code: 400 },
+        );
+    }
+
+    // resultJson hong khong duoc lam hong luon thao tac luu: thu nguoi dung vua
+    // nhap la du lieu that, con phan AI thi da hong san tu truoc.
+    let data: Record<string, unknown> = {};
+    try {
+        const parsed = JSON.parse(String(row.resultJson ?? '{}'));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            data = parsed as Record<string, unknown>;
+        }
+    } catch { /* bat dau tu object rong */ }
+
+    // Khoa dang `a.b` la object long nhau trong resultJson, khong phai mot khoa
+    // phang co dau cham - dat sai tang thi `getPath` o UI khong bao gio tim thay.
+    const parts = fieldKey.split('.');
+    let cursor = data;
+    for (const part of parts.slice(0, -1)) {
+        const next = cursor[part];
+        cursor[part] = next && typeof next === 'object' && !Array.isArray(next)
+            ? { ...(next as Record<string, unknown>) } : {};
+        cursor = cursor[part] as Record<string, unknown>;
+    }
+    cursor[parts[parts.length - 1]] = value;
+
+    await UPDATE(DISCIPLINES).set({ resultJson: JSON.stringify(data) }).where({ ID: disciplineID });
+    cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
+}

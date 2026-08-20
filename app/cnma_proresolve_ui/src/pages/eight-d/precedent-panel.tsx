@@ -43,12 +43,15 @@ function eur(n: number | null) {
  * nó là con số kiểm chứng được. Đoạn D1 do AI viết ở dưới trang phải khớp với
  * bảng này — lệch nhau là dấu hiệu model đang thêm người.
  */
-function tally(precedents: Precedent[]) {
+function tally(precedents: Precedent[] = []) {
     const people = new Map<string, { name: string; fn: string; n: number; cases: string[]; ledCount: number }>();
     const roles = new Map<string, number>();
 
-    for (const p of precedents) {
-        for (const t of p.team) {
+    const safePrecedents = Array.isArray(precedents) ? precedents : [];
+
+    for (const p of safePrecedents) {
+        const team = Array.isArray(p?.team) ? p.team : [];
+        for (const t of team) {
             const e = people.get(t.partnerId)
                 ?? { name: t.partnerName, fn: t.functionTitle, n: 0, cases: [] as string[], ledCount: 0 };
             e.n++;
@@ -89,7 +92,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
 
             {/* Vì sao case này được chọn — không để người đọc phải tin suông */}
             <div className="flex flex-wrap gap-1.5">
-                {p.breakdown.map((b) => (
+                {(p.breakdown ?? []).map((b) => (
                     <span
                         key={b.criterionKey}
                         className={`rounded px-1.5 py-0.5 text-xs ${LEVEL_STYLE[b.level]}`}
@@ -120,7 +123,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
                 </div>
             </div>
 
-            {p.team.length > 0 && (
+            {(p.team ?? []).length > 0 && (
                 <div>
                     <span className="text-xs text-muted-foreground">Team that solved it</span>
                     <div className="mt-1 flex flex-wrap gap-1.5">
@@ -135,7 +138,7 @@ function PrecedentCard({ p, rank }: { p: Precedent; rank: number }) {
                 </div>
             )}
 
-            {p.actions.length > 0 && (
+            {(p.actions ?? []).length > 0 && (
                 <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">What they did</span>
                     {p.actions.map((a) => (
@@ -177,7 +180,8 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
         );
     }
 
-    const { people, roles } = tally(data.precedents);
+    const precedents = Array.isArray(data.precedents) ? data.precedents : [];
+    const { people, roles } = tally(precedents);
 
     return (
         <div className="space-y-3">
@@ -185,10 +189,10 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
                 <GitBranch className="h-4 w-4 text-primary" />
                 <h2 className="font-medium">Similar past cases</h2>
                 <Badge variant="secondary" className="text-xs">
-                    {data.precedents.length} of {data.candidatesScored} scored
+                    {precedents.length} of {data.candidatesScored ?? 0} scored
                 </Badge>
                 <span className="ml-auto text-xs text-muted-foreground">
-                    library {data.libraryCount} · threshold {data.settings.minScore}/{data.maxScore}
+                    library {data.libraryCount ?? 0} · threshold {data.settings?.minScore ?? 0}/{data.maxScore ?? 0}
                     {data.semanticUsed && (
                         <span className="ml-2 inline-flex items-center gap-1">
                             <Search className="h-3 w-3" /> semantic on
@@ -200,7 +204,7 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
             {/* ── Không có tiền lệ ──
                 Hiện đầy đủ lý do chứ không phải một ô trống: "chưa nạp kho" và
                 "đã tìm nhưng không đủ điểm" nhìn giống nhau mà xử lý khác hẳn. */}
-            {!data.precedents.length ? (
+            {!precedents.length ? (
                 <Card className="flex items-start gap-3 border-dashed p-5">
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="space-y-1">
@@ -261,7 +265,7 @@ export function PrecedentPanel({ reportID }: { reportID: string }) {
 
                     {/* ── Từng case ── */}
                     <Accordion type="single" collapsible defaultValue="p0">
-                        {data.precedents.map((p, i) => (
+                        {precedents.map((p, i) => (
                             <AccordionItem key={p.notificationId} value={`p${i}`} className="border-none">
                                 <AccordionTrigger className="rounded-lg px-3 py-2 text-sm hover:bg-muted/50 hover:no-underline">
                                     <span className="flex flex-1 items-center gap-2 pr-3 text-left">
