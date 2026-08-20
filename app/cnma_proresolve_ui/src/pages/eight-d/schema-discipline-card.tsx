@@ -5,6 +5,8 @@ import {
 import { AlertCircle, AlertTriangle, CheckCircle2, Link2 } from 'lucide-react';
 import type { Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
+import { AiSuggestWidget, DecisionTableWidget, TeamRosterProvider, type RosterRow } from './team-roster-widget';
+import { ComplaintReferenceWidget, IsBoxWidget, IsNotBoxWidget, ProblemStatementWidget, W2hCellWidget } from './problem-widgets';
 
 interface SnapshotField { key: string; label: string; widget: string; visible?: boolean; colSpan?: number; rowSpan?: number }
 interface SnapshotGroup { id: string; label: string; fieldKeys: string[]; order?: number }
@@ -19,6 +21,34 @@ const COLUMN_SPANS: Record<number, string> = {
     10: 'col-span-12 md:col-span-10', 11: 'col-span-12 md:col-span-11', 12: 'col-span-12',
 };
 const ROW_SPANS: Record<number, string> = { 2: 'row-span-2', 3: 'row-span-3', 4: 'row-span-4' };
+
+/**
+ * Widget tu ve nhan cua no ben trong.
+ *
+ * `FieldBlock` mac dinh in nhan field o tren moi o. Voi mot o 5W2H hay mot hop
+ * Is/Is-Not - von da co nhan rieng ben trong dung theo mockup - thi thanh ra in
+ * hai lan cung mot chu. Danh sach nay tat cai o tren, de nhan ben trong lam viec.
+ */
+const SELF_LABELLED_WIDGETS = new Set(['w2h-cell', 'is-box', 'isnot-box', 'complaint-reference']);
+
+/**
+ * Widget tu lo trang thai RONG cua no.
+ *
+ * `FieldValue` mac dinh thay gia tri rong thi tra ve ngay mot chu "Not provided"
+ * tran - khong khung, khong nhan, lech han voi cac o ben canh. Voi mot o 5W2H
+ * thi dung phai la o van con nguyen khung, ben trong ghi "Not tracked in current
+ * dataset" bang chu nghieng; voi hop Is/Is-Not cung vay; con complaint reference
+ * thi phai an han di.
+ *
+ * Nhung widget nay tu ve lay trang thai rong cua minh, nen phai duoc goi ke ca
+ * khi khong co du lieu.
+ */
+const SELF_EMPTY_WIDGETS = new Set([
+    'w2h-cell', 'is-box', 'isnot-box', 'complaint-reference',
+    'ai-suggest', 'decision-table', 'problem-statement',
+]);
+
+
 
 function parseObject<T>(value: string | null | undefined): T | null {
     if (!value) return null;
@@ -92,9 +122,40 @@ function EvidenceList({ paths, context }: { paths: string[]; context: Record<str
     })}</div>;
 }
 
-function FieldValue({ field, value, context }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null }) {
-    if (value === undefined || value === null || value === '') return <span className="text-sm italic text-muted-foreground">Not provided</span>;
+function FieldValue({ field, value, context, disciplineID, data }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown> }) {
+    if ((value === undefined || value === null || value === '') && !SELF_EMPTY_WIDGETS.has(field.widget)) return <span className="text-sm italic text-muted-foreground">Not provided</span>;
     if (field.widget === 'evidence-list' && Array.isArray(value)) return <EvidenceList paths={value.map(String)} context={context} />;
+    // Hai widget co HANH VI cua D1. Chung khong tu giu state - state nhom nam
+    // trong `TeamRosterProvider` boc quanh ca the, vi nut "Accept all suggested"
+    // o field nay phai them nguoi vao BANG o field kia.
+    //
+    // Nhan ca `field.key` vi `formSchemaJson` duoc chup vao tung discipline luc
+    // phan tich: report chay truoc thay doi nay mang widget cu trong snapshot.
+    if (field.widget === 'ai-suggest' || field.key === 'team.roster') {
+        return <AiSuggestWidget roster={Array.isArray(value) ? value as RosterRow[] : []} />;
+    }
+    if (field.widget === 'decision-table' || field.key === 'team.assignedRoster') {
+        return <DecisionTableWidget />;
+    }
+
+    // ── Widget cua D2 ────────────────────────────────────────────────────────
+    // `complaint-reference` doc thang CaseContext (du lieu SAP da xac thuc), nen
+    // bo qua `value` - AI khong ghi vao khoa nay.
+    if (field.widget === 'complaint-reference') {
+        return <ComplaintReferenceWidget caseContext={context} />;
+    }
+    if (field.widget === 'problem-statement') {
+        return <ProblemStatementWidget
+            statement={value}
+            override={getPath(data, 'problem.statementOverride')}
+            disciplineID={disciplineID}
+        />;
+    }
+    if (field.widget === 'w2h-cell') {
+        return <W2hCellWidget label={field.label || humanize(field.key)} value={value} />;
+    }
+    if (field.widget === 'is-box') return <IsBoxWidget value={value} />;
+    if (field.widget === 'isnot-box') return <IsNotBoxWidget value={value} />;
     if (field.widget === 'markdown' || field.widget === 'textarea') return <Markdown>{String(value)}</Markdown>;
     if (field.widget === 'status') return <Badge variant={/ready|agree|complete|verified|effective/i.test(String(value)) ? 'success' : 'secondary'} className="max-w-full whitespace-normal break-words text-left leading-relaxed">{String(value)}</Badge>;
     if (typeof value === 'boolean') return <Badge variant={value ? 'success' : 'secondary'}>{value ? 'Yes' : 'No'}</Badge>;
@@ -107,23 +168,56 @@ function FieldValue({ field, value, context }: { field: SnapshotField; value: un
     return <span className="break-words whitespace-pre-wrap text-sm leading-relaxed">{String(value)}</span>;
 }
 
-function FieldBlock({ field, value, violations, context }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null }) {
+function FieldBlock({ field, value, violations, context, disciplineID, data }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown> }) {
     const hasError = violations.some((item) => item.severity === 'error');
     const hasWarning = violations.some((item) => item.severity === 'warning');
-    return <div className={cn('min-w-0 overflow-hidden rounded-xl p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}><div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div><div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
+    return <div className={cn('min-w-0 overflow-hidden rounded-xl', SELF_LABELLED_WIDGETS.has(field.widget) ? 'p-0' : 'p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}>{!SELF_LABELLED_WIDGETS.has(field.widget) && <div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div>}<div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
 }
 
-export function SchemaDisciplineCard({ discipline, caseContext }: { discipline: Discipline8D; caseContext?: string }) {
-    const schema = parseObject<SnapshotSchema>(discipline.formSchemaJson);
+export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson }: {
+    discipline: Discipline8D;
+    caseContext?: string;
+    /**
+     * Bo cuc dang cau hinh trong Form Editor, doc song tu `StepPrompts`.
+     *
+     * Duoc uu tien hon ban chup trong `discipline.formSchemaJson`: nguoi dung
+     * chinh bo cuc roi F5 la thay ngay, khong phai chay lai ca pipeline AI chi
+     * de keo mot field ra khoi layout group.
+     *
+     * Roi ve ban chup khi chua nap xong hoac buoc D nay chua co cau hinh - man
+     * hinh trong trong luc dang tai la mot bug nhin thay duoc, con hien ban chup
+     * cu them mot nhip thi khong ai nhan ra.
+     */
+    liveFormSchemaJson?: string | null;
+}) {
+    const live = parseObject<SnapshotSchema>(liveFormSchemaJson);
+    // `binding` la ten cu cua `key` trong Form Editor. Ban chup da duoc
+    // `normalizeStepConfig` doi sang `key`, ban song thi chua - khong quy ve mot
+    // moi thi field vua keo vao lang le khong tim thay du lieu.
+    const schema = live
+        ? {
+            ...live,
+            fields: (live.fields ?? []).map((field) => ({
+                ...field,
+                key: String((field as { binding?: string }).binding?.trim() || field.key),
+            })),
+        }
+        : parseObject<SnapshotSchema>(discipline.formSchemaJson);
     const data = parseObject<Record<string, unknown>>(discipline.resultJson);
     const context = parseObject<Record<string, unknown>>(caseContext);
     const validation = parseObject<ValidationSnapshot>(discipline.validationJson);
     if (!schema || !data) return null;
     const fieldMap = new Map(schema.fields.map((field) => [field.key, field]));
     const groups = [...(schema.groups ?? [])].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
-    const visibleGroups = groups.length ? groups : [{ id: 'result', label: discipline.title, fieldKeys: schema.fields.map((field) => field.key) }];
+    // KHONG co fallback "khong group thi hien het field".
+    //
+    // Layout group la thu quyet dinh cai gi len bao cao: keo field vao group thi
+    // no hien, keo ra thi khong. Fallback cu bien "toi da bo het field ra" thanh
+    // "hien toan bo field" - dung nguoc lai y nguoi dung, va khong co cach nao
+    // dung Form Editor de tao ra mot buoc rong.
+    const visibleGroups = groups;
     const violations = validation?.violations ?? [];
     const errorCount = violations.filter((item) => item.severity === 'error').length;
     const warningCount = violations.filter((item) => item.severity === 'warning').length;
-    return <div className="min-w-0 space-y-3"><Card className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-border/70 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><Badge variant="outline">{discipline.code}</Badge><div className="min-w-0"><div className="break-words font-semibold">{discipline.title}</div><div className="text-xs text-muted-foreground">Schema-driven result</div></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant={discipline.dataBacked ? 'success' : 'warning'}>{discipline.dataBacked ? 'Data backed' : 'Inference / incomplete data'}</Badge><Badge variant="outline">{Math.round(Number(discipline.confidence ?? 0) * 100)}% confidence</Badge>{errorCount > 0 ? <Badge variant="destructive">{errorCount} errors</Badge> : warningCount > 0 ? <Badge variant="warning">{warningCount} warnings</Badge> : <Badge variant="success"><CheckCircle2 className="h-3.5 w-3.5" />Validation passed</Badge>}</div></Card><Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">{visibleGroups.map((group) => <AccordionItem key={group.id} value={group.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"><AccordionTrigger className="min-w-0 px-4 py-3 hover:no-underline"><span className="break-words text-left text-sm font-semibold">{group.label}</span></AccordionTrigger><AccordionContent className="border-t px-4 py-4"><div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">{group.fieldKeys.map((key) => { const field = fieldMap.get(key); if (!field || field.visible === false) return null; const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key); return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} />; })}</div></AccordionContent></AccordionItem>)}</Accordion></div>;
+    return <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')}><div className="min-w-0 space-y-3"><Card className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-border/70 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><Badge variant="outline">{discipline.code}</Badge><div className="min-w-0"><div className="break-words font-semibold">{discipline.title}</div><div className="text-xs text-muted-foreground">Schema-driven result</div></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant={discipline.dataBacked ? 'success' : 'warning'}>{discipline.dataBacked ? 'Data backed' : 'Inference / incomplete data'}</Badge><Badge variant="outline">{Math.round(Number(discipline.confidence ?? 0) * 100)}% confidence</Badge>{errorCount > 0 ? <Badge variant="destructive">{errorCount} errors</Badge> : warningCount > 0 ? <Badge variant="warning">{warningCount} warnings</Badge> : <Badge variant="success"><CheckCircle2 className="h-3.5 w-3.5" />Validation passed</Badge>}</div></Card><Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">{visibleGroups.map((group) => <AccordionItem key={group.id} value={group.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"><AccordionTrigger className="min-w-0 px-4 py-3 hover:no-underline"><span className="break-words text-left text-sm font-semibold">{group.label}</span></AccordionTrigger><AccordionContent className="border-t px-4 py-4"><div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">{group.fieldKeys.map((key) => { const field = fieldMap.get(key); if (!field || field.visible === false) return null; const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key); return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} />; })}</div></AccordionContent></AccordionItem>)}</Accordion></div></TeamRosterProvider>;
 }

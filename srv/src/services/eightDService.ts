@@ -37,8 +37,11 @@ import {
     getReportForRerun,
     markAnalyzing,
     markFailed,
+    saveAssignedTeam,
+    saveDisciplineFieldValue,
     saveResult,
     sweepStuckAnalyzing,
+    type AssignedTeamRow,
 } from '../domain/eightd/eightDRepository';
 import { PipelineError, type CaseContext } from '../domain/eightd/types';
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
@@ -105,7 +108,7 @@ export function registerEightDHandlers(srv: any): void {
         const { payload, title } = req.data ?? {};
 
         if (typeof payload !== 'string' || !payload.trim()) {
-            return req.error(400, 'payload là bắt buộc và phải là chuỗi JSON.');
+            return req.error(400, 'payload is required and must be a JSON string.');
         }
 
         // Validate và map TRƯỚC khi tạo bản ghi: payload rác thì đừng để lại một
@@ -122,7 +125,7 @@ export function registerEightDHandlers(srv: any): void {
             if (blocking.length) {
                 return req.error(
                     400,
-                    `Payload không dùng được: ` +
+                    `Payload cannot be used: ` +
                     blocking.map((i) => `[${i.constraintId}] ${i.message}`).join(' '),
                 );
             }
@@ -149,16 +152,16 @@ export function registerEightDHandlers(srv: any): void {
     srv.on('reanalyze', async (req: any) => {
         const reportID = req.data?.reportID;
         if (typeof reportID !== 'string' || !reportID.trim()) {
-            return req.error(400, 'reportID là bắt buộc.');
+            return req.error(400, 'reportID is required.');
         }
 
         const row = await getReportForRerun(reportID);
-        if (!row) return req.error(404, `Không tìm thấy report ${reportID}.`);
+        if (!row) return req.error(404, `Report ${reportID} not found.`);
         if (!row.sourcePayload) {
-            return req.error(422, `Report ${reportID} không có sourcePayload để chạy lại.`);
+            return req.error(422, `Report ${reportID} has no sourcePayload to re-run.`);
         }
         if (row.status === 'Analyzing') {
-            return req.error(409, `Report ${reportID} đang chạy rồi.`);
+            return req.error(409, `Report ${reportID} is already running.`);
         }
 
         await markAnalyzing(reportID);
@@ -177,7 +180,7 @@ export function registerEightDHandlers(srv: any): void {
     srv.on('findPrecedents', async (req: any) => {
         const reportID = req.data?.reportID;
         if (typeof reportID !== 'string' || !reportID.trim()) {
-            return req.error(400, 'reportID là bắt buộc.');
+            return req.error(400, 'reportID is required.');
         }
 
         const db = await cds.connect.to('db');
@@ -186,7 +189,7 @@ export function registerEightDHandlers(srv: any): void {
                 .columns('ID', 'notificationId', 'caseContext', 'sourcePayload')
                 .where({ ID: reportID }),
         );
-        if (!row) return req.error(404, `Không tìm thấy report ${reportID}.`);
+        if (!row) return req.error(404, `Report ${reportID} not found.`);
 
         // `caseContext` được ghi lúc tạo bản ghi, nên có sẵn kể cả khi pipeline AI
         // chưa chạy xong. Rơi về `sourcePayload` phòng bản ghi cũ chưa có cột này.
@@ -196,7 +199,7 @@ export function registerEightDHandlers(srv: any): void {
                 ? (JSON.parse(row.caseContext) as CaseContext)
                 : mapCase(JSON.parse(row.sourcePayload));
         } catch (e: any) {
-            return req.error(422, `Report ${reportID} không dựng lại được case context: ${e.message}`);
+            return req.error(422, `Report ${reportID} could not rebuild its case context: ${e.message}`);
         }
 
         // Bước D nào chạy profile nào là do `StepRetrievalBindings` quyết, nên
@@ -221,22 +224,117 @@ export function registerEightDHandlers(srv: any): void {
     srv.on('seedCaseLibrary', async (req: any) => {
         const payload = req.data?.payload;
         if (typeof payload !== 'string' || !payload.trim()) {
-            return req.error(400, 'payload là bắt buộc và phải là chuỗi JSON.');
+            return req.error(400, 'payload is required and must be a JSON string.');
         }
 
         let parsed: unknown;
         try {
             parsed = JSON.parse(payload);
         } catch (e: any) {
-            return req.error(400, `payload không phải JSON hợp lệ: ${e.message}`);
+            return req.error(400, `payload is not valid JSON: ${e.message}`);
         }
 
         // Nhận cả một case đơn lẻ lẫn cả mẻ — người gọi không phải bọc mảng chỉ
         // để nạp một file.
         const cases = Array.isArray(parsed) ? parsed : [parsed];
-        if (!cases.length) return req.error(400, 'payload rỗng, không có case nào để nạp.');
+        if (!cases.length) return req.error(400, 'payload is empty — no cases to seed.');
 
         return JSON.stringify(await seedLibrary(cases));
+    });
+
+    // ── saveTeamRoster ───────────────────────────────────────────────────────
+    //
+    // Duong ghi DUY NHAT ma UI co tren mot report da phan tich. Validate o day
+    // chu khong o client: client la thu duy nhat co the bi thay the.
+    srv.on('saveTeamRoster', async (req: any) => {
+        const disciplineID = req.data?.disciplineID;
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID is required.');
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(String(req.data?.roster ?? ''));
+        } catch (e: any) {
+            return req.error(400, `roster is not valid JSON: ${e.message}`);
+        }
+        if (!Array.isArray(parsed)) return req.error(400, 'roster must be an array.');
+
+        // Vai trò để hở tự do thì bảng sẽ dần có mỗi dòng một cách viết, và
+        // không truy vấn được "ai là trưởng nhóm" nữa.
+        const ALLOWED_ROLES = new Set(['8D Team Leader', '8D Team Member']);
+        const roster: AssignedTeamRow[] = [];
+        const seen = new Set<string>();
+        for (const [index, item] of parsed.entries()) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                return req.error(400, `roster[${index}] is not an object.`);
+            }
+            const row = item as Record<string, unknown>;
+            const partnerId = String(row.partnerId ?? '').trim();
+            // Dòng chưa gán người là trạng thái nháp trên UI, không phải dữ liệu
+            // để lưu — bỏ qua thay vì báo lỗi bắt người dùng đi dọn.
+            if (!partnerId) continue;
+            if (seen.has(partnerId)) {
+                return req.error(400, `Partner ${partnerId} appears twice in the team.`);
+            }
+            seen.add(partnerId);
+
+            const partnerRole = String(row.partnerRole ?? '').trim();
+            if (!ALLOWED_ROLES.has(partnerRole)) {
+                return req.error(400,
+                    `roster[${index}].partnerRole "${partnerRole}" is not a valid role. `
+                    + `Choose one of: ${[...ALLOWED_ROLES].join(', ')}.`);
+            }
+
+            roster.push({
+                partnerId,
+                partnerName: String(row.partnerName ?? '').trim() || partnerId,
+                functionTitle: String(row.functionTitle ?? '').trim(),
+                partnerRole,
+            });
+        }
+
+        const leaders = roster.filter((row) => row.partnerRole === '8D Team Leader').length;
+        if (leaders > 1) return req.error(400, `An 8D team has exactly one leader; found ${leaders}.`);
+
+        try {
+            await saveAssignedTeam(disciplineID, roster);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
+        return JSON.stringify({ saved: roster.length });
+    });
+
+    // ── saveDisciplineField ──────────────────────────────────────────────────
+    //
+    // Duong ghi cua nguoi dung len mot buoc D. Danh sach khoa cho phep nam o
+    // repository (`HUMAN_WRITABLE_FIELDS`), khong o day: mot cho duy nhat quyet
+    // dinh cai gi ghi duoc thi khong the lech nhau.
+    srv.on('saveDisciplineField', async (req: any) => {
+        const disciplineID = req.data?.disciplineID;
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID is required.');
+        }
+        const fieldKey = String(req.data?.fieldKey ?? '').trim();
+        if (!fieldKey) return req.error(400, 'fieldKey is required.');
+
+        let value: unknown;
+        try {
+            value = JSON.parse(String(req.data?.valueJson ?? 'null'));
+        } catch (e: any) {
+            return req.error(400, `valueJson is not valid JSON: ${e.message}`);
+        }
+
+        // Chuoi rong = "xoa phan sua cua toi", khong phai mot gia tri. Luu chuoi
+        // rong thi UI van thay co override va khong bao gio quay lai duoc ban AI.
+        if (typeof value === 'string' && !value.trim()) value = null;
+
+        try {
+            await saveDisciplineFieldValue(disciplineID, fieldKey, value);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
+        return JSON.stringify({ saved: fieldKey });
     });
 
     // ── clearCaseLibrary ─────────────────────────────────────────────────────

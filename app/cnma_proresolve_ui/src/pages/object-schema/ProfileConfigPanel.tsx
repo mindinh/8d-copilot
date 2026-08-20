@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
     Badge, Button, Input, Label, ScrollArea, Tooltip, TooltipContent, TooltipTrigger, cn,
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cnma/react-ui';
 import {
-    Boxes, Check, CheckCircle2, Code2, Copy, GripVertical, LayoutGrid, Sigma, SlidersHorizontal,
+    Boxes, Check, Code2, Copy, GripVertical, LayoutGrid, Sigma, SlidersHorizontal,
     Sparkles, Trash2, Users, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -164,12 +165,6 @@ export function ProfileConfigPanel({
     const [copied, setCopied] = useState(false);
     const drop = useDroppable({ id: 'profile-fields' });
 
-    const toggleStep = (code: string) => onChange({
-        steps: draft.steps.includes(code)
-            ? draft.steps.filter((s) => s !== code)
-            : [...draft.steps, code].sort(),
-    });
-
     const jsonSchemaObject = {
         profileKey,
         label: draft.label,
@@ -300,7 +295,7 @@ export function ProfileConfigPanel({
                             </div>
                         </div>
 
-                        {/* ── 8D Steps Binding Section ── */}
+                        {/* ── 8D Steps Binding Section (Single Select Dropdown) ── */}
                         <div className="space-y-3 rounded-xl border bg-card p-4 shadow-xs">
                             <div className="flex items-center justify-between border-b pb-2.5">
                                 <div className="flex items-center gap-2">
@@ -309,83 +304,64 @@ export function ProfileConfigPanel({
                                     </div>
                                     <div>
                                         <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                                            Assigned 8D Steps ({draft.steps.length} of 8 steps)
+                                            Assigned 8D Step
                                         </h3>
                                         <p className="text-[11px] text-muted-foreground">
-                                            Click steps below to bind or unbind them with this retrieval profile.
+                                            Select the single 8D methodology step to bind with this retrieval profile.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Interactive 8D Step Grid */}
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                {STEP_CODES.map((code) => {
-                                    const selected = draft.steps.includes(code);
-                                    const owner = ownerByStep[code];
-                                    const meta = STEP_METADATA[code] ?? { title: code, subtitle: '' };
-                                    const isOwnedByOther = owner && owner !== profileKey;
-                                    const stolenFrom = selected && isOwnedByOther ? owner : null;
+                            <div className="max-w-md space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Bound 8D Step
+                                </Label>
+                                <Select
+                                    value={draft.steps[0] ?? 'none'}
+                                    onValueChange={(val) => onChange({ steps: val === 'none' ? [] : [val] })}
+                                >
+                                    <SelectTrigger className="h-9 text-xs font-medium">
+                                        <SelectValue placeholder="Select an 8D step..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none" className="text-xs text-muted-foreground">
+                                            None (Unassigned)
+                                        </SelectItem>
+                                        {STEP_CODES.map((code) => {
+                                            const meta = STEP_METADATA[code] ?? { title: code, subtitle: '' };
+                                            const owner = ownerByStep[code];
+                                            const isOwnedByOther = owner && owner !== profileKey;
 
-                                    return (
-                                        <Tooltip key={code}>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleStep(code)}
-                                                    className={cn(
-                                                        'group relative flex flex-col items-start gap-1 rounded-xl border p-2.5 text-left transition-all duration-150',
-                                                        selected
-                                                            ? 'border-primary/60 bg-primary/10 shadow-xs ring-1 ring-primary/30'
-                                                            : 'border-border/70 bg-card hover:border-primary/40 hover:bg-primary/5',
-                                                        stolenFrom && 'border-amber-500/60 bg-amber-500/10 ring-1 ring-amber-500/30',
-                                                    )}
-                                                >
-                                                    <div className="flex w-full items-center justify-between">
-                                                        <Badge
-                                                            variant={selected ? 'default' : 'outline'}
-                                                            className={cn(
-                                                                'h-5 px-1.5 font-mono text-xs font-bold',
-                                                                selected ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
-                                                            )}
-                                                        >
+                                            return (
+                                                <SelectItem key={code} value={code} className="text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0 font-bold">
                                                             {code}
                                                         </Badge>
-                                                        {selected && (
-                                                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                                                        <span className="font-medium text-foreground">{meta.title}</span>
+                                                        {isOwnedByOther && (
+                                                            <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                                                (bound to {profileLabelOf(owner)})
+                                                            </span>
                                                         )}
                                                     </div>
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
 
-                                                    <span className="mt-0.5 line-clamp-1 text-xs font-semibold text-foreground">
-                                                        {meta.title}
-                                                    </span>
-
-                                                    <span className="line-clamp-1 text-[10px] text-muted-foreground">
-                                                        {stolenFrom
-                                                            ? `Reassigns from ${profileLabelOf(stolenFrom)}`
-                                                            : selected
-                                                                ? 'Bound to this profile'
-                                                                : owner ? `Uses ${profileLabelOf(owner)}` : 'Uses Default'}
-                                                    </span>
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent
-                                                side="bottom"
-                                                className="max-w-72 space-y-1 border border-red-200 bg-white p-3 text-xs text-slate-800 shadow-xl dark:border-red-200 dark:bg-white dark:text-slate-800"
-                                            >
-                                                <p className="font-bold text-red-600">{code}: {meta.title}</p>
-                                                <p className="text-slate-600">{meta.subtitle}</p>
-                                                <p className="border-t border-red-100 pt-1 font-semibold text-red-700">
-                                                    {stolenFrom
-                                                        ? `Currently bound to "${profileLabelOf(stolenFrom)}". Saving will reassign ${code} to this profile.`
-                                                        : selected
-                                                            ? `${code} uses this profile.`
-                                                            : `Click to assign ${code} to this profile (currently uses "${profileLabelOf(owner)}").`}
-                                                </p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    );
-                                })}
+                                {draft.steps[0] && (
+                                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                        Bound to <span className="font-semibold text-primary">{draft.steps[0]} - {STEP_METADATA[draft.steps[0]]?.title}</span>.
+                                        {ownerByStep[draft.steps[0]] && ownerByStep[draft.steps[0]] !== profileKey && (
+                                            <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium">
+                                                Saving will reassign {draft.steps[0]} from "{profileLabelOf(ownerByStep[draft.steps[0]])}".
+                                            </span>
+                                        )}
+                                    </p>
+                                )}
                             </div>
                         </div>
 

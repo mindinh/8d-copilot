@@ -316,3 +316,116 @@ export function isCustomerComplaint(origin: string | null | undefined): boolean 
 export function originShort(origin: string | null | undefined): string {
     return String(origin ?? '').split(' ')[0] || '—';
 }
+
+/**
+ * Mot Business Partner chon duoc cho nhom 8D.
+ *
+ * `email`/`phone` co trong schema (`HistoricalTeamMembers`) va co chu dich -
+ * comment trong `case-library.cds` ghi ro "Auto-fill khi nguoi dung chon
+ * partner. Rule-based, khong phai AI sinh". Nhung `librarySeeder` dang seed
+ * `null` cho ca hai vi mock data khong he co chung, nen kieu du lieu phai cho
+ * phep `null` thay vi hua mot thu chua ton tai.
+ */
+export interface PartnerDirectoryEntry {
+    partnerId: string;
+    partnerName: string;
+    functionTitle: string;
+    email: string | null;
+    phone: string | null;
+}
+
+/**
+ * Danh ba Business Partner, gom tu kho case lich su.
+ *
+ * -- Vi sao gom o client chu khong phai mot endpoint rieng --
+ * `HistoricalTeamMembers` la mot dong MOI LAN mot nguoi tham gia MOT case, nen
+ * mot nguoi lam 5 case se co 5 dong. Danh ba can moi nguoi mot dong. Gom o day
+ * tranh phai them mot function moi vao `EightDService.cds` chi de lam mot phep
+ * distinct - kho nay chi vai chuc dong, khong dang mot vong deploy.
+ *
+ * Giu lai ban ghi co `email`/`phone` khi trung `partnerId`: cac dong cua cung
+ * mot nguoi khong nhat thiet day du nhu nhau.
+ */
+export async function getPartnerDirectory(): Promise<PartnerDirectoryEntry[]> {
+    const response = await axiosInstance.get(
+        'api/cnma/EIGHTD_SRV/HistoricalTeamMembers'
+        + '?$select=partnerId,partnerName,functionTitle,email,phone&$top=5000',
+    );
+    const rows = (response.data?.value ?? response.data ?? []) as Array<Record<string, unknown>>;
+    const merged = new Map<string, PartnerDirectoryEntry>();
+    for (const row of Array.isArray(rows) ? rows : []) {
+        const partnerId = String(row.partnerId ?? '').trim();
+        if (!partnerId) continue;
+        const entry: PartnerDirectoryEntry = {
+            partnerId,
+            partnerName: String(row.partnerName ?? '').trim() || partnerId,
+            functionTitle: String(row.functionTitle ?? '').trim(),
+            email: (row.email as string | null) || null,
+            phone: (row.phone as string | null) || null,
+        };
+        const existing = merged.get(partnerId);
+        merged.set(partnerId, existing
+            ? {
+                ...existing,
+                functionTitle: existing.functionTitle || entry.functionTitle,
+                email: existing.email ?? entry.email,
+                phone: existing.phone ?? entry.phone,
+            }
+            : entry);
+    }
+    return [...merged.values()].sort((a, b) => a.partnerName.localeCompare(b.partnerName));
+}
+
+/** Mot dong nhom 8D nguoi dung da chot cho D1. */
+export interface AssignedTeamRow {
+    partnerId: string;
+    partnerName: string;
+    functionTitle: string;
+    partnerRole: string;
+}
+
+/**
+ * Luu nhom 8D da chot cua D1 xuong DB.
+ *
+ * Chi ghi khoa `team.assignedRoster` trong `resultJson` cua discipline - phan
+ * `team.roster` do AI de xuat khong bi dung toi, nen van doi chieu duoc "AI de
+ * xuat ai" voi "nguoi dung chot ai". Server validate lai toan bo (vai tro hop le,
+ * khong trung partner, toi da mot truong nhom), nen loi tra ve tu day la loi that
+ * chu khong phai canh bao co the bo qua.
+ */
+export async function saveTeamRoster(
+    disciplineID: string,
+    roster: AssignedTeamRow[],
+): Promise<number> {
+    const response = await axiosInstance.post('api/cnma/EIGHTD_SRV/saveTeamRoster', {
+        disciplineID,
+        roster: JSON.stringify(roster),
+    });
+    const raw = response.data?.value ?? response.data;
+    try {
+        return (typeof raw === 'string' ? JSON.parse(raw) : raw)?.saved ?? roster.length;
+    } catch {
+        return roster.length;
+    }
+}
+
+/**
+ * Ghi mot o do nguoi dung nhap tren mot buoc D.
+ *
+ * Server chi chap nhan nhung khoa nam trong danh sach cho phep cua buoc do, va
+ * moi khoa deu tach khoi ban AI viet - nen mot lan luu khong the lam mat ket
+ * luan cua may. Loi tra ve tu day la loi that, khong phai canh bao bo qua duoc.
+ *
+ * Gui `null` de XOA phan sua va quay ve ban AI.
+ */
+export async function saveDisciplineField(
+    disciplineID: string,
+    fieldKey: string,
+    value: unknown,
+): Promise<void> {
+    await axiosInstance.post('api/cnma/EIGHTD_SRV/saveDisciplineField', {
+        disciplineID,
+        fieldKey,
+        valueJson: JSON.stringify(value ?? null),
+    });
+}

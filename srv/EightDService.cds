@@ -79,6 +79,44 @@ service EightDService {
     function findPrecedents(reportID : String) returns String;
 
     /**
+     * Ghi lai nhom 8D ma nguoi dung da chot cho D1.
+     *
+     * -- Vi sao mot action HEP thay vi mo UPDATE tren Disciplines --
+     * `Disciplines` van `@readonly` co chu dich: `resultJson` la ket luan cua AI,
+     * mo ghi tu do len no nghia la bat ky ai cung sua duoc nguyen nhan goc, chuoi
+     * 5-Why hay trich dan nguon ma khong de lai dau vet - dung thu ma ca pipeline
+     * nay duoc dung len de chong.
+     *
+     * Action nay chi ghi DUNG mot khoa: `team.assignedRoster`. `team.roster` do AI
+     * de xuat khong bi dung toi, nen luon doi chieu duoc "AI de xuat ai" voi
+     * "nguoi dung chot ai" - va do la thu chung minh con nguoi van quyet, khong
+     * phai may.
+     *
+     * @param disciplineID ID cua dong D1 trong `Disciplines`.
+     * @param roster       Mang JSON: [{ partnerId, partnerName, functionTitle, partnerRole }]
+     */
+    action saveTeamRoster(disciplineID : String, roster : LargeString) returns String;
+
+    /**
+     * Ghi mot o do NGUOI DUNG nhap tren mot buoc D.
+     *
+     * -- Vi sao khong mo UPDATE tren Disciplines --
+     * `resultJson` la ket luan cua AI. Mo ghi tu do len no nghia la bat ky ai
+     * cung sua duoc nguyen nhan goc, chuoi 5-Why hay trich dan nguon ma khong
+     * de lai dau vet - dung thu ca pipeline nay duoc dung len de chong.
+     *
+     * Action nay chi ghi duoc nhung khoa nam trong danh sach cho phep o server
+     * (`HUMAN_WRITABLE_FIELDS`). Moi khoa deu la khoa RIENG cua nguoi dung, tach
+     * khoi ban AI viet - vi du `problem.statementOverride` khong dung toi
+     * `problem.statement`, nen luon doi chieu duoc may viet gi va nguoi sua gi.
+     *
+     * @param disciplineID ID dong trong `Disciplines`.
+     * @param fieldKey     Khoa trong `resultJson`, phai nam trong danh sach cho phep.
+     * @param valueJson    Gia tri, ma hoa JSON (chuoi, so, mang... deu duoc).
+     */
+    action saveDisciplineField(disciplineID : String, fieldKey : String, valueJson : LargeString) returns String;
+
+    /**
      * Nạp case vào kho tiền lệ.
      *
      * Có mặt vì trên Cloud Foundry không chạy được script cục bộ đối với HDI

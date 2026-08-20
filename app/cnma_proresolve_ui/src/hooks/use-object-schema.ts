@@ -76,14 +76,16 @@ function toDraft(
     criteria: ProfileCriterion[],
     bindings: StepBinding[],
 ): ProfileDraft {
+    const assignedSteps = STEP_CODES.filter((code) =>
+        bindings.find((b) => b.stepCode === code)?.profile_profileKey === profile.profileKey,
+    );
     return {
         label: profile.label ?? profile.profileKey,
         description: profile.description ?? '',
         fields: criteria
             .filter((c) => c.profile_profileKey === profile.profileKey)
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
-        steps: STEP_CODES.filter((code) =>
-            bindings.find((b) => b.stepCode === code)?.profile_profileKey === profile.profileKey),
+        steps: assignedSteps.slice(0, 1),
     };
 }
 
@@ -176,6 +178,9 @@ export function useObjectSchema(): ObjectSchemaState {
     const blockingError = useMemo(() => {
         if (!draft) return null;
         if (!draft.label.trim()) return 'Profile must have a label.';
+        if (draft.steps.length > 1) {
+            return 'Each profile can only be assigned to a single 8D step.';
+        }
         if (draft.steps.length && !draft.fields.length) {
             return `Profile is assigned to ${draft.steps.join(', ')} but contains no fields — these steps will never match any precedent.`;
         }

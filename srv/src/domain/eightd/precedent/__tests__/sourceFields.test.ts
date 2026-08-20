@@ -154,7 +154,7 @@ describe('buildSourceFieldCatalog', () => {
 
         // Cả hai case cùng WC-1: khớp 100%, cộng điểm đều, không đổi thứ hạng.
         expect(workCenter?.distinctValues).toBe(1);
-        expect(workCenter?.note).toMatch(/cùng một giá trị/);
+        expect(workCenter?.note).toMatch(/exact same value/);
     });
 
     it('luôn có mặt các field suy ra lúc nạp, kể cả khi payload không chứa chúng', () => {

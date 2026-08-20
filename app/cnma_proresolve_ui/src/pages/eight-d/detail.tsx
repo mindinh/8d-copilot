@@ -29,6 +29,7 @@ import {
 } from '@/services/eightd-service';
 import { DisciplineCard } from './discipline-card';
 import { SchemaDisciplineCard } from './schema-discipline-card';
+import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { ReportStatusBadge } from './status-badge';
 import { ReasoningPanel } from './reasoning-panel';
 import { PrecedentPanel } from './precedent-panel';
@@ -65,6 +66,14 @@ export function EightDDetailPage() {
     const queryClient = useQueryClient();
     const [showPayload, setShowPayload] = useState(false);
     const [activeDiscipline, setActiveDiscipline] = useState('D1');
+
+    // Bo cuc SONG, doc thang tu StepPrompts - khong phai ban chup luc phan tich.
+    //
+    // Doi lai: sua Form Editor roi F5 la thay ngay, khong phai chay lai AI sau
+    // moi lan keo mot field. Cai gia phai tra la mot bao cao da phat hanh se doi
+    // hinh khi ai do chinh cau hinh - nen `resultJson` (KET LUAN cua AI) van la
+    // ban chup bat bien; chi rieng chuyen bay cai gi len man hinh moi la song.
+    const stepPrompts = useStepPrompts();
 
     const { data: report, isLoading, isError, error } = useQuery({
         queryKey: ['8d', 'report', id],
@@ -281,7 +290,7 @@ export function EightDDetailPage() {
                         {disciplines.map((discipline) => (
                             <TabsContent key={discipline.ID} value={discipline.code} className="mt-4 min-w-0">
                                 {discipline.formSchemaJson && discipline.resultJson
-                                    ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} />
+                                    ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[discipline.code]?.formSchemaJson ?? null} />
                                     : <DisciplineCard discipline={discipline} />}
                             </TabsContent>
                         ))}
