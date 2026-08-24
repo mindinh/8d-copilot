@@ -12,9 +12,9 @@ import { AlertTriangle, Plus, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useObjectSchema } from '@/hooks/use-object-schema';
 import {
-    cloneRetrievalProfile, deleteRetrievalProfile,
-    type ProfileCriterion, type SourceFieldInfo,
+    cloneRetrievalProfile, deleteRetrievalProfile, type SourceFieldInfo,
 } from '@/services/retrieval-service';
+import { newCriterionFrom } from './newCriterion';
 import { SourceFieldsPanel } from './SourceFieldsPanel';
 import { ProfileConfigPanel } from './ProfileConfigPanel';
 import { ProfileListPanel } from './ProfileListPanel';
@@ -22,44 +22,6 @@ import { ProfileListPanel } from './ProfileListPanel';
 /**
  * Object Schema — Defines similarity matching rules per 8D step.
  */
-
-function criterionKeyFor(path: string, taken: Set<string>): string {
-    const base = path
-        .replace(/\[\]/g, '')
-        .split('.')
-        .map((part, i) => (i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
-        .join('')
-        .replace(/[^A-Za-z0-9]/g, '')
-        .slice(0, 36) || 'criterion';
-    if (!taken.has(base)) return base;
-    let n = 2;
-    while (taken.has(`${base}${n}`)) n++;
-    return `${base}${n}`;
-}
-
-function newCriterionFrom(
-    field: SourceFieldInfo,
-    profileKey: string,
-    taken: Set<string>,
-): ProfileCriterion {
-    const method = field.methods[0] ?? 'exact';
-    return {
-        profile_profileKey: profileKey,
-        criterionKey: criterionKeyFor(field.path, taken),
-        label: field.label,
-        description: field.note,
-        sourceTable: field.sourceTable,
-        sourceField: field.path,
-        matchType: method,
-        weight: 1,
-        fallbackField: null,
-        fallbackMatch: null,
-        fallbackWeight: null,
-        minSimilarity: method === 'cosine' ? 0.7 : null,
-        enabled: false,
-        sortOrder: 0,
-    };
-}
 
 function CloneProfileDialog({
     open, onOpenChange, sourceLabel, taken, onSubmit, busy,
@@ -249,6 +211,7 @@ export function ObjectSchemaPage() {
                                 profileLabelOf={(key) =>
                                     state.profiles.find((p) => p.profileKey === key)?.label ?? key}
                                 isDragging={dragging !== null}
+                                maxScore={state.maxScore}
                                 onChange={state.setDraft}
                             />
                         ) : (

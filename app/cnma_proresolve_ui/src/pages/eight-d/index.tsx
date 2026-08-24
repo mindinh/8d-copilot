@@ -14,7 +14,7 @@ import {
     TableRow,
     cn,
 } from '@cnma/react-ui';
-import { Check, ClipboardList, FileSpreadsheet, Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
+import { Check, ClipboardList, FileSpreadsheet, Info, PlusCircle, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
 import {
     eightDService,
     originShort,
@@ -149,6 +149,10 @@ export function EightDListPage() {
                     <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
                         <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
                         Refresh
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/create-defect')} className="gap-1.5">
+                        <PlusCircle className="w-4 h-4 text-primary" />
+                        Record Defect (SAP UI5)
                     </Button>
                     <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
                         <Sparkles className="w-4 h-4" />

@@ -1,0 +1,851 @@
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+    Button,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    Input,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Spinner,
+    Badge,
+    cn,
+} from '@cnma/react-ui';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Box,
+    Check,
+    Code2,
+    Copy,
+    Factory,
+    FileText,
+    Plus,
+    RefreshCw,
+    ShieldAlert,
+    Sparkles,
+    Trash2,
+    UserCheck,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { eightDService } from '@/services/eightd-service';
+
+/**
+ * Mẫu sự vụ cho phép demo người thuyết trình bấm nạp 1-click.
+ */
+interface DefectPreset {
+    id: string;
+    title: string;
+    description: string;
+    badge: string;
+    data: {
+        notificationId: string;
+        origin: string;
+        symptomShortText: string;
+        status: string;
+        foundDate: string;
+        quantityExtent: string;
+        materialId: string;
+        materialDesc: string;
+        materialGroup: string;
+        batchId: string;
+        workCenterId: string;
+        workCenterDesc: string;
+        defectCode: string;
+        defectText: string;
+        inspections: Array<{ characteristic: string; measuredValue: string; specValue: string }>;
+        customerReference: {
+            complaintReference: string;
+            customerPlantContact: string;
+            slaResponseDue: string;
+        };
+    };
+}
+
+const PRESETS: DefectPreset[] = [
+    {
+        id: 'preset-flange',
+        title: 'Q3 Internal Defect - Flange Burr',
+        description: 'CNC Milling Line 7 — Rough edge on bracket flange after milling',
+        badge: 'Internal Q3',
+        data: {
+            notificationId: '8D-10049001',
+            origin: 'Q3 - Internal Defect',
+            symptomShortText: 'Operator stopped the line - rough edge felt on bracket flange after milling',
+            status: 'In Process',
+            foundDate: new Date().toISOString().split('T')[0],
+            quantityExtent: '61 units on hold',
+            materialId: 'MAT-10247',
+            materialDesc: 'Bracket Housing X240',
+            materialGroup: 'MG-HOUSING',
+            batchId: 'B-55901',
+            workCenterId: 'WC-MILL-07',
+            workCenterDesc: 'CNC Milling Line 7',
+            defectCode: 'DEF-0489',
+            defectText: 'Flange edge burr above limit',
+            inspections: [
+                {
+                    characteristic: 'Burr height at flange edge',
+                    measuredValue: '0.26mm',
+                    specValue: 'max 0.10mm',
+                },
+            ],
+            customerReference: {
+                complaintReference: 'N/A - internal defect, no customer reference',
+                customerPlantContact: 'N/A',
+                slaResponseDue: 'N/A',
+            },
+        },
+    },
+    {
+        id: 'preset-coolant',
+        title: 'Q1 Customer Complaint - Coolant Leakage',
+        description: 'Die Casting Line 3 — Fluid seeping through housing joint face after 200h',
+        badge: 'Customer Q1',
+        data: {
+            notificationId: '8D-10049002',
+            origin: 'Q1 - Customer Complaint',
+            symptomShortText: 'Customer reports coolant weeping from pump housing joint after 200 operating hours',
+            status: 'In Process',
+            foundDate: new Date().toISOString().split('T')[0],
+            quantityExtent: '9 units returned, 120 in the field',
+            materialId: 'MAT-10318',
+            materialDesc: 'Pump Housing P90',
+            materialGroup: 'MG-HOUSING',
+            batchId: 'B-55744',
+            workCenterId: 'WC-CAST-03',
+            workCenterDesc: 'Aluminium Die Casting Line 3',
+            defectCode: 'DEF-9001',
+            defectText: 'Fluid seeping through casting wall near the joint face',
+            inspections: [
+                {
+                    characteristic: 'Helium leak rate',
+                    measuredValue: '9 mbar*l/s',
+                    specValue: 'max 5 mbar*l/s',
+                },
+            ],
+            customerReference: {
+                complaintReference: 'CC-2026-1188',
+                customerPlantContact: 'Vestbeck Motors - Plant 2 - Quality desk',
+                slaResponseDue: '2026-08-30',
+            },
+        },
+    },
+    {
+        id: 'preset-welding',
+        title: 'Q3 Internal Defect - Weld Porosity',
+        description: 'Robotic Weld Cell 2 — Sub-surface porosity cluster found via ultrasonic test',
+        badge: 'Internal Q3',
+        data: {
+            notificationId: '8D-10049003',
+            origin: 'Q3 - Internal Defect',
+            symptomShortText: 'Sub-surface porosity pores found during ultrasonic testing on seam W-04',
+            status: 'In Process',
+            foundDate: new Date().toISOString().split('T')[0],
+            quantityExtent: '18 sub-assemblies quarantined',
+            materialId: 'MAT-10500',
+            materialDesc: 'Subframe Structure Weldment',
+            materialGroup: 'MG-WELD',
+            batchId: 'B-77210',
+            workCenterId: 'WC-WELD-02',
+            workCenterDesc: 'Robotic Welding Cell 2',
+            defectCode: 'DEF-0312',
+            defectText: 'Porosity cluster exceeding ISO 5817 Level B limit',
+            inspections: [
+                {
+                    characteristic: 'Porosity defect pore diameter',
+                    measuredValue: '1.8mm',
+                    specValue: 'max 0.5mm',
+                },
+            ],
+            customerReference: {
+                complaintReference: 'N/A - internal defect, no customer reference',
+                customerPlantContact: 'N/A',
+                slaResponseDue: 'N/A',
+            },
+        },
+    },
+];
+
+function generateRandomId(): string {
+    const randomNum = Math.floor(10000000 + Math.random() * 90000000);
+    return `8D-${randomNum}`;
+}
+
+export function CreateDefectPage() {
+    const navigate = useNavigate();
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [showJsonPreview, setShowJsonPreview] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    // Form state
+    const [notificationId, setNotificationId] = useState(PRESETS[0].data.notificationId);
+    const [origin, setOrigin] = useState(PRESETS[0].data.origin);
+    const [symptomShortText, setSymptomShortText] = useState(PRESETS[0].data.symptomShortText);
+    const [status, setStatus] = useState(PRESETS[0].data.status);
+    const [foundDate, setFoundDate] = useState(PRESETS[0].data.foundDate);
+    const [quantityExtent, setQuantityExtent] = useState(PRESETS[0].data.quantityExtent);
+
+    const [materialId, setMaterialId] = useState(PRESETS[0].data.materialId);
+    const [materialDesc, setMaterialDesc] = useState(PRESETS[0].data.materialDesc);
+    const [materialGroup, setMaterialGroup] = useState(PRESETS[0].data.materialGroup);
+    const [batchId, setBatchId] = useState(PRESETS[0].data.batchId);
+
+    const [workCenterId, setWorkCenterId] = useState(PRESETS[0].data.workCenterId);
+    const [workCenterDesc, setWorkCenterDesc] = useState(PRESETS[0].data.workCenterDesc);
+
+    const [defectCode, setDefectCode] = useState(PRESETS[0].data.defectCode);
+    const [defectText, setDefectText] = useState(PRESETS[0].data.defectText);
+
+    const [inspections, setInspections] = useState(PRESETS[0].data.inspections);
+
+    const [complaintReference, setComplaintReference] = useState(
+        PRESETS[0].data.customerReference.complaintReference,
+    );
+    const [customerPlantContact, setCustomerPlantContact] = useState(
+        PRESETS[0].data.customerReference.customerPlantContact,
+    );
+    const [slaResponseDue, setSlaResponseDue] = useState(
+        PRESETS[0].data.customerReference.slaResponseDue,
+    );
+
+    // Handle preset selection
+    const applyPreset = (preset: DefectPreset) => {
+        const d = preset.data;
+        setNotificationId(generateRandomId());
+        setOrigin(d.origin);
+        setSymptomShortText(d.symptomShortText);
+        setStatus(d.status);
+        setFoundDate(d.foundDate);
+        setQuantityExtent(d.quantityExtent);
+        setMaterialId(d.materialId);
+        setMaterialDesc(d.materialDesc);
+        setMaterialGroup(d.materialGroup);
+        setBatchId(d.batchId);
+        setWorkCenterId(d.workCenterId);
+        setWorkCenterDesc(d.workCenterDesc);
+        setDefectCode(d.defectCode);
+        setDefectText(d.defectText);
+        setInspections(d.inspections);
+        setComplaintReference(d.customerReference.complaintReference);
+        setCustomerPlantContact(d.customerReference.customerPlantContact);
+        setSlaResponseDue(d.customerReference.slaResponseDue);
+        setError(null);
+        toast.info(`Loaded preset: ${preset.title}`);
+    };
+
+    // Inspection row controls
+    const addInspection = () => {
+        setInspections([
+            ...inspections,
+            { characteristic: '', measuredValue: '', specValue: '' },
+        ]);
+    };
+
+    const updateInspection = (
+        index: number,
+        field: 'characteristic' | 'measuredValue' | 'specValue',
+        value: string,
+    ) => {
+        const updated = [...inspections];
+        updated[index][field] = value;
+        setInspections(updated);
+    };
+
+    const removeInspection = (index: number) => {
+        if (inspections.length <= 1) return;
+        setInspections(inspections.filter((_, i) => i !== index));
+    };
+
+    // Dynamic JSON payload construction
+    const builtPayloadObject = useMemo(() => {
+        const isQ1 = origin.startsWith('Q1');
+        return {
+            notificationId: notificationId.trim() || '8D-DEMO-001',
+            origin,
+            symptomShortText: symptomShortText.trim(),
+            status,
+            foundDate: foundDate || null,
+            completionDate: null,
+            quantityExtent: quantityExtent.trim() || null,
+            teamSize: null,
+            material: {
+                materialId: materialId.trim() || null,
+                description: materialDesc.trim() || null,
+                materialGroup: materialGroup.trim() || null,
+            },
+            batch: {
+                batchId: batchId.trim() || null,
+                materialId: materialId.trim() || null,
+            },
+            defect: {
+                defectCode: defectCode.trim() || null,
+                defectText: defectText.trim() || null,
+            },
+            workCenter: {
+                workCenterId: workCenterId.trim() || null,
+                description: workCenterDesc.trim() || null,
+            },
+            inspections: inspections
+                .filter((i) => i.characteristic.trim())
+                .map((i) => ({
+                    characteristic: i.characteristic.trim(),
+                    measuredValue: i.measuredValue.trim(),
+                    specValue: i.specValue.trim(),
+                })),
+            causesIshikawa: [],
+            fiveWhyChain: [],
+            actions: [],
+            teamAssignments: [],
+            isIsNot: null,
+            fmeaLink: null,
+            costCopq: null,
+            lessonsLearned: null,
+            customerReference: {
+                complaintReference: isQ1
+                    ? complaintReference.trim() || 'CC-2026-PENDING'
+                    : 'N/A - internal defect, no customer reference',
+                customerPlantContact: isQ1 ? customerPlantContact.trim() || 'Customer Quality' : 'N/A',
+                slaResponseDue: isQ1 ? slaResponseDue.trim() || 'N/A' : 'N/A',
+            },
+        };
+    }, [
+        notificationId,
+        origin,
+        symptomShortText,
+        status,
+        foundDate,
+        quantityExtent,
+        materialId,
+        materialDesc,
+        materialGroup,
+        batchId,
+        workCenterId,
+        workCenterDesc,
+        defectCode,
+        defectText,
+        inspections,
+        complaintReference,
+        customerPlantContact,
+        slaResponseDue,
+    ]);
+
+    const payloadJsonString = useMemo(
+        () => JSON.stringify(builtPayloadObject, null, 2),
+        [builtPayloadObject],
+    );
+
+    // Copy JSON to clipboard
+    const copyJson = () => {
+        navigator.clipboard.writeText(payloadJsonString);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('JSON payload copied to clipboard');
+    };
+
+    // Form submission
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!symptomShortText.trim()) {
+            setError('Please enter a Symptom Description for the defect.');
+            return;
+        }
+
+        setBusy(true);
+        setError(null);
+
+        try {
+            const reportID = await eightDService.analyzeFromJson(
+                payloadJsonString,
+                `${notificationId} — ${symptomShortText.slice(0, 50)}`,
+            );
+            toast.success(`Defect record ${notificationId} created!`, {
+                description: 'Starting AI 8D Copilot analysis workflow...',
+            });
+            navigate(`/8d/${reportID}`);
+        } catch (err: any) {
+            const msg =
+                err?.response?.data?.error?.message ??
+                err?.message ??
+                'Failed to create defect and start analysis.';
+            setError(msg);
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+            {/* Header / Navigation Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => navigate('/8d')}
+                        className="h-9 w-9 shrink-0"
+                        title="Back to 8D Reports"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="bg-primary/10 text-primary text-xs font-mono px-2 py-0.5 rounded font-semibold border border-primary/20">
+                                SAP UI5 QM Simulation
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                                Fiori Record Defect
+                            </Badge>
+                        </div>
+                        <h1 className="text-xl font-bold text-foreground mt-1">
+                            Record Quality Defect
+                        </h1>
+                        <p className="text-xs text-muted-foreground">
+                            Simulate creating a SAP QM Quality Notification, generating standard OData Deep Structure JSON, and initiating the AI 8D Copilot workflow.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowJsonPreview(!showJsonPreview)}
+                        className="gap-1.5 text-xs"
+                    >
+                        <Code2 className="w-4 h-4 text-muted-foreground" />
+                        {showJsonPreview ? 'Hide JSON Payload' : 'Inspect JSON Payload'}
+                    </Button>
+                </div>
+            </div>
+
+            {/* Quick Demo Presets Banner */}
+            <Card className="bg-gradient-to-r from-primary/5 via-card to-card border-primary/20">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                            Quick Demo Presets
+                        </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                        Click to autofill sample SAP QM defect data for live demo
+                    </span>
+                </CardHeader>
+                <CardContent className="pt-0 px-4 pb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {PRESETS.map((preset) => (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => applyPreset(preset)}
+                                className="flex flex-col items-start p-2.5 rounded-lg border border-border/80 bg-card hover:bg-accent/50 hover:border-primary/50 text-left transition-all group cursor-pointer shadow-sm"
+                            >
+                                <div className="flex items-center justify-between w-full mb-1">
+                                    <span className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
+                                        {preset.title}
+                                    </span>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            'text-[10px] px-1.5 py-0 shrink-0 font-mono',
+                                            preset.badge.includes('Q1')
+                                                ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                                : 'bg-info/10 text-info border-info/30',
+                                        )}
+                                    >
+                                        {preset.badge}
+                                    </Badge>
+                                </div>
+                                <span className="text-[11px] text-muted-foreground line-clamp-2">
+                                    {preset.description}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Collapsible Live JSON Payload Inspector */}
+            {showJsonPreview && (
+                <Card className="border-primary/30 bg-slate-950 text-slate-100 dark">
+                    <CardHeader className="py-3 px-4 flex flex-row items-center justify-between border-b border-slate-800">
+                        <div className="flex items-center gap-2">
+                            <Code2 className="w-4 h-4 text-cyan-400" />
+                            <span className="text-xs font-mono font-semibold text-cyan-400">
+                                Generated SAP QM OData Payload (JSON)
+                            </span>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={copyJson}
+                            className="h-7 text-xs text-slate-300 hover:text-white hover:bg-slate-800 gap-1"
+                        >
+                            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copied ? 'Copied!' : 'Copy Payload'}
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                        <pre className="text-[11px] font-mono leading-relaxed overflow-x-auto text-cyan-200 max-h-72 p-2 rounded bg-slate-900 border border-slate-800">
+                            {payloadJsonString}
+                        </pre>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Error Display Banner */}
+            {error && (
+                <div className="flex items-start gap-2.5 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div className="flex-1 font-medium">{error}</div>
+                </div>
+            )}
+
+            {/* SAP QM Defect Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {/* 1. Header Information */}
+                <Card className="shadow-sm">
+                    <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4 text-primary" />
+                                <CardTitle className="text-sm font-bold">1. Notification Header</CardTitle>
+                            </div>
+                            <Badge variant="outline" className="font-mono text-[11px]">
+                                SAP QM Notification
+                            </Badge>
+                        </div>
+                        <CardDescription className="text-xs">
+                            Basic SAP defect header parameters including notification ID, origin type, and symptom summary.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Notification ID */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold">Notification ID</Label>
+                                <button
+                                    type="button"
+                                    onClick={() => setNotificationId(generateRandomId())}
+                                    className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> New ID
+                                </button>
+                            </div>
+                            <Input
+                                value={notificationId}
+                                onChange={(e) => setNotificationId(e.target.value)}
+                                className="font-mono text-xs"
+                                placeholder="8D-10049001"
+                                required
+                            />
+                        </div>
+
+                        {/* Defect Origin */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Defect Origin / Type</Label>
+                            <Select value={origin} onValueChange={setOrigin}>
+                                <SelectTrigger className="text-xs">
+                                    <SelectValue placeholder="Select origin" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Q3 - Internal Defect">Q3 - Internal Defect (Shop Floor)</SelectItem>
+                                    <SelectItem value="Q1 - Customer Complaint">Q1 - Customer Complaint (Field Return)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Found Date */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Found Date</Label>
+                            <Input
+                                type="date"
+                                value={foundDate}
+                                onChange={(e) => setFoundDate(e.target.value)}
+                                className="text-xs"
+                            />
+                        </div>
+
+                        {/* Symptom Short Text */}
+                        <div className="md:col-span-2 space-y-1.5">
+                            <Label className="text-xs font-semibold">
+                                Symptom Short Text / Primary Description <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                                value={symptomShortText}
+                                onChange={(e) => setSymptomShortText(e.target.value)}
+                                placeholder="Operator stopped the line - rough edge felt on flange after milling"
+                                className="text-xs"
+                                required
+                            />
+                        </div>
+
+                        {/* Quantity Extent */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Quantity / Extent on Hold</Label>
+                            <Input
+                                value={quantityExtent}
+                                onChange={(e) => setQuantityExtent(e.target.value)}
+                                placeholder="e.g. 61 units on hold"
+                                className="text-xs"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 2. Material & Production Context */}
+                <Card className="shadow-sm">
+                    <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
+                        <div className="flex items-center gap-2">
+                            <Box className="w-4 h-4 text-primary" />
+                            <CardTitle className="text-sm font-bold">2. Material & Production Context</CardTitle>
+                        </div>
+                        <CardDescription className="text-xs">
+                            Master data links connecting the defect to Material Master, Batch Management, and Work Center.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {/* Material ID */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Material ID</Label>
+                            <Input
+                                value={materialId}
+                                onChange={(e) => setMaterialId(e.target.value)}
+                                placeholder="MAT-10247"
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        {/* Material Description */}
+                        <div className="md:col-span-2 space-y-1.5">
+                            <Label className="text-xs font-semibold">Material Description</Label>
+                            <Input
+                                value={materialDesc}
+                                onChange={(e) => setMaterialDesc(e.target.value)}
+                                placeholder="Bracket Housing X240"
+                                className="text-xs"
+                            />
+                        </div>
+
+                        {/* Material Group */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Material Group</Label>
+                            <Input
+                                value={materialGroup}
+                                onChange={(e) => setMaterialGroup(e.target.value)}
+                                placeholder="MG-HOUSING"
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        {/* Batch ID */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Batch ID</Label>
+                            <Input
+                                value={batchId}
+                                onChange={(e) => setBatchId(e.target.value)}
+                                placeholder="B-55901"
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        {/* Work Center ID */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Work Center ID</Label>
+                            <Input
+                                value={workCenterId}
+                                onChange={(e) => setWorkCenterId(e.target.value)}
+                                placeholder="WC-MILL-07"
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        {/* Work Center Description */}
+                        <div className="md:col-span-2 space-y-1.5">
+                            <Label className="text-xs font-semibold">Work Center Description</Label>
+                            <Input
+                                value={workCenterDesc}
+                                onChange={(e) => setWorkCenterDesc(e.target.value)}
+                                placeholder="CNC Milling Line 7"
+                                className="text-xs"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 3. Defect Classification & Quality Inspection Results */}
+                <Card className="shadow-sm">
+                    <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
+                        <div className="flex items-center gap-2">
+                            <Factory className="w-4 h-4 text-primary" />
+                            <CardTitle className="text-sm font-bold">3. Defect Classification & Measurements</CardTitle>
+                        </div>
+                        <CardDescription className="text-xs">
+                            Defect catalog codes and quantitative measurement values against tolerance limits.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="p-5 space-y-4">
+                        {/* Defect Code & Text */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-border/40">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Defect Code</Label>
+                                <Input
+                                    value={defectCode}
+                                    onChange={(e) => setDefectCode(e.target.value)}
+                                    placeholder="DEF-0489"
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                            <div className="md:col-span-2 space-y-1.5">
+                                <Label className="text-xs font-semibold">Defect Catalog Description</Label>
+                                <Input
+                                    value={defectText}
+                                    onChange={(e) => setDefectText(e.target.value)}
+                                    placeholder="Flange edge burr above limit"
+                                    className="text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Inspection Measurements Table */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                    <FileText className="w-3.5 h-3.5 text-primary" />
+                                    Inspection Characteristics & Measured Values (D2 Evidence)
+                                </Label>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addInspection}
+                                    className="h-7 text-xs gap-1"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Add Characteristic
+                                </Button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {inspections.map((insp, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <Input
+                                            value={insp.characteristic}
+                                            onChange={(e) => updateInspection(idx, 'characteristic', e.target.value)}
+                                            placeholder="Characteristic (e.g. Burr height at flange edge)"
+                                            className="flex-[2] text-xs"
+                                        />
+                                        <Input
+                                            value={insp.measuredValue}
+                                            onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
+                                            placeholder="Measured (0.26mm)"
+                                            className="flex-1 font-mono text-xs"
+                                        />
+                                        <Input
+                                            value={insp.specValue}
+                                            onChange={(e) => updateInspection(idx, 'specValue', e.target.value)}
+                                            placeholder="Spec (max 0.10mm)"
+                                            className="flex-1 font-mono text-xs"
+                                        />
+                                        {inspections.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeInspection(idx)}
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 4. Customer Reference (Q1 Complaint fields) */}
+                {origin.startsWith('Q1') && (
+                    <Card className="shadow-sm border-destructive/30 bg-destructive/5">
+                        <CardHeader className="bg-destructive/10 pb-3 border-b border-destructive/20">
+                            <div className="flex items-center gap-2">
+                                <UserCheck className="w-4 h-4 text-destructive" />
+                                <CardTitle className="text-sm font-bold text-destructive">
+                                    4. Customer Complaint Reference (Q1 Fields)
+                                </CardTitle>
+                            </div>
+                            <CardDescription className="text-xs text-destructive/80">
+                                Additional customer-facing complaint metadata required for Q1 external defects.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Complaint Reference #</Label>
+                                <Input
+                                    value={complaintReference}
+                                    onChange={(e) => setComplaintReference(e.target.value)}
+                                    placeholder="CC-2026-1188"
+                                    className="font-mono text-xs bg-card"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Customer Contact / Plant</Label>
+                                <Input
+                                    value={customerPlantContact}
+                                    onChange={(e) => setCustomerPlantContact(e.target.value)}
+                                    placeholder="Vestbeck Motors - Plant 2"
+                                    className="text-xs bg-card"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">SLA Response Due Date</Label>
+                                <Input
+                                    type="date"
+                                    value={slaResponseDue.match(/^\d{4}-\d{2}-\d{2}$/) ? slaResponseDue : ''}
+                                    onChange={(e) => setSlaResponseDue(e.target.value)}
+                                    className="text-xs bg-card"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Form Action Controls */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => navigate('/8d')}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        disabled={busy || !symptomShortText.trim()}
+                        className="gap-2 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md"
+                    >
+                        {busy ? <Spinner className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+                        {busy ? 'Creating Defect & Scheduling Analysis…' : 'Create Defect & Start 8D Process'}
+                    </Button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+export default CreateDefectPage;

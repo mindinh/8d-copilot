@@ -14,8 +14,9 @@ import {
     WorkflowPage,
     EightDListPage,
     EightDDetailPage,
+    CreateDefectPage,
 } from '@/pages';
-
+ 
 // Sync React Router navigation with parent FLP shell URL
 function ShellSync() {
     useFLPSyncDirect();
@@ -54,6 +55,7 @@ export default function App() {
                             <Route path="/" element={<HomePage />} />
                             <Route path="/8d" element={<EightDListPage />} />
                             <Route path="/8d/:id" element={<EightDDetailPage />} />
+                            <Route path="/create-defect" element={<CreateDefectPage />} />
                             <Route path="/organization" element={<OrganizationPage />} />
                             <Route path="/workflow" element={<WorkflowPage />} />
                             <Route path="/object-schema" element={<ObjectSchemaPage />} />

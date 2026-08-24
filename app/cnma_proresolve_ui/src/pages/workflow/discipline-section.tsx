@@ -14,7 +14,7 @@ import { FormMappingEditor } from '../ai-settings/step-prompt-editor/FormMapping
 import { normalizeDataSchema, normalizeFormSchema, parseConfig, stringifyConfig } from '../ai-settings/step-prompt-editor/json';
 import { RawConfigEditor } from '../ai-settings/step-prompt-editor/RawConfigEditor';
 import { StepEditorTabNavigation, type StepEditorTab } from '../ai-settings/step-prompt-editor/StepEditorTabNavigation';
-import { StepSimilarityEditor } from '../ai-settings/step-prompt-editor/StepSimilarityEditor';
+import { StepObjectSchemaEditor } from '../object-schema/StepObjectSchemaEditor';
 import type { ConstraintsConfig, FormSchemaConfig } from '../ai-settings/step-prompt-editor/types';
 
 type ConfigField = 'inputSchemaJson' | 'combinedPrompt' | 'formSchemaJson' | 'constraintsJson';
@@ -187,7 +187,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
         inputSchemaJson: '', combinedPrompt: '', formSchemaJson: '', constraintsJson: '',
     });
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<StepEditorTab>('prompt');
+    const [activeTab, setActiveTab] = useState<StepEditorTab>('schema');
 
     const loadDraft = useCallback((p: StepPrompt) => setDraft({
         inputSchemaJson: p.inputSchemaJson ?? '',
@@ -383,15 +383,15 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                         </div>
                     )}
 
-                    {/* Tab 5: Precedent Search & Similarity
-                        Không nằm trong `draft`/Save của khối này: nó ghi thẳng
-                        vào profile chấm điểm, không phải vào bản ghi prompt.
-                        Nút "Save D… Configuration" ở trên chỉ nói về prompt. */}
-                    {activeTab === 'similarity' && (
-                        <StepSimilarityEditor
-                            stepCode={activePrompt.stepCode}
-                            stepLabel={activePrompt.label}
-                        />
+                    {/* Object Schema — has its own Save. The header's
+                        "Save D… Configuration" covers the prompt tabs only. */}
+                    {activeTab === 'schema' && (
+                        <div className="-m-4 flex min-h-160 flex-col">
+                            <StepObjectSchemaEditor
+                                stepCode={activePrompt.stepCode}
+                                stepLabel={activePrompt.label}
+                            />
+                        </div>
                     )}
 
                     {/* Tab 4: Guardrails & Constraints */}

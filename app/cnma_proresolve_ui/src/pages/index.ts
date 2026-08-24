@@ -7,3 +7,5 @@ export { StepPromptEditorPage } from './ai-settings/step-prompts-tab';
 export { WorkflowPage } from './workflow';
 export { EightDListPage } from './eight-d';
 export { EightDDetailPage } from './eight-d/detail';
+export { CreateDefectPage } from './create-defect';
+

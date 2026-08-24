@@ -50,9 +50,7 @@ export function CriteriaPipelineSection({ cfg, allowAdd = true }: {
                             Matching pipeline
                         </CardTitle>
                         <CardDescription className="mt-1">
-                            Every past case is scored against the open one, step by step. Unlike a
-                            waterfall, <em>all</em> steps run and their points add up — order only
-                            changes how the breakdown reads. Maximum reachable score is{' '}
+                            All enabled steps are scored and their points add up. Maximum reachable score is{' '}
                             <span className="font-mono font-medium">{maxScore}</span>.
                         </CardDescription>
                     </div>
@@ -116,11 +114,6 @@ export function CriteriaPipelineSection({ cfg, allowAdd = true }: {
                         />
                     ))
                 )}
-
-                <p className="text-xs text-muted-foreground">
-                    Turning a step off lowers the maximum score too, not just the score — so 5 out of
-                    8 still reads as a strong match.
-                </p>
             </CardContent>
         </Card>
     );

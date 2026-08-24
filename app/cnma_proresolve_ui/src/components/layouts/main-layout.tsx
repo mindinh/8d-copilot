@@ -7,6 +7,7 @@ import {
     Boxes,
     Workflow,
     ClipboardList,
+    PlusCircle,
     Menu,
     ChevronLeft,
     ChevronRight,
@@ -45,6 +46,7 @@ function useNavTree(): NavEntry[] {
     return [
         { type: 'leaf', to: '/', icon: LayoutDashboard, label: t('nav.home') },
         { type: 'leaf', to: '/8d', icon: ClipboardList, label: '8D Reports' },
+        { type: 'leaf', to: '/create-defect', icon: PlusCircle, label: 'Create Defect (SAP UI5)' },
         { type: 'leaf', to: '/organization', icon: Building2, label: 'Organization' },
         // Lưu ý: cờ `adminOnly` có trong interface NavLeaf nhưng CHƯA được dùng
         // để lọc ở đâu cả — đặt vào đây sẽ không ẩn mục nào. Khi nào phân quyền

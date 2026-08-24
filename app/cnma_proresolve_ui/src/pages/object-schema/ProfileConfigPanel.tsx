@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
-    Badge, Button, Input, Label, ScrollArea, Tooltip, TooltipContent, TooltipTrigger, cn,
+    Badge, Button, Input, Label, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger, cn,
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cnma/react-ui';
 import {
-    Boxes, Check, Code2, Copy, GripVertical, LayoutGrid, Sigma, SlidersHorizontal,
-    Sparkles, Trash2, Users, Zap,
+    Boxes, Check, Code2, Copy, GripVertical, Info, LayoutGrid, Sigma, Sparkles,
+    Target, Trash2, Users, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -15,7 +15,12 @@ import {
 import type { ProfileDraft } from '@/hooks/use-object-schema';
 
 /**
- * Panel 2 — Profile configuration, criteria management, and JSON View.
+ * Panel 2 — the whole profile: which fields it compares, how heavily each one
+ * counts, and the thresholds that decide what qualifies.
+ *
+ * Fields and weights live on one screen on purpose. Dropping a field changes the
+ * reachable score, and the threshold only means something against that score —
+ * split across two screens, neither could show the consequence of its own edit.
  */
 
 const STEP_METADATA: Record<string, { title: string; subtitle: string }> = {
@@ -29,18 +34,42 @@ const STEP_METADATA: Record<string, { title: string; subtitle: string }> = {
     D8: { title: 'Team Recognition', subtitle: 'Case closure & lessons learned' },
 };
 
-const METHOD_STYLE: Record<string, { label: string; className: string }> = {
-    exact: { label: 'Exact Match', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
-    keyword: { label: 'Keyword Match', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30' },
-    family: { label: 'Family Group', className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30' },
-    cosine: { label: 'Vector (Cosine)', className: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30' },
-};
+const METHODS = [
+    { value: 'exact', label: 'Exact Match', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30', hint: 'Values must be equal, ignoring case and surrounding spaces. For array fields, sharing any one value counts as a match.' },
+    { value: 'keyword', label: 'Keyword Match', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30', hint: 'Matches when the two texts share at least one keyword, after dropping filler and short words.' },
+    { value: 'family', label: 'Family Group', className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30', hint: 'Equality on a grouping field — used for "same material family".' },
+    { value: 'cosine', label: 'Vector (Cosine)', className: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30', hint: 'Semantic closeness between two case narratives. Score = weight × cosine similarity.' },
+] as const;
+
+const METHOD_BY_VALUE = new Map(METHODS.map((m) => [m.value, m]));
+
+/** Small labelled control with the explanation moved into a hover tooltip. */
+function Setting({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {label}
+                </Label>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 cursor-help text-muted-foreground/50 hover:text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-64 text-xs">{hint}</TooltipContent>
+                </Tooltip>
+            </div>
+            {children}
+        </div>
+    );
+}
 
 function FieldCard({
-    criterion: c, field, onRemove,
+    criterion: c, field, maxScore, onPatch, onRemove,
 }: {
     criterion: ProfileCriterion;
     field: SourceFieldInfo | undefined;
+    maxScore: number;
+    onPatch: (patch: Partial<ProfileCriterion>) => void;
     onRemove: () => void;
 }) {
     const drag = useDraggable({
@@ -48,14 +77,17 @@ function FieldCard({
         data: { criterionKey: c.criterionKey },
     });
     const methodKey = c.matchType || 'exact';
-    const methodInfo = METHOD_STYLE[methodKey] ?? { label: methodKey, className: 'bg-muted text-muted-foreground' };
+    const methodInfo = METHOD_BY_VALUE.get(methodKey as typeof METHODS[number]['value'])
+        ?? { label: methodKey, className: 'bg-muted text-muted-foreground', hint: '' };
     const labelText = field?.label || c.label || c.sourceField;
+    const share = maxScore > 0 && c.enabled ? Math.round(((c.weight ?? 0) / maxScore) * 100) : 0;
 
     return (
         <div
             ref={drag.setNodeRef}
             className={cn(
-                'group relative flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-xs transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm',
+                'group relative rounded-xl border bg-card p-3 shadow-xs transition-all',
+                c.enabled ? 'hover:border-primary/40 hover:shadow-sm' : 'bg-muted/40 opacity-70',
                 drag.isDragging && 'opacity-30 scale-98 ring-2 ring-primary/40',
             )}
         >
@@ -64,84 +96,127 @@ function FieldCard({
                     {...drag.attributes}
                     {...drag.listeners}
                     className="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground active:cursor-grabbing"
-                    title="Drag to reorder or remove"
+                    title="Drag out to remove"
                 >
                     <GripVertical className="h-4 w-4" />
                 </span>
 
-                {/* Non-editable clean title label */}
-                <div className="min-w-0 flex-1 px-1 py-0.5">
-                    <span className="text-xs font-bold text-foreground">
-                        {labelText}
-                    </span>
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-bold text-foreground">{labelText}</div>
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                        <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">{c.sourceField}</span>
+                        {field?.indexed && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Zap className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs">
+                                    Indexed column — filtered in SQL before scoring.
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
+                        {field?.multiValued && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Sigma className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs">
+                                    Multiple values per case.
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1.5">
-                    {/* Method Badge */}
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Badge className={cn('border px-2 py-0.5 font-medium text-[11px]', methodInfo.className)}>
-                                {methodInfo.label}
-                            </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent
-                            side="bottom"
-                            className="max-w-72 border border-red-200 bg-white p-3 text-xs text-slate-800 shadow-xl dark:border-red-200 dark:bg-white dark:text-slate-800"
-                        >
-                            Match method and weights are configured in each 8D step's <span className="font-bold text-red-600">Similarity Search</span> settings.
-                        </TooltipContent>
-                    </Tooltip>
+                <div className="flex shrink-0 items-center gap-2">
+                    <Select
+                        value={methodKey}
+                        onValueChange={(v) => onPatch({
+                            matchType: v,
+                            ...(v === 'cosine'
+                                ? {
+                                    minSimilarity: c.minSimilarity ?? 0.7,
+                                    sourceField: 'embedding',
+                                    fallbackMatch: null, fallbackField: null, fallbackWeight: null,
+                                }
+                                : {}),
+                        })}
+                    >
+                        <SelectTrigger className={cn('h-7 w-36 border text-[11px] font-medium', methodInfo.className)}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {METHODS.map((m) => (
+                                <SelectItem key={m.value} value={m.value} className="text-xs">
+                                    {m.label}
+                                    {field?.methods.includes(m.value) && (
+                                        <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
+                                            suggested
+                                        </Badge>
+                                    )}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
-                    {/* Weight indicator */}
-                    <Badge variant="outline" className="h-6 font-mono text-[11px] font-semibold text-foreground">
-                        +{c.weight ?? 0} pts
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                        <Input
+                            type="number" min={0} max={99}
+                            value={c.weight ?? 0}
+                            className="h-7 w-14 text-right text-xs font-semibold"
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                if (Number.isFinite(v) && v >= 0) onPatch({ weight: v });
+                            }}
+                        />
+                        <span className="w-8 text-right font-mono text-[11px] text-muted-foreground">
+                            {share}%
+                        </span>
+                    </div>
 
-                    {!c.enabled && (
-                        <Badge variant="secondary" className="h-6 text-[10px] uppercase text-muted-foreground">
-                            Disabled
-                        </Badge>
-                    )}
+                    <Switch checked={c.enabled} onCheckedChange={(enabled) => onPatch({ enabled })} />
 
-                    {/* Delete button */}
                     <button
                         type="button"
                         className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         onClick={onRemove}
-                        title="Remove criterion from profile"
+                        title="Remove from profile"
                     >
                         <Trash2 className="h-3.5 w-3.5" />
                     </button>
                 </div>
             </div>
 
-            {/* Path Sub-header */}
-            <div className="flex items-center justify-between pl-7 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                    <span className="text-muted-foreground/70">Field Path:</span>
-                    <span className="rounded bg-muted/70 px-1.5 py-0.5 text-foreground">{c.sourceField}</span>
-                    {field?.indexed && (
-                        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-sans text-[10px] font-medium" title="SQL Indexed">
-                            <Zap className="h-3 w-3" /> Indexed
-                        </span>
-                    )}
-                    {field?.multiValued && (
-                        <span className="inline-flex items-center gap-0.5 text-sky-600 dark:text-sky-400 font-sans text-[10px] font-medium" title="Multi-valued collection">
-                            <Sigma className="h-3 w-3" /> Array
-                        </span>
-                    )}
+            {methodKey === 'cosine' && (
+                <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
+                    <Label className="text-[11px] font-medium text-muted-foreground">
+                        Minimum cosine
+                    </Label>
+                    <Input
+                        type="number" min={0} max={1} step={0.01}
+                        value={c.minSimilarity ?? 0.7}
+                        className="h-7 w-20 text-right text-xs"
+                        onChange={(e) => {
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && v >= 0 && v <= 1) onPatch({ minSimilarity: v });
+                        }}
+                    />
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-72 text-xs">
+                            Unrelated English defect narratives already sit around 0.60. A floor below
+                            that scores every pair and lets baseline noise decide the ranking.
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
-
-                {field?.note && (
-                    <span className="max-w-xs truncate text-[11px] text-muted-foreground/80">
-                        {field.note}
-                    </span>
-                )}
-            </div>
+            )}
 
             {!field && (
-                <div className="mt-1 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-                    Field <span className="font-mono font-semibold">{c.sourceField}</span> is not found in database catalog — this criterion will produce no score match.
+                <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+                    Field <span className="font-mono font-semibold">{c.sourceField}</span> is not in the
+                    catalog — this criterion can never score.
                 </div>
             )}
         </div>
@@ -155,107 +230,96 @@ interface ProfileConfigPanelProps {
     ownerByStep: Record<string, string>;
     profileLabelOf: (profileKey: string) => string;
     isDragging: boolean;
+    maxScore: number;
+    /** Fixed to one 8D step — the step editor embeds it this way, so hide the picker. */
+    lockedStepCode?: string;
     onChange: (patch: Partial<ProfileDraft>) => void;
 }
 
 export function ProfileConfigPanel({
-    draft, profileKey, fieldByPath, ownerByStep, profileLabelOf, isDragging, onChange,
+    draft, profileKey, fieldByPath, ownerByStep, profileLabelOf, isDragging, maxScore,
+    lockedStepCode, onChange,
 }: ProfileConfigPanelProps) {
     const [activeTab, setActiveTab] = useState<'visual' | 'json'>('visual');
     const [copied, setCopied] = useState(false);
     const drop = useDroppable({ id: 'profile-fields' });
 
-    const jsonSchemaObject = {
+    const jsonString = JSON.stringify({
         profileKey,
         label: draft.label,
         description: draft.description,
-        assignedSteps: draft.steps,
-        criteriaCount: draft.fields.length,
+        assignedStep: draft.steps[0] ?? null,
+        retrieval: { minScore: draft.minScore, topN: draft.topN, closedOnly: draft.closedOnly },
+        maxScore,
         criteria: draft.fields.map((c) => ({
             criterionKey: c.criterionKey,
-            label: c.label,
             sourceField: c.sourceField,
-            sourceTable: c.sourceTable,
             matchType: c.matchType || 'exact',
             weight: c.weight ?? 1,
-            enabled: Boolean(c.enabled),
             minSimilarity: c.minSimilarity ?? null,
+            enabled: Boolean(c.enabled),
         })),
-    };
+    }, null, 2);
 
-    const jsonString = JSON.stringify(jsonSchemaObject, null, 2);
+    const patchField = (criterionKey: string, patch: Partial<ProfileCriterion>) => onChange({
+        fields: draft.fields.map((f) => (f.criterionKey === criterionKey ? { ...f, ...patch } : f)),
+    });
 
-    const handleCopyJson = () => {
-        void navigator.clipboard.writeText(jsonString);
-        setCopied(true);
-        toast.success('JSON schema copied to clipboard');
-        setTimeout(() => setCopied(false), 2000);
-    };
+    const enabledCount = draft.fields.filter((f) => f.enabled).length;
 
     return (
         <main className="flex min-w-0 flex-1 flex-col bg-muted/20">
-            {/* Header with Visual / JSON Tab Switcher */}
             <div className="border-b bg-card p-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <div className="flex items-center gap-2 font-semibold text-foreground">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                <Boxes className="h-4 w-4" />
-                            </div>
-                            <span className="text-sm">Profile Configuration & 8D Binding</span>
+                    <div className="flex items-center gap-2 font-semibold text-foreground">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Boxes className="h-4 w-4" />
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Define similarity criteria for this profile and bind it to specific 8D methodology steps.
-                        </p>
+                        <span className="text-sm">
+                            {lockedStepCode
+                                ? `${lockedStepCode} · ${STEP_METADATA[lockedStepCode]?.title ?? ''} — Similarity Schema`
+                                : 'Profile Configuration'}
+                        </span>
                     </div>
 
-                    {/* Tab Switcher */}
                     <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-1 text-xs font-medium">
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('visual')}
-                            className={cn(
-                                'flex items-center gap-1.5 rounded-md px-3 py-1 transition-all',
-                                activeTab === 'visual'
-                                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-background/40',
-                            )}
-                        >
-                            <LayoutGrid className="h-3.5 w-3.5" />
-                            Visual Editor
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('json')}
-                            className={cn(
-                                'flex items-center gap-1.5 rounded-md px-3 py-1 transition-all',
-                                activeTab === 'json'
-                                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-background/40',
-                            )}
-                        >
-                            <Code2 className="h-3.5 w-3.5" />
-                            JSON Schema
-                        </button>
+                        {([['visual', LayoutGrid, 'Visual Editor'], ['json', Code2, 'JSON Schema']] as const)
+                            .map(([id, Icon, text]) => (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => setActiveTab(id)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-md px-3 py-1 transition-all',
+                                        activeTab === id
+                                            ? 'bg-background text-foreground shadow-xs font-semibold'
+                                            : 'text-muted-foreground hover:bg-background/40 hover:text-foreground',
+                                    )}
+                                >
+                                    <Icon className="h-3.5 w-3.5" />
+                                    {text}
+                                </button>
+                            ))}
                     </div>
                 </div>
             </div>
 
-            {/* TAB CONTENT: JSON VIEW */}
             {activeTab === 'json' ? (
                 <div className="flex flex-1 flex-col overflow-hidden p-4">
                     <div className="flex items-center justify-between rounded-t-xl border border-b-0 bg-card px-4 py-2.5">
                         <div className="flex items-center gap-2">
                             <Code2 className="h-4 w-4 text-primary" />
-                            <span className="text-xs font-semibold text-foreground">
-                                Profile JSON Schema ({profileKey}.json)
-                            </span>
+                            <span className="text-xs font-semibold text-foreground">{profileKey}.json</span>
                         </div>
                         <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCopyJson}
+                            size="sm" variant="outline"
                             className="h-7 gap-1.5 text-xs font-medium"
+                            onClick={() => {
+                                void navigator.clipboard.writeText(jsonString);
+                                setCopied(true);
+                                toast.success('JSON schema copied to clipboard');
+                                setTimeout(() => setCopied(false), 2000);
+                            }}
                         >
                             {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                             {copied ? 'Copied' : 'Copy JSON'}
@@ -266,10 +330,9 @@ export function ProfileConfigPanel({
                     </ScrollArea>
                 </div>
             ) : (
-                /* TAB CONTENT: VISUAL EDITOR */
                 <ScrollArea className="flex-1">
-                    <div className="space-y-5 p-4">
-                        {/* Metadata Section */}
+                    <div className="space-y-4 p-4">
+                        {/* ── Identity ── */}
                         <div className="grid gap-3 rounded-xl border bg-card p-3.5 shadow-xs sm:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -289,39 +352,91 @@ export function ProfileConfigPanel({
                                 <Input
                                     value={draft.description}
                                     className="h-8.5 text-sm"
-                                    placeholder="Describe the purpose or domain of this profile..."
+                                    placeholder="What kind of similarity does this profile capture?"
                                     onChange={(e) => onChange({ description: e.target.value })}
                                 />
                             </div>
                         </div>
 
-                        {/* ── 8D Steps Binding Section (Single Select Dropdown) ── */}
-                        <div className="space-y-3 rounded-xl border bg-card p-4 shadow-xs">
-                            <div className="flex items-center justify-between border-b pb-2.5">
-                                <div className="flex items-center gap-2">
+                        {/* ── Retrieval settings + reachable score ── */}
+                        <div className="rounded-xl border bg-card p-3.5 shadow-xs">
+                            <div className="mb-3 flex items-center gap-2 border-b pb-2.5">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                    <Target className="h-3.5 w-3.5" />
+                                </div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                    Retrieval Settings
+                                </h3>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-4">
+                                <Setting
+                                    label="Min Score"
+                                    hint="Below this score nothing is surfaced at all — the step is told there is no precedent rather than handed a weak one."
+                                >
+                                    <Input
+                                        type="number" min={0} step={0.5}
+                                        value={draft.minScore}
+                                        className="h-8.5 text-right text-sm font-semibold"
+                                        onChange={(e) => {
+                                            const v = Number(e.target.value);
+                                            if (Number.isFinite(v) && v >= 0) onChange({ minScore: v });
+                                        }}
+                                    />
+                                </Setting>
+
+                                <Setting label="Top N" hint="How many precedents this step receives, best match first.">
+                                    <Input
+                                        type="number" min={1} max={20}
+                                        value={draft.topN}
+                                        className="h-8.5 text-right text-sm font-semibold"
+                                        onChange={(e) => {
+                                            const v = Number(e.target.value);
+                                            if (Number.isFinite(v) && v >= 1) onChange({ topN: v });
+                                        }}
+                                    />
+                                </Setting>
+
+                                <Setting label="Closed Only" hint="Only completed or closed cases qualify as precedents.">
+                                    <div className="flex h-8.5 items-center">
+                                        <Switch
+                                            checked={draft.closedOnly}
+                                            onCheckedChange={(v) => onChange({ closedOnly: v })}
+                                        />
+                                    </div>
+                                </Setting>
+
+                                <Setting
+                                    label="Reachable Score"
+                                    hint="The weights of every enabled field. Disabling a field lowers this ceiling too, so 5 out of 8 still reads as a strong match."
+                                >
+                                    <div className="flex h-8.5 items-baseline gap-1.5">
+                                        <span className="font-mono text-xl font-bold text-foreground">{maxScore}</span>
+                                        <span className="text-[11px] text-muted-foreground">
+                                            {enabledCount}/{draft.fields.length} on
+                                        </span>
+                                    </div>
+                                </Setting>
+                            </div>
+                        </div>
+
+                        {/* ── 8D binding (standalone page only) ── */}
+                        {!lockedStepCode && (
+                            <div className="rounded-xl border bg-card p-3.5 shadow-xs">
+                                <div className="mb-3 flex items-center gap-2 border-b pb-2.5">
                                     <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
                                         <Users className="h-3.5 w-3.5" />
                                     </div>
-                                    <div>
-                                        <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                                            Assigned 8D Step
-                                        </h3>
-                                        <p className="text-[11px] text-muted-foreground">
-                                            Select the single 8D methodology step to bind with this retrieval profile.
-                                        </p>
-                                    </div>
+                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                        Assigned 8D Step
+                                    </h3>
                                 </div>
-                            </div>
 
-                            <div className="max-w-md space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
-                                    Bound 8D Step
-                                </Label>
                                 <Select
                                     value={draft.steps[0] ?? 'none'}
                                     onValueChange={(val) => onChange({ steps: val === 'none' ? [] : [val] })}
                                 >
-                                    <SelectTrigger className="h-9 text-xs font-medium">
+                                    <SelectTrigger className="h-9 max-w-md text-xs font-medium">
                                         <SelectValue placeholder="Select an 8D step..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -332,11 +447,10 @@ export function ProfileConfigPanel({
                                             const meta = STEP_METADATA[code] ?? { title: code, subtitle: '' };
                                             const owner = ownerByStep[code];
                                             const isOwnedByOther = owner && owner !== profileKey;
-
                                             return (
                                                 <SelectItem key={code} value={code} className="text-xs">
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0 font-bold">
+                                                        <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-bold">
                                                             {code}
                                                         </Badge>
                                                         <span className="font-medium text-foreground">{meta.title}</span>
@@ -351,30 +465,17 @@ export function ProfileConfigPanel({
                                         })}
                                     </SelectContent>
                                 </Select>
-
-                                {draft.steps[0] && (
-                                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                        Bound to <span className="font-semibold text-primary">{draft.steps[0]} - {STEP_METADATA[draft.steps[0]]?.title}</span>.
-                                        {ownerByStep[draft.steps[0]] && ownerByStep[draft.steps[0]] !== profileKey && (
-                                            <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium">
-                                                Saving will reassign {draft.steps[0]} from "{profileLabelOf(ownerByStep[draft.steps[0]])}".
-                                            </span>
-                                        )}
-                                    </p>
-                                )}
                             </div>
-                        </div>
+                        )}
 
-                        {/* ── Criteria List Dropzone ── */}
+                        {/* ── Criteria dropzone ── */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Profile Criteria ({draft.fields.length})
-                                    </span>
-                                </div>
+                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Matching Criteria ({draft.fields.length})
+                                </span>
                                 <span className="text-[11px] text-muted-foreground">
-                                    Drag fields from left catalog to add • Drag out to remove
+                                    Drag in from the catalog · drag out to remove
                                 </span>
                             </div>
 
@@ -394,6 +495,8 @@ export function ProfileConfigPanel({
                                         key={c.criterionKey}
                                         criterion={c}
                                         field={fieldByPath.get(c.sourceField ?? '')}
+                                        maxScore={maxScore}
+                                        onPatch={(patch) => patchField(c.criterionKey, patch)}
                                         onRemove={() => onChange({
                                             fields: draft.fields.filter((f) => f.criterionKey !== c.criterionKey),
                                         })}
@@ -401,27 +504,19 @@ export function ProfileConfigPanel({
                                 ))}
 
                                 {!draft.fields.length && (
-                                    <div className="flex min-h-60 flex-col items-center justify-center text-center text-muted-foreground">
+                                    <div className="flex min-h-60 flex-col items-center justify-center text-center">
                                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                                             <Sparkles className="h-6 w-6" />
                                         </div>
-                                        <p className="mt-3 text-sm font-semibold text-foreground">No criteria in profile</p>
+                                        <p className="mt-3 text-sm font-semibold text-foreground">
+                                            No matching criteria yet
+                                        </p>
                                         <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                                            Drag fields from the left <span className="font-medium text-foreground">Source Field Catalog</span> into this area to configure similarity matching criteria.
+                                            Drag fields from the catalog on the left to decide what makes two
+                                            cases similar.
                                         </p>
                                     </div>
                                 )}
-                            </div>
-                        </div>
-
-                        {/* Pro Tip Note */}
-                        <div className="flex items-start gap-2.5 rounded-xl border bg-card p-3 text-xs text-muted-foreground shadow-xs">
-                            <SlidersHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                            <div className="space-y-0.5">
-                                <p className="font-medium text-foreground">Tip for fine-tuning step scoring:</p>
-                                <p className="text-[11px] leading-relaxed">
-                                    Newly added fields start <span className="font-semibold text-foreground">disabled</span> with a default weight of +1. Open the <span className="font-semibold text-primary">Similarity Search</span> editor in the AI Settings page for each 8D step to fine-tune weights, thresholds, and match rules for specific disciplines.
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -430,5 +525,3 @@ export function ProfileConfigPanel({
         </main>
     );
 }
-
-

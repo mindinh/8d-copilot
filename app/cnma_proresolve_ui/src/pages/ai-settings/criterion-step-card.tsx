@@ -211,9 +211,6 @@ export function CriterionStepCard({
                                 </SelectContent>
                             </Select>
                         )}
-                        <p className="text-xs text-muted-foreground/70">
-                            {MATCH_METHODS.find((m) => m.value === method)?.hint}
-                        </p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -243,11 +240,6 @@ export function CriterionStepCard({
                                 </SelectContent>
                             </Select>
                         )}
-                        <p className="text-xs text-muted-foreground/70">
-                            {fieldsLocked
-                                ? 'Field của profile được định nghĩa ở trang Object Schema.'
-                                : 'Select target SAP QM entity or historical case reference table.'}
-                        </p>
                     </div>
                 </div>
 
@@ -272,14 +264,6 @@ export function CriterionStepCard({
                                     }}
                                 />
                             </div>
-                            <p className="self-end text-xs text-muted-foreground">
-                                Two unrelated manufacturing write-ups already sit around 0.60 — they are
-                                all English defect narratives. A floor below that scores every pair and
-                                lets the baseline decide the ranking. Measure before changing it:
-                                <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
-                                    npx tsx scripts/measure-similarity.mjs
-                                </code>
-                            </p>
                         </div>
                     </div>
                 )}
@@ -346,18 +330,7 @@ export function CriterionStepCard({
                                     />
                                 </div>
                             </div>
-                        ) : (
-                            <p className="text-xs text-muted-foreground/70">
-                                Off — this step scores its full weight or nothing.
-                            </p>
-                        )}
-
-                        {hasFallback && (
-                            <p className="text-xs text-muted-foreground/70">
-                                The fallback is only tried when the main match fails. The two never add
-                                up — that would break the maximum score.
-                            </p>
-                        )}
+                        ) : null}
                     </div>
                 )}
 

@@ -40,7 +40,6 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                         />
                         <span className="text-xs text-muted-foreground font-mono">/ {maxLimit} max</span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Cases scoring below this threshold are ignored.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -63,7 +62,6 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                         />
                         <span className="text-xs text-muted-foreground">cases</span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Max top-scoring cases sent to AI context.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -79,7 +77,6 @@ export function ThresholdSection({ cfg }: { cfg: RetrievalConfigState }) {
                             Closed Cases Only
                         </Label>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Only use cases with confirmed resolution.</p>
                 </div>
 
                 <div className="ml-auto pt-5">
