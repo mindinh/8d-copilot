@@ -149,9 +149,7 @@ async function syncModels(): Promise<string> {
   }
 
   const discovery = await getDiscovery();
-  const existingModels: Record<string, any>[] = await db.run(
-    SELECT.from(ENTITIES.AI_MODELS).columns('modelId'),
-  );
+  const existingModels = (await SELECT.from(ENTITIES.AI_MODELS).columns('modelId')) as Record<string, any>[];
   const existingSet = new Set(existingModels.map((m) => m.modelId));
 
   const updates: { modelId: string; patch: Record<string, unknown> }[] = [];
@@ -175,11 +173,11 @@ async function syncModels(): Promise<string> {
   }
 
   for (const { modelId, patch } of updates) {
-    await db.run(UPDATE(ENTITIES.AI_MODELS).set(patch).where({ modelId }));
+    await UPDATE(ENTITIES.AI_MODELS).set(patch).where({ modelId });
   }
 
   if (newEntries.length > 0) {
-    await db.run(INSERT.into(ENTITIES.AI_MODELS).entries(newEntries));
+    await INSERT.into(ENTITIES.AI_MODELS).entries(newEntries);
   }
 
   const added = newEntries.length;
@@ -194,10 +192,7 @@ async function syncModels(): Promise<string> {
 
 /** Model đang bật mà một activity được phép dùng, đã sắp xếp cho ô chọn. */
 async function getAvailableModels(activity?: string): Promise<string> {
-  const db = await cds.connect.to('db');
-  const models: Record<string, any>[] = await db.run(
-    SELECT.from(ENTITIES.AI_MODELS).where({ active: true }).orderBy('sortOrder', 'modelId'),
-  );
+  const models = (await SELECT.from(ENTITIES.AI_MODELS).where({ active: true }).orderBy('sortOrder', 'modelId')) as Record<string, any>[];
   return JSON.stringify(models.filter((m) => isSuitableFor(m, activity)).map(toAvailableModel));
 }
 
@@ -212,7 +207,6 @@ async function previewScore(caseA?: string, caseB?: string, profileKey?: string)
     return JSON.stringify({ error: 'caseA và caseB là bắt buộc (mã notification).' });
   }
 
-  const db = await cds.connect.to('db');
   const cols = [
     'notificationId', 'symptomShortText', 'workCenterId', 'defectCode',
     'defectText', 'defectKeywords', 'materialId', 'materialFamily',
@@ -224,10 +218,8 @@ async function previewScore(caseA?: string, caseB?: string, profileKey?: string)
     'attributesJson',
   ];
 
-  const [a, b] = await Promise.all([
-    db.run(SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseA.trim() })),
-    db.run(SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseB.trim() })),
-  ]);
+  const a = (await SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseA.trim() })) as any;
+  const b = (await SELECT.one.from(HISTORICAL_CASES).columns(...cols).where({ notificationId: caseB.trim() })) as any;
 
   const missing = [!a && caseA, !b && caseB].filter(Boolean);
   if (missing.length) {
@@ -266,12 +258,9 @@ async function previewScore(caseA?: string, caseB?: string, profileKey?: string)
  * Kho ở quy mô này (hàng chục tới hàng trăm case) thì quét hết là rẻ.
  */
 async function getSourceFieldCatalog(): Promise<string> {
-  const db = await cds.connect.to('db');
   try {
-    const rows = await db.run(
-      SELECT.from(HISTORICAL_CASES).columns('sourcePayload').orderBy('notificationId'),
-    );
-    const payloads = (rows as Record<string, any>[]).flatMap((r) => {
+    const rows = (await SELECT.from(HISTORICAL_CASES).columns('sourcePayload').orderBy('notificationId')) as Record<string, any>[];
+    const payloads = rows.flatMap((r) => {
       try {
         return r.sourcePayload ? [JSON.parse(r.sourcePayload)] : [];
       } catch {
@@ -288,9 +277,8 @@ async function getSourceFieldCatalog(): Promise<string> {
 
 /** Ghi lại mặc định cho cấu hình tìm tiền lệ. */
 async function resetRetrievalConfig(scope = 'all'): Promise<string> {
-  const db = await cds.connect.to('db');
   const wanted = scope.trim().toLowerCase();
-  const wipe = async (entity: string) => db.run(DELETE.from(entity));
+  const wipe = async (entity: string) => DELETE.from(entity);
 
   if (wanted === 'all' || wanted === 'criteria') await wipe(CRITERIA);
   if (wanted === 'all' || wanted === 'settings') await wipe(SETTINGS);
@@ -306,7 +294,7 @@ async function resetRetrievalConfig(scope = 'all'): Promise<string> {
   if (wanted.startsWith('prompt:')) {
     const stepCode = wanted.slice('prompt:'.length).toUpperCase();
     if (!/^D[1-8]$/.test(stepCode)) throw new Error(`Invalid step prompt scope: ${scope}`);
-    await db.run(DELETE.from(STEP_PROMPTS).where({ stepCode }));
+    await DELETE.from(STEP_PROMPTS).where({ stepCode });
   }
 
   // Hai hàm seed chỉ ghi phần còn thiếu — xoá trước rồi seed lại chính là "khôi

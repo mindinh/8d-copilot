@@ -123,19 +123,21 @@ function fallbackConfig(): ProfileConfig {
  * không để người gọi tự xử: một bước không có profile nghĩa là bước đó im lặng
  * mất hết tiền lệ, và triệu chứng đó không chỉ về nguyên nhân này.
  */
+async function getDb() {
+    return (cds.db || (await cds.connect.to('db')));
+}
+
 export async function getProfileConfig(): Promise<ProfileConfig> {
     if (cached && Date.now() - cachedAt < CACHE_TTL_MS) return cached;
 
     try {
-        const db = await cds.connect.to('db');
-        const [profileRows, criteriaRows, bindingRows] = await Promise.all([
-            db.run(SELECT.from(PROFILES).orderBy('sortOrder', 'profileKey')),
-            db.run(SELECT.from(PROFILE_CRITERIA).orderBy('sortOrder')),
-            db.run(SELECT.from(STEP_BINDINGS)),
-        ]);
+        const db = await getDb();
+        const profileRows = (await db.run(SELECT.from(PROFILES).orderBy('sortOrder', 'profileKey'))) as Record<string, any>[];
+        const criteriaRows = (await db.run(SELECT.from(PROFILE_CRITERIA).orderBy('sortOrder'))) as Record<string, any>[];
+        const bindingRows = (await db.run(SELECT.from(STEP_BINDINGS))) as Record<string, any>[];
 
         const byProfile = new Map<string, Criterion[]>();
-        for (const row of criteriaRows as Record<string, any>[]) {
+        for (const row of criteriaRows) {
             const key = String(row.profile_profileKey ?? row.profile?.profileKey ?? '');
             if (!key) continue;
             const list = byProfile.get(key) ?? [];
@@ -143,7 +145,7 @@ export async function getProfileConfig(): Promise<ProfileConfig> {
             byProfile.set(key, list);
         }
 
-        const profiles: RetrievalProfile[] = (profileRows as Record<string, any>[]).map((r) => ({
+        const profiles: RetrievalProfile[] = profileRows.map((r) => ({
             profileKey: String(r.profileKey),
             label: r.label ?? r.profileKey,
             description: r.description ?? null,
@@ -167,7 +169,7 @@ export async function getProfileConfig(): Promise<ProfileConfig> {
             : profiles[0].profileKey;
 
         const declared = new Map(
-            (bindingRows as Record<string, any>[]).map((r) => [
+            bindingRows.map((r) => [
                 String(r.stepCode),
                 String(r.profile_profileKey ?? r.profile?.profileKey ?? ''),
             ]),
@@ -219,13 +221,11 @@ async function readLegacyGlobalConfig(): Promise<{
     topN: number;
     closedOnly: boolean;
 }> {
-    const db = await cds.connect.to('db');
     try {
-        const [rows, settings] = await Promise.all([
-            db.run(SELECT.from(CRITERIA).orderBy('sortOrder')),
-            db.run(SELECT.one.from(SETTINGS).where({ ID: 'GLOBAL' })),
-        ]);
-        const criteria = (rows as Record<string, any>[]).map(toCriterion);
+        const db = await getDb();
+        const rows = (await db.run(SELECT.from(CRITERIA).orderBy('sortOrder'))) as Record<string, any>[];
+        const settings = (await db.run(SELECT.one.from(SETTINGS).where({ ID: 'GLOBAL' }))) as Record<string, any> | null;
+        const criteria = rows.map(toCriterion);
         return {
             criteria: criteria.length ? criteria : DEFAULT_CRITERIA.map((c) => ({ ...c })),
             minScore: Number(settings?.minScore ?? DEFAULT_RETRIEVAL_SETTINGS.minScore),
@@ -280,9 +280,8 @@ function criterionRow(profileKey: string, c: Criterion, index: number): Record<s
  */
 export async function seedRetrievalProfiles(): Promise<void> {
     try {
-        const db = await cds.connect.to('db');
-
-        const existing = await db.run(SELECT.from(PROFILES).columns('profileKey'));
+        const db = await getDb();
+        const existing = (await db.run(SELECT.from(PROFILES).columns('profileKey'))) as any[];
         const haveDefault = existing.some(
             (r: any) => String(r.profileKey) === DEFAULT_PROFILE_KEY,
         );
@@ -318,7 +317,7 @@ export async function seedRetrievalProfiles(): Promise<void> {
 
         // Bù theo TỪNG BƯỚC, không phải "chỉ khi bảng rỗng" — thêm một bước mới
         // vào `STEP_CODES` rồi deploy phải tới được môi trường đã chạy.
-        const boundRows = await db.run(SELECT.from(STEP_BINDINGS).columns('stepCode'));
+        const boundRows = (await db.run(SELECT.from(STEP_BINDINGS).columns('stepCode'))) as any[];
         const bound = new Set(boundRows.map((r: any) => String(r.stepCode)));
         const missing = STEP_CODES.filter((code) => !bound.has(code));
         if (missing.length) {
@@ -352,7 +351,7 @@ export async function cloneProfile(
     sourceKey: string,
     target: { profileKey: string; label: string; description?: string | null },
 ): Promise<void> {
-    const db = await cds.connect.to('db');
+    const db = await getDb();
     const key = target.profileKey.trim();
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(key)) {
         throw Object.assign(
@@ -365,8 +364,8 @@ export async function cloneProfile(
     if (clash) throw Object.assign(new Error(`Profile "${key}" đã tồn tại.`), { code: 409 });
 
     const source = await getProfile(sourceKey);
-    const maxOrder = (await db.run(SELECT.from(PROFILES).columns('sortOrder')))
-        .reduce((max: number, r: any) => Math.max(max, Number(r.sortOrder) || 0), 0);
+    const allProfiles = (await db.run(SELECT.from(PROFILES).columns('sortOrder'))) as any[];
+    const maxOrder = allProfiles.reduce((max: number, r: any) => Math.max(max, Number(r.sortOrder) || 0), 0);
 
     await db.run(
         INSERT.into(PROFILES).entries({
@@ -438,7 +437,7 @@ const MATCH_TYPES = new Set(['exact', 'keyword', 'family', 'cosine']);
  * server làm cho khớp.
  */
 export async function saveProfile(profileKey: string, input: SaveProfileInput): Promise<void> {
-    const db = await cds.connect.to('db');
+    const db = await getDb();
     const key = String(profileKey ?? '').trim();
 
     const row = await db.run(SELECT.one.from(PROFILES).where({ profileKey: key }));
@@ -460,11 +459,11 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
      */
     const criteria = input.criteriaFields
         ? await (async () => {
-            const existing = await db.run(
+            const existing = (await db.run(
                 SELECT.from(PROFILE_CRITERIA).where({ profile_profileKey: key }),
-            );
+            )) as Record<string, any>[];
             const tuningByKey = new Map(
-                (existing as Record<string, any>[]).map((r) => [String(r.criterionKey), r]),
+                existing.map((r) => [String(r.criterionKey), r]),
             );
             return input.criteriaFields!.map((f) => {
                 const previous = tuningByKey.get(String(f.criterionKey));
@@ -488,9 +487,6 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
         : input.criteria;
 
     // ── Kiểm tra TRƯỚC khi ghi bất cứ thứ gì ─────────────────────────────────
-    // Một `matchType` sai chính tả không gây lỗi ở đâu cả: tiêu chí chỉ đơn giản
-    // không bao giờ ăn điểm, mà vẫn được cộng vào trần điểm. Bắt ở đây là chỗ
-    // duy nhất còn nói được câu gì có ích.
     if (criteria) {
         const seen = new Set<string>();
         for (const c of criteria) {
@@ -568,8 +564,6 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
                         fallbackWeight: c.fallbackWeight == null ? null : Number(c.fallbackWeight),
                         minSimilarity: c.minSimilarity == null ? null : Number(c.minSimilarity),
                         enabled: c.enabled !== false,
-                        // Thứ tự do vị trí trong mảng quyết định — client kéo thả
-                        // xong gửi mảng đã sắp, không phải tự tính sortOrder.
                         sortOrder: (index + 1) * 10,
                     })),
                 ),
@@ -578,11 +572,10 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
     }
 
     if (steps) {
-        // Bước bị BỎ khỏi profile này phải về `default`, nếu không nó giữ một
-        // ràng buộc mà màn hình vừa nói là đã gỡ.
-        const released = (await db.run(
+        const boundRows = (await db.run(
             SELECT.from(STEP_BINDINGS).columns('stepCode').where({ profile_profileKey: key }),
-        ))
+        )) as any[];
+        const released = boundRows
             .map((r: any) => String(r.stepCode))
             .filter((code: string) => !steps.includes(code));
 
@@ -594,9 +587,6 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
             );
         }
         if (steps.length) {
-            // `stepCode` là khoá chính, nên gán bước cho profile này tự động gỡ
-            // nó khỏi profile cũ — "mỗi bước đúng một profile" là bất biến của
-            // schema, không phải một luật phải nhớ kiểm.
             await db.run(
                 UPDATE(STEP_BINDINGS)
                     .set({ profile_profileKey: key })
@@ -615,14 +605,9 @@ export async function saveProfile(profileKey: string, input: SaveProfileInput): 
 
 /**
  * Xoá một profile và mọi tiêu chí của nó; bước nào đang trỏ vào thì kéo về mặc định.
- *
- * Kéo ràng buộc về TRƯỚC khi xoá, trong cùng một lượt: để lại ràng buộc mồ côi
- * nghĩa là bước đó phải chờ `getProfileConfig()` chữa lúc đọc — chữa được, nhưng
- * lúc đó DB đang giữ một trạng thái không hợp lệ và mọi thứ đọc thẳng bảng sẽ
- * thấy nó.
  */
 export async function deleteProfile(profileKey: string): Promise<{ rebound: string[] }> {
-    const db = await cds.connect.to('db');
+    const db = await getDb();
     const key = String(profileKey ?? '').trim();
 
     if (key === DEFAULT_PROFILE_KEY) {
@@ -638,9 +623,9 @@ export async function deleteProfile(profileKey: string): Promise<{ rebound: stri
         throw Object.assign(new Error(`Profile "${key}" là profile hệ thống.`), { code: 400 });
     }
 
-    const affected = await db.run(
+    const affected = (await db.run(
         SELECT.from(STEP_BINDINGS).columns('stepCode').where({ profile_profileKey: key }),
-    );
+    )) as any[];
     const rebound = affected.map((r: any) => String(r.stepCode));
     if (rebound.length) {
         await db.run(

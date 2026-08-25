@@ -112,12 +112,17 @@ export function useObjectSchema(stepCode?: string): ObjectSchemaState {
     const [activeProfileKey, setActiveProfileKey] = useState('default');
     const [draft, setDraftState] = useState<ProfileDraft | null>(null);
 
-    const reload = useCallback(async (selectKey?: string) => {
+    const reload = useCallback(async (selectKey?: string, skipCatalog = false) => {
+        const fetchCatalog = skipCatalog
+            ? Promise.resolve(null)
+            : getSourceFieldCatalog();
         const [cat, p, c, b] = await Promise.all([
-            getSourceFieldCatalog(), getProfiles(), getProfileCriteria(), getStepBindings(),
+            fetchCatalog, getProfiles(), getProfileCriteria(), getStepBindings(),
         ]);
-        setCatalog(cat.fields ?? []);
-        setCatalogCaseCount(cat.caseCount ?? 0);
+        if (cat) {
+            setCatalog(cat.fields ?? []);
+            setCatalogCaseCount(cat.caseCount ?? 0);
+        }
         setProfiles(p);
         setCriteria(c);
         setBindings(b);
@@ -233,7 +238,7 @@ export function useObjectSchema(stepCode?: string): ObjectSchemaState {
                 criteria: draft.fields,
                 steps: draft.steps,
             });
-            await reload(activeProfileKey);
+            await reload(activeProfileKey, true);
             toast.success(`Saved profile "${draft.label}".`);
         } catch (e: any) {
             toast.error(`Save failed: ${e?.response?.data?.error?.message ?? e.message}`);

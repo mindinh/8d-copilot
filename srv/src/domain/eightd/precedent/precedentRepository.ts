@@ -74,12 +74,31 @@ const CANDIDATE_COLUMNS = [
  *
  * Con số này ≥ ngưỡng ⇒ bộ lọc SQL không còn an toàn, phải quét toàn bộ.
  */
+const SQL_FILTERABLE_COLUMNS = new Set([
+    'workCenterId',
+    'defectCode',
+    'materialId',
+    'materialFamily',
+]);
+
+/**
+ * Điểm tối đa một case có thể đạt mà KHÔNG trùng khoá nào — tức là phần bộ lọc
+ * SQL không nhìn thấy được.
+ *
+ * Ba nguồn:
+ *   trùng từ khoá  HANA có `CONTAINS`, SQLite không.
+ *   ngữ nghĩa      cosine không lọc được bằng `WHERE` ở bất kỳ DB nào.
+ *   đường dẫn SAP  nằm trong `attributesJson`, không có cột riêng trong bảng.
+ *
+ * Con số này ≥ ngưỡng ⇒ bộ lọc SQL không còn an toàn, phải quét toàn bộ.
+ */
 function nonFilterableReach(criteria: readonly Criterion[]): number {
     return criteria
         .filter((c) => c.enabled)
         .reduce((sum, c) => {
             if ((c.matchType || 'exact') === 'cosine') return sum + (Number(c.weight) || 0);
             if (c.fallbackMatch === 'keyword') return sum + (Number(c.fallbackWeight) || 0);
+            if (c.sourceField && !SQL_FILTERABLE_COLUMNS.has(c.sourceField)) return sum + (Number(c.weight) || 0);
             return sum;
         }, 0);
 }
@@ -102,18 +121,6 @@ export async function fetchCandidates(
     current: ScorableCase,
     criteria: readonly Criterion[],
     opts: { closedOnly: boolean; minScore: number },
-    /**
-     * Bộ nhớ tạm dùng chung TRONG MỘT lượt chạy.
-     *
-     * Tám bước D chạy tối đa tám profile, và các profile khác nhau về trọng số
-     * thường cho ra cùng một câu lọc — nhất là khi tiêu chí ngữ nghĩa bật, lúc
-     * đó mọi profile đều quét toàn bộ kho. Không có cache thì cùng một câu SELECT
-     * chạy tám lần trên một connection SQLite duy nhất.
-     *
-     * Khoá cache do chính hàm này tính, sau khi đã quyết định hình dạng câu truy
-     * vấn — người gọi không cần biết luật lọc, và không có bản sao luật nào để
-     * lệch khỏi bản gốc.
-     */
     cache?: Map<string, CandidateRow[]>,
 ): Promise<CandidateRow[]> {
     const db = await cds.connect.to('db');
@@ -145,29 +152,23 @@ export async function fetchCandidates(
     // Mỗi cột khớp-bằng của tiêu chí đang bật thành một vế OR. `materialFamily`
     // phải có mặt: trùng từ khoá (+2) cộng cùng họ vật tư (+1) là vừa đúng
     // ngưỡng 3, và vế đó chỉ vào được qua cột này.
-    //
-    // Tiêu chí trỏ vào đường dẫn payload KHÔNG vào được vế OR nào: giá trị của
-    // chúng nằm trong `attributesJson`, không có cột để so. Chúng đã được
-    // `nonFilterableReach` tính vào phần "đạt được không cần trùng khoá", nên
-    // hoặc câu lọc vẫn an toàn, hoặc nhánh quét toàn bộ ở trên đã chạy.
     const orFields = new Set<string>();
     for (const c of criteria) {
         if (!c.enabled) continue;
-        if (c.matchType !== 'keyword' && c.sourceField) orFields.add(c.sourceField);
-        if (c.fallbackMatch === 'family' && c.fallbackField) orFields.add(c.fallbackField);
+        if (c.matchType !== 'keyword' && c.sourceField && SQL_FILTERABLE_COLUMNS.has(c.sourceField)) {
+            orFields.add(c.sourceField);
+        }
+        if (c.fallbackMatch === 'family' && c.fallbackField && SQL_FILTERABLE_COLUMNS.has(c.fallbackField)) {
+            orFields.add(c.fallbackField);
+        }
     }
 
     const orTerms = [...orFields]
         .map((field) => ({ field, value: (current as unknown as Record<string, any>)[field] }))
         .filter((t) => t.value != null && String(t.value).trim() !== '');
 
-    // Case đang mở không có khoá nào để so ⇒ không thể có tiền lệ. Trả rỗng chứ
-    // đừng quét cả kho rồi chấm ra 0 điểm hết.
     if (!orTerms.length) return [];
 
-    // Dựng CQN token thủ công. Dạng object `{ or: [...] }` KHÔNG phải cú pháp
-    // CQN hợp lệ — CAP dịch nó thành `WHERE ( OR ? col = ? AND …` và SQLite ném
-    // lỗi cú pháp. Chỉ mảng token mới diễn đạt được một nhóm OR có số vế động.
     const tokens: any[] = ['('];
     orTerms.forEach((t, i) => {
         if (i) tokens.push('or');

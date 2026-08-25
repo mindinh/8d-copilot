@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
-    Badge, Input, ScrollArea, Tooltip, TooltipContent, TooltipTrigger, cn,
+    Badge, Input, cn,
 } from '@cnma/react-ui';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Database, GripVertical, Search, Sigma, X, Zap } from 'lucide-react';
 import type { SourceFieldInfo } from '@/services/retrieval-service';
 
@@ -35,7 +36,7 @@ function FieldChip({ field, disabled }: { field: SourceFieldInfo; disabled: bool
                     {...drag.attributes}
                     {...drag.listeners}
                     className={cn(
-                        'group relative flex items-center gap-2 rounded-lg border p-2 text-xs transition-all duration-150',
+                        'group relative flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border p-2 text-xs transition-all duration-150',
                         RISK_STYLE[risk],
                         disabled
                             ? 'cursor-not-allowed opacity-45 grayscale-[0.3]'
@@ -45,9 +46,9 @@ function FieldChip({ field, disabled }: { field: SourceFieldInfo; disabled: bool
                 >
                     <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-muted-foreground" />
                     
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                            <span className="truncate font-medium text-foreground">{field.label}</span>
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate font-medium text-foreground min-w-0">{field.label}</span>
                             {disabled && (
                                 <Badge variant="secondary" className="h-4 shrink-0 px-1 font-mono text-[10px]">
                                     Added
@@ -145,7 +146,7 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
         <aside
             ref={drop.setNodeRef}
             className={cn(
-                'flex w-80 shrink-0 flex-col border-r bg-card/50 transition-colors',
+                'flex w-64 shrink-0 flex-col border-r bg-card/50 transition-colors overflow-hidden',
                 drop.isOver && 'bg-destructive/10 ring-2 ring-inset ring-destructive/40',
             )}
         >
@@ -231,19 +232,19 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
             </div>
 
             {/* Field Groups List */}
-            <ScrollArea className="flex-1">
-                <div className="space-y-4 p-3">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
+                <div className="space-y-4 p-3 w-full min-w-0">
                     {groups.map(([group, groupFields]) => (
-                        <div key={group} className="space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                                <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">
+                        <div key={group} className="space-y-1.5 w-full min-w-0">
+                            <div className="flex items-center justify-between px-1 min-w-0">
+                                <span className="truncate text-[11px] font-semibold tracking-wider uppercase text-muted-foreground min-w-0">
                                     {group === 'derived' ? 'Derived Metrics' : group}
                                 </span>
-                                <span className="font-mono text-[10px] text-muted-foreground">
+                                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                                     {groupFields.length} {groupFields.length === 1 ? 'field' : 'fields'}
                                 </span>
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 w-full min-w-0">
                                 {groupFields.map((field) => (
                                     <FieldChip
                                         key={field.path}
@@ -267,21 +268,21 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
                         </div>
                     )}
                 </div>
-            </ScrollArea>
+            </div>
 
             {/* Legend Footer */}
-            <div className="space-y-1.5 border-t bg-card/80 p-3 text-[11px] text-muted-foreground">
-                <div className="flex items-center gap-2">
-                    <span className="flex h-4 w-4 items-center justify-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <div className="space-y-1.5 border-t bg-card/80 p-3 text-[11px] text-muted-foreground w-full min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                         <Zap className="h-3 w-3" />
                     </span>
-                    <span>Indexed column (Fast SQL pre-filtering)</span>
+                    <span className="truncate">Indexed column (Fast SQL pre-filtering)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="flex h-4 w-4 items-center justify-center rounded bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-sky-500/10 text-sky-600 dark:text-sky-400">
                         <Sigma className="h-3 w-3" />
                     </span>
-                    <span>Multi-valued collection</span>
+                    <span className="truncate">Multi-valued collection</span>
                 </div>
             </div>
         </aside>

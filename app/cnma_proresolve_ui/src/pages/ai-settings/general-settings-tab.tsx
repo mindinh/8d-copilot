@@ -80,7 +80,7 @@ export function GeneralSettingsTab() {
 
     return (
         <FormProvider {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-4xl mx-auto space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full min-w-0 space-y-4">
                 <Card className="p-1">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Model per processing step</CardTitle>

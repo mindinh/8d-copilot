@@ -130,7 +130,7 @@ export function EightDDetailPage() {
     const independent = parseFinding(report.aiFinding);
 
     return (
-        <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
 
             {/* ── Header ── */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">

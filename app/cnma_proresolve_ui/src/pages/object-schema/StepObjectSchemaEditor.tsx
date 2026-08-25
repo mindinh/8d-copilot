@@ -5,8 +5,9 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
-    Badge, Button, Spinner, TooltipProvider,
+    Badge, Button, Spinner,
 } from '@cnma/react-ui';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { AlertTriangle, Plus, Save, X } from 'lucide-react';
 import { useObjectSchema } from '@/hooks/use-object-schema';
 import type { SourceFieldInfo } from '@/services/retrieval-service';

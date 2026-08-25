@@ -24,7 +24,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const HOST = process.env.SEED_HOST ?? 'http://localhost:4004';
+const HOST = process.env.SEED_HOST ?? 'http://127.0.0.1:4004';
 const EIGHTD = `${HOST}/api/cnma/EIGHTD_SRV`;
 const AI = `${HOST}/api/cnma/AI_SRV`;
 
@@ -89,17 +89,30 @@ async function runIssue(file: string) {
 
     // ── ②③ Tìm tiền lệ ───────────────────────────────────────────────────────
     const t1 = Date.now();
-    const p = act(await call(`${EIGHTD}/findPrecedents(reportID='${reportID}')`));
+    const resp = act(await call(`${EIGHTD}/findPrecedents(reportID='${reportID}')`));
     console.log(`\n②③ TÌM TIỀN LỆ  (${Date.now() - t1}ms)`);
-    console.log(`   kho ${p.libraryCount} case · chấm ${p.candidatesScored} ứng viên · `
-        + `ngưỡng ${p.settings.minScore}/${p.maxScore} · lấy tối đa ${p.settings.topN}`);
-    console.log(`   nhúng mô tả sự vụ: ${p.semanticUsed ? 'thành công — tiêu chí ngữ nghĩa có tham gia' : 'KHÔNG dùng'}`);
 
-    if (!p.precedents.length) {
-        console.log(`\n   ✗ KHÔNG CÓ TIỀN LỆ`);
-        console.log(`     ${p.reason}`);
+    const isPerStep = Boolean(resp?.byStep && resp?.union);
+    const precedents: any[] = isPerStep ? resp.union : (resp?.precedents ?? []);
+    const sampleStep: any = isPerStep ? (resp.byStep.D1 ?? Object.values(resp.byStep)[0]) : resp;
+
+    if (isPerStep) {
+        console.log(`   kho ${sampleStep?.libraryCount ?? 0} case · danh sách hợp nhất: ${precedents.length} tiền lệ (từ ${Object.keys(resp.byStep).length} bước D)`);
+        for (const [code, stepResult] of Object.entries<any>(resp.byStep)) {
+            console.log(`     · ${code} (${stepResult.profileLabel}): ${stepResult.precedents.length} case (ngưỡng ${stepResult.settings?.minScore}/${stepResult.maxScore}, top ${stepResult.settings?.topN})`);
+        }
+        console.log(`   nhúng mô tả sự vụ: ${sampleStep?.semanticUsed ? 'thành công — tiêu chí ngữ nghĩa có tham gia' : 'KHÔNG dùng'}`);
+    } else if (sampleStep?.settings) {
+        console.log(`   kho ${sampleStep.libraryCount} case · chấm ${sampleStep.candidatesScored} ứng viên · `
+            + `ngưỡng ${sampleStep.settings.minScore}/${sampleStep.maxScore} · lấy tối đa ${sampleStep.settings.topN}`);
+        console.log(`   nhúng mô tả sự vụ: ${sampleStep.semanticUsed ? 'thành công — tiêu chí ngữ nghĩa có tham gia' : 'KHÔNG dùng'}`);
     }
-    for (const pr of p.precedents) {
+
+    if (!precedents.length) {
+        console.log(`\n   ✗ KHÔNG CÓ TIỀN LỆ`);
+        console.log(`     ${sampleStep?.reason ?? 'No matching precedents found.'}`);
+    }
+    for (const pr of precedents) {
         console.log(`\n   ${pr.notificationId}   ${pr.score}/${pr.maxScore}   ${pr.sapStatus}`);
         console.log(`      ${pr.explanation}`);
         console.log(`      vì sao: ${pr.breakdown.map((b: any) => `${b.criterionKey}=${b.level}(+${b.points})`).join('  ')}`);
@@ -117,10 +130,10 @@ async function runIssue(file: string) {
     }
 
     // ── Gợi ý D1 rút ra từ tiền lệ (thuần code) ──────────────────────────────
-    if (p.precedents.length) {
+    if (precedents.length) {
         const byPerson = new Map<string, { name: string; fn: string; n: number; cases: string[] }>();
         const byFn = new Map<string, number>();
-        for (const pr of p.precedents) {
+        for (const pr of precedents) {
             for (const t of pr.team) {
                 const e = byPerson.get(t.partnerId)
                     ?? { name: t.partnerName, fn: t.functionTitle, n: 0, cases: [] as string[] };
@@ -139,20 +152,26 @@ async function runIssue(file: string) {
     if (noAi) return;
 
     // ── ④ Dựng báo cáo ───────────────────────────────────────────────────────
-    console.log(`\n④ DỰNG BÁO CÁO 8D — đang chờ AI (60-120 giây)…`);
+    console.log(`\n④ DỰNG BÁO CÁO 8D — đang chờ AI (60-360 giây)…`);
     const started = Date.now();
     let row: any = null;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 120; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        row = await call(`${EIGHTD}/Reports('${reportID}')`
-            + '?$select=status,errorMessage,aiModelAnalyze,aiRootCause,aiAgreesWithRecord,tokensUsed,durationMs,internalSummary,customerSummary');
-        process.stdout.write(`\r   ${Math.round((Date.now() - started) / 1000)}s — ${row.status}      `);
-        if (row.status !== 'Analyzing') break;
+        try {
+            row = await call(`${EIGHTD}/Reports('${reportID}')`
+                + '?$select=status,errorMessage,aiModelAnalyze,aiRootCause,aiAgreesWithRecord,tokensUsed,durationMs,internalSummary,customerSummary');
+            if (row) {
+                process.stdout.write(`\r   ${Math.round((Date.now() - started) / 1000)}s — ${row.status}      `);
+                if (row.status !== 'Analyzing') break;
+            }
+        } catch (pollErr: any) {
+            process.stdout.write(`\r   ${Math.round((Date.now() - started) / 1000)}s — Đang chờ backend... (${pollErr.message?.slice(0, 30)})      `);
+        }
     }
     console.log('');
 
-    if (row.status !== 'Analyzed') {
-        console.log(`   ✗ ${row.status}: ${row.errorMessage}`);
+    if (!row || row.status !== 'Analyzed') {
+        console.log(`   ✗ ${row?.status ?? 'Timeout'}: ${row?.errorMessage ?? 'Quá thời gian chờ'}`);
         return;
     }
 
@@ -160,7 +179,7 @@ async function runIssue(file: string) {
     console.log(`   chẩn đoán mù: AI tự chọn ${row.aiRootCause}`
         + (row.aiAgreesWithRecord === null ? ' (sự vụ mới chưa có đáp án để đối chiếu)' : ''));
 
-    const d = await call(`${EIGHTD}/Disciplines?$filter=report_ID eq ${reportID}`
+    const d = await call(`${EIGHTD}/Disciplines?$filter=report_ID eq '${reportID}'`
         + '&$select=code,title,summary,dataBacked,confidence,sources&$orderby=sequence');
     console.log('');
     for (const x of d.value) {

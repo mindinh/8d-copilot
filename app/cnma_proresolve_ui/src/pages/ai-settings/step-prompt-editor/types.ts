@@ -13,13 +13,6 @@ export interface DataSchemaField {
     items?: DataSchemaField;
 }
 
-export interface DataSchemaConfig {
-    type: 'object';
-    properties: Record<string, DataSchemaField>;
-    required?: string[];
-    additionalProperties?: boolean;
-}
-
 export interface FlatDataSchemaField {
     key: string;
     label: string;

@@ -382,7 +382,7 @@ export function CreateDefectPage() {
     };
 
     return (
-        <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
             {/* Header / Navigation Bar */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
                 <div className="flex items-center gap-3">

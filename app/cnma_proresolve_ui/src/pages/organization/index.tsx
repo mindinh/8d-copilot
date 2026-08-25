@@ -13,7 +13,7 @@ export interface OrganizationPageProps {
  */
 export function OrganizationPage({ baseUrl = '/api/cnma/IDENTITY_SRV', className }: OrganizationPageProps = {}) {
     return (
-        <div className="organization-page p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="organization-page p-6 md:p-8 w-full min-w-0 space-y-6">
             <CapOrganizationManager
                 httpClient={identityHttpClient}
                 baseUrl={baseUrl}

@@ -1,12 +1,11 @@
 import { Button, cn } from '@cnma/react-ui';
 
-export type StepEditorTab = 'schema' | 'data' | 'prompt' | 'form' | 'constraints';
+export type StepEditorTab = 'schema' | 'prompt' | 'form' | 'constraints';
 
 const TABS: Array<{ id: StepEditorTab; label: string }> = [
     // First, because it runs first: this tab decides which past cases the step
     // is shown. The rest decide how it writes about them.
     { id: 'schema', label: 'Object Schema' },
-    { id: 'data', label: 'Data schema' },
     { id: 'prompt', label: 'Prompt guide' },
     { id: 'form', label: 'Form editor' },
     { id: 'constraints', label: 'Constraints' },

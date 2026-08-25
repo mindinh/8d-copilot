@@ -43,7 +43,7 @@ export function SimilarityTab() {
                     Từng bước 8D có thể chạy một profile riêng với bộ trọng số khác.
                 </span>
                 <Button asChild size="sm" variant="outline" className="ml-auto h-7">
-                    <Link to="/object-schema">Mở Object Schema</Link>
+                    <Link to="/ai-settings/step-prompts/D1">Mở Object Schema của bước D</Link>
                 </Button>
             </div>
 

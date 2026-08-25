@@ -57,3 +57,9 @@ html, body {
         padding-bottom: 12px;
     }
 }
+
+/* ── Ẩn mũi tên (arrow) của Tooltip ───────────────────── */
+[data-slot="tooltip-content"] > svg {
+    display: none !important;
+}
+

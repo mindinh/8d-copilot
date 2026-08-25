@@ -29,15 +29,3 @@ export function normalizeFormSchema(value: import('./types').FormSchemaConfig, s
     };
 }
 
-export function normalizeDataSchema(value: unknown): import('./types').DataSchemaConfig {
-    const candidate = value as { type?: string; properties?: Record<string, import('./types').DataSchemaField>; fields?: Array<Record<string, unknown>> };
-    if (candidate?.type === 'object' && candidate.properties) return candidate as import('./types').DataSchemaConfig;
-    const properties: Record<string, import('./types').DataSchemaField> = {};
-    const required: string[] = [];
-    for (const field of candidate?.fields ?? []) {
-        const key = String(field.key ?? ''); if (!key) continue;
-        properties[key] = { type: String(field.type ?? 'string') as import('./types').DataType, title: String(field.label ?? key), description: String(field.description ?? ''), 'x-source': String(field.source ?? 'manual_input') as import('./types').DataSource };
-        if (field.required === true) required.push(key);
-    }
-    return { type: 'object', properties, required, additionalProperties: false };
-}

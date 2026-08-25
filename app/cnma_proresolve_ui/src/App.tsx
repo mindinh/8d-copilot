@@ -9,7 +9,6 @@ import {
     HomePage,
     OrganizationPage,
     AiSettingsPage,
-    ObjectSchemaPage,
     StepPromptEditorPage,
     WorkflowPage,
     EightDListPage,
@@ -58,7 +57,6 @@ export default function App() {
                             <Route path="/create-defect" element={<CreateDefectPage />} />
                             <Route path="/organization" element={<OrganizationPage />} />
                             <Route path="/workflow" element={<WorkflowPage />} />
-                            <Route path="/object-schema" element={<ObjectSchemaPage />} />
                             <Route path="/ai-settings" element={<AiSettingsPage />} />
 
                             <Route path="*" element={<Navigate to="/" replace />} />

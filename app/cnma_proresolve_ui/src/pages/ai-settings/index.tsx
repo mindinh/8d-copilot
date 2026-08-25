@@ -23,7 +23,7 @@ import { StepPromptsTab } from './step-prompts-landing';
  */
 export function AiSettingsPage() {
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-5">
+        <div className="p-6 w-full min-w-0 space-y-5">
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">AI Settings</h1>
                 <p className="mt-1 text-sm text-muted-foreground">

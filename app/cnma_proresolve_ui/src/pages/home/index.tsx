@@ -8,7 +8,7 @@ import {
 
 export function HomePage() {
     return (
-        <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
             {/* Header Banner */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card border border-border rounded-xl p-6 shadow-xs">
                 <div>

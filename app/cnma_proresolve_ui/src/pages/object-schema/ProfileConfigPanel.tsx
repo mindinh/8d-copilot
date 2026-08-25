@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
-    Badge, Button, Input, Label, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger, cn,
+    Badge, Button, Input, Label, Switch, cn,
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cnma/react-ui';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     Boxes, Check, Code2, Copy, GripVertical, Info, LayoutGrid, Sigma, Sparkles,
     Target, Trash2, Users, Zap,
@@ -91,44 +92,46 @@ function FieldCard({
                 drag.isDragging && 'opacity-30 scale-98 ring-2 ring-primary/40',
             )}
         >
-            <div className="flex items-center gap-2">
-                <span
-                    {...drag.attributes}
-                    {...drag.listeners}
-                    className="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground active:cursor-grabbing"
-                    title="Drag out to remove"
-                >
-                    <GripVertical className="h-4 w-4" />
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                        {...drag.attributes}
+                        {...drag.listeners}
+                        className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground active:cursor-grabbing"
+                        title="Drag out to remove"
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </span>
 
-                <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-bold text-foreground">{labelText}</div>
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
-                        <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">{c.sourceField}</span>
-                        {field?.indexed && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Zap className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-xs">
-                                    Indexed column — filtered in SQL before scoring.
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                        {field?.multiValued && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Sigma className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-xs">
-                                    Multiple values per case.
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
+                    <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-bold text-foreground">{labelText}</div>
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                            <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">{c.sourceField}</span>
+                            {field?.indexed && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Zap className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="text-xs">
+                                        Indexed column — filtered in SQL before scoring.
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
+                            {field?.multiValued && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Sigma className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="text-xs">
+                                        Multiple values per case.
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 shrink-0 pl-7 sm:pl-0">
                     <Select
                         value={methodKey}
                         onValueChange={(v) => onPatch({
@@ -142,7 +145,7 @@ function FieldCard({
                                 : {}),
                         })}
                     >
-                        <SelectTrigger className={cn('h-7 w-36 border text-[11px] font-medium', methodInfo.className)}>
+                        <SelectTrigger className={cn('h-7 w-28 sm:w-32 border text-[11px] font-medium', methodInfo.className)}>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -163,13 +166,13 @@ function FieldCard({
                         <Input
                             type="number" min={0} max={99}
                             value={c.weight ?? 0}
-                            className="h-7 w-14 text-right text-xs font-semibold"
+                            className="h-7 w-12 text-right text-xs font-semibold"
                             onChange={(e) => {
                                 const v = Number(e.target.value);
                                 if (Number.isFinite(v) && v >= 0) onPatch({ weight: v });
                             }}
                         />
-                        <span className="w-8 text-right font-mono text-[11px] text-muted-foreground">
+                        <span className="w-7 text-right font-mono text-[11px] text-muted-foreground">
                             {share}%
                         </span>
                     </div>
@@ -268,21 +271,21 @@ export function ProfileConfigPanel({
     const enabledCount = draft.fields.filter((f) => f.enabled).length;
 
     return (
-        <main className="flex min-w-0 flex-1 flex-col bg-muted/20">
+        <main className="flex min-w-0 flex-1 flex-col bg-muted/20 overflow-hidden">
             <div className="border-b bg-card p-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 font-semibold text-foreground">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <div className="flex items-center gap-2 font-semibold text-foreground min-w-0">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                             <Boxes className="h-4 w-4" />
                         </div>
-                        <span className="text-sm">
+                        <span className="truncate text-sm">
                             {lockedStepCode
                                 ? `${lockedStepCode} · ${STEP_METADATA[lockedStepCode]?.title ?? ''} — Similarity Schema`
                                 : 'Profile Configuration'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-1 text-xs font-medium">
+                    <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-1 text-xs font-medium shrink-0">
                         {([['visual', LayoutGrid, 'Visual Editor'], ['json', Code2, 'JSON Schema']] as const)
                             .map(([id, Icon, text]) => (
                                 <button
@@ -325,15 +328,15 @@ export function ProfileConfigPanel({
                             {copied ? 'Copied' : 'Copy JSON'}
                         </Button>
                     </div>
-                    <ScrollArea className="flex-1 rounded-b-xl border bg-slate-950 p-4 font-mono text-xs text-slate-100 dark:bg-slate-900">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden rounded-b-xl border bg-slate-950 p-4 font-mono text-xs text-slate-100 dark:bg-slate-900">
                         <pre className="whitespace-pre-wrap leading-relaxed">{jsonString}</pre>
-                    </ScrollArea>
+                    </div>
                 </div>
             ) : (
-                <ScrollArea className="flex-1">
-                    <div className="space-y-4 p-4">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
+                    <div className="space-y-4 p-4 w-full min-w-0">
                         {/* ── Identity ── */}
-                        <div className="grid gap-3 rounded-xl border bg-card p-3.5 shadow-xs sm:grid-cols-2">
+                        <div className="grid gap-3 rounded-xl border bg-card p-3.5 shadow-xs grid-cols-1 md:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     Profile Name
@@ -369,7 +372,7 @@ export function ProfileConfigPanel({
                                 </h3>
                             </div>
 
-                            <div className="grid gap-3 sm:grid-cols-4">
+                            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
                                 <Setting
                                     label="Min Score"
                                     hint="Below this score nothing is surfaced at all — the step is told there is no precedent rather than handed a weak one."
@@ -410,9 +413,11 @@ export function ProfileConfigPanel({
                                     label="Reachable Score"
                                     hint="The weights of every enabled field. Disabling a field lowers this ceiling too, so 5 out of 8 still reads as a strong match."
                                 >
-                                    <div className="flex h-8.5 items-baseline gap-1.5">
-                                        <span className="font-mono text-xl font-bold text-foreground">{maxScore}</span>
-                                        <span className="text-[11px] text-muted-foreground">
+                                    <div className="flex h-8.5 min-w-0 items-baseline gap-1.5 overflow-hidden">
+                                        <span className="min-w-0 truncate font-mono text-xl font-bold text-foreground" title={String(maxScore)}>
+                                            {maxScore}
+                                        </span>
+                                        <span className="shrink-0 text-[11px] text-muted-foreground">
                                             {enabledCount}/{draft.fields.length} on
                                         </span>
                                     </div>
@@ -450,13 +455,11 @@ export function ProfileConfigPanel({
                                             return (
                                                 <SelectItem key={code} value={code} className="text-xs">
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-bold">
-                                                            {code}
-                                                        </Badge>
-                                                        <span className="font-medium text-foreground">{meta.title}</span>
+                                                        <span className="font-mono font-bold text-primary">{code}</span>
+                                                        <span>{meta.title}</span>
                                                         {isOwnedByOther && (
-                                                            <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                                                                (bound to {profileLabelOf(owner)})
+                                                            <span className="text-[10px] text-muted-foreground">
+                                                                (currently {profileLabelOf(owner)})
                                                             </span>
                                                         )}
                                                     </div>
@@ -470,7 +473,7 @@ export function ProfileConfigPanel({
 
                         {/* ── Criteria dropzone ── */}
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Matching Criteria ({draft.fields.length})
                                 </span>
@@ -520,7 +523,7 @@ export function ProfileConfigPanel({
                             </div>
                         </div>
                     </div>
-                </ScrollArea>
+                </div>
             )}
         </main>
     );
