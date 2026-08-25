@@ -1,12 +1,18 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+    Badge,
     Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
     Input,
     Label,
     Select,
@@ -15,12 +21,9 @@ import {
     SelectTrigger,
     SelectValue,
     Spinner,
-    Badge,
-    cn,
 } from '@cnma/react-ui';
 import {
     AlertCircle,
-    ArrowLeft,
     Box,
     Check,
     Code2,
@@ -37,149 +40,18 @@ import {
 import { toast } from 'sonner';
 import { eightDService } from '@/services/eightd-service';
 
-/**
- * Mẫu sự vụ cho phép demo người thuyết trình bấm nạp 1-click.
- */
-interface DefectPreset {
-    id: string;
-    title: string;
-    description: string;
-    badge: string;
-    data: {
-        notificationId: string;
-        origin: string;
-        symptomShortText: string;
-        status: string;
-        foundDate: string;
-        quantityExtent: string;
-        materialId: string;
-        materialDesc: string;
-        materialGroup: string;
-        batchId: string;
-        workCenterId: string;
-        workCenterDesc: string;
-        defectCode: string;
-        defectText: string;
-        inspections: Array<{ characteristic: string; measuredValue: string; specValue: string }>;
-        customerReference: {
-            complaintReference: string;
-            customerPlantContact: string;
-            slaResponseDue: string;
-        };
-    };
-}
-
-const PRESETS: DefectPreset[] = [
-    {
-        id: 'preset-flange',
-        title: 'Q3 Internal Defect - Flange Burr',
-        description: 'CNC Milling Line 7 — Rough edge on bracket flange after milling',
-        badge: 'Internal Q3',
-        data: {
-            notificationId: '8D-10049001',
-            origin: 'Q3 - Internal Defect',
-            symptomShortText: 'Operator stopped the line - rough edge felt on bracket flange after milling',
-            status: 'In Process',
-            foundDate: new Date().toISOString().split('T')[0],
-            quantityExtent: '61 units on hold',
-            materialId: 'MAT-10247',
-            materialDesc: 'Bracket Housing X240',
-            materialGroup: 'MG-HOUSING',
-            batchId: 'B-55901',
-            workCenterId: 'WC-MILL-07',
-            workCenterDesc: 'CNC Milling Line 7',
-            defectCode: 'DEF-0489',
-            defectText: 'Flange edge burr above limit',
-            inspections: [
-                {
-                    characteristic: 'Burr height at flange edge',
-                    measuredValue: '0.26mm',
-                    specValue: 'max 0.10mm',
-                },
-            ],
-            customerReference: {
-                complaintReference: 'N/A - internal defect, no customer reference',
-                customerPlantContact: 'N/A',
-                slaResponseDue: 'N/A',
-            },
-        },
-    },
-    {
-        id: 'preset-coolant',
-        title: 'Q1 Customer Complaint - Coolant Leakage',
-        description: 'Die Casting Line 3 — Fluid seeping through housing joint face after 200h',
-        badge: 'Customer Q1',
-        data: {
-            notificationId: '8D-10049002',
-            origin: 'Q1 - Customer Complaint',
-            symptomShortText: 'Customer reports coolant weeping from pump housing joint after 200 operating hours',
-            status: 'In Process',
-            foundDate: new Date().toISOString().split('T')[0],
-            quantityExtent: '9 units returned, 120 in the field',
-            materialId: 'MAT-10318',
-            materialDesc: 'Pump Housing P90',
-            materialGroup: 'MG-HOUSING',
-            batchId: 'B-55744',
-            workCenterId: 'WC-CAST-03',
-            workCenterDesc: 'Aluminium Die Casting Line 3',
-            defectCode: 'DEF-9001',
-            defectText: 'Fluid seeping through casting wall near the joint face',
-            inspections: [
-                {
-                    characteristic: 'Helium leak rate',
-                    measuredValue: '9 mbar*l/s',
-                    specValue: 'max 5 mbar*l/s',
-                },
-            ],
-            customerReference: {
-                complaintReference: 'CC-2026-1188',
-                customerPlantContact: 'Vestbeck Motors - Plant 2 - Quality desk',
-                slaResponseDue: '2026-08-30',
-            },
-        },
-    },
-    {
-        id: 'preset-welding',
-        title: 'Q3 Internal Defect - Weld Porosity',
-        description: 'Robotic Weld Cell 2 — Sub-surface porosity cluster found via ultrasonic test',
-        badge: 'Internal Q3',
-        data: {
-            notificationId: '8D-10049003',
-            origin: 'Q3 - Internal Defect',
-            symptomShortText: 'Sub-surface porosity pores found during ultrasonic testing on seam W-04',
-            status: 'In Process',
-            foundDate: new Date().toISOString().split('T')[0],
-            quantityExtent: '18 sub-assemblies quarantined',
-            materialId: 'MAT-10500',
-            materialDesc: 'Subframe Structure Weldment',
-            materialGroup: 'MG-WELD',
-            batchId: 'B-77210',
-            workCenterId: 'WC-WELD-02',
-            workCenterDesc: 'Robotic Welding Cell 2',
-            defectCode: 'DEF-0312',
-            defectText: 'Porosity cluster exceeding ISO 5817 Level B limit',
-            inspections: [
-                {
-                    characteristic: 'Porosity defect pore diameter',
-                    measuredValue: '1.8mm',
-                    specValue: 'max 0.5mm',
-                },
-            ],
-            customerReference: {
-                complaintReference: 'N/A - internal defect, no customer reference',
-                customerPlantContact: 'N/A',
-                slaResponseDue: 'N/A',
-            },
-        },
-    },
-];
-
 function generateRandomId(): string {
     const randomNum = Math.floor(10000000 + Math.random() * 90000000);
     return `8D-${randomNum}`;
 }
 
-export function CreateDefectPage() {
+export interface CreateDefectDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onCreated?: (reportID: string) => void;
+}
+
+export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefectDialogProps) {
     const navigate = useNavigate();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -187,60 +59,31 @@ export function CreateDefectPage() {
     const [copied, setCopied] = useState(false);
 
     // Form state
-    const [notificationId, setNotificationId] = useState(PRESETS[0].data.notificationId);
-    const [origin, setOrigin] = useState(PRESETS[0].data.origin);
-    const [symptomShortText, setSymptomShortText] = useState(PRESETS[0].data.symptomShortText);
-    const [status, setStatus] = useState(PRESETS[0].data.status);
-    const [foundDate, setFoundDate] = useState(PRESETS[0].data.foundDate);
-    const [quantityExtent, setQuantityExtent] = useState(PRESETS[0].data.quantityExtent);
+    const [notificationId, setNotificationId] = useState(() => generateRandomId());
+    const [origin, setOrigin] = useState('Q3 - Internal Defect');
+    const [symptomShortText, setSymptomShortText] = useState('');
+    const [status] = useState('In Process');
+    const [foundDate, setFoundDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [quantityExtent, setQuantityExtent] = useState('');
 
-    const [materialId, setMaterialId] = useState(PRESETS[0].data.materialId);
-    const [materialDesc, setMaterialDesc] = useState(PRESETS[0].data.materialDesc);
-    const [materialGroup, setMaterialGroup] = useState(PRESETS[0].data.materialGroup);
-    const [batchId, setBatchId] = useState(PRESETS[0].data.batchId);
+    const [materialId, setMaterialId] = useState('');
+    const [materialDesc, setMaterialDesc] = useState('');
+    const [materialGroup, setMaterialGroup] = useState('');
+    const [batchId, setBatchId] = useState('');
 
-    const [workCenterId, setWorkCenterId] = useState(PRESETS[0].data.workCenterId);
-    const [workCenterDesc, setWorkCenterDesc] = useState(PRESETS[0].data.workCenterDesc);
+    const [workCenterId, setWorkCenterId] = useState('');
+    const [workCenterDesc, setWorkCenterDesc] = useState('');
 
-    const [defectCode, setDefectCode] = useState(PRESETS[0].data.defectCode);
-    const [defectText, setDefectText] = useState(PRESETS[0].data.defectText);
+    const [defectCode, setDefectCode] = useState('');
+    const [defectText, setDefectText] = useState('');
 
-    const [inspections, setInspections] = useState(PRESETS[0].data.inspections);
+    const [inspections, setInspections] = useState([
+        { characteristic: '', measuredValue: '', specValue: '' },
+    ]);
 
-    const [complaintReference, setComplaintReference] = useState(
-        PRESETS[0].data.customerReference.complaintReference,
-    );
-    const [customerPlantContact, setCustomerPlantContact] = useState(
-        PRESETS[0].data.customerReference.customerPlantContact,
-    );
-    const [slaResponseDue, setSlaResponseDue] = useState(
-        PRESETS[0].data.customerReference.slaResponseDue,
-    );
-
-    // Handle preset selection
-    const applyPreset = (preset: DefectPreset) => {
-        const d = preset.data;
-        setNotificationId(generateRandomId());
-        setOrigin(d.origin);
-        setSymptomShortText(d.symptomShortText);
-        setStatus(d.status);
-        setFoundDate(d.foundDate);
-        setQuantityExtent(d.quantityExtent);
-        setMaterialId(d.materialId);
-        setMaterialDesc(d.materialDesc);
-        setMaterialGroup(d.materialGroup);
-        setBatchId(d.batchId);
-        setWorkCenterId(d.workCenterId);
-        setWorkCenterDesc(d.workCenterDesc);
-        setDefectCode(d.defectCode);
-        setDefectText(d.defectText);
-        setInspections(d.inspections);
-        setComplaintReference(d.customerReference.complaintReference);
-        setCustomerPlantContact(d.customerReference.customerPlantContact);
-        setSlaResponseDue(d.customerReference.slaResponseDue);
-        setError(null);
-        toast.info(`Loaded preset: ${preset.title}`);
-    };
+    const [complaintReference, setComplaintReference] = useState('');
+    const [customerPlantContact, setCustomerPlantContact] = useState('');
+    const [slaResponseDue, setSlaResponseDue] = useState('');
 
     // Inspection row controls
     const addInspection = () => {
@@ -370,7 +213,12 @@ export function CreateDefectPage() {
             toast.success(`Defect record ${notificationId} created!`, {
                 description: 'Starting AI 8D Copilot analysis workflow...',
             });
-            navigate(`/8d/${reportID}`);
+            onOpenChange(false);
+            if (onCreated) {
+                onCreated(reportID);
+            } else {
+                navigate(`/8d/${reportID}`);
+            }
         } catch (err: any) {
             const msg =
                 err?.response?.data?.error?.message ??
@@ -382,98 +230,50 @@ export function CreateDefectPage() {
     };
 
     return (
-        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
-            {/* Header / Navigation Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
-                <div className="flex items-center gap-3">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => navigate('/8d')}
-                        className="h-9 w-9 shrink-0"
-                        title="Back to 8D Reports"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="bg-primary/10 text-primary text-xs font-mono px-2 py-0.5 rounded font-semibold border border-primary/20">
-                                SAP UI5 QM Simulation
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                                Fiori Record Defect
-                            </Badge>
-                        </div>
-                        <h1 className="text-xl font-bold text-foreground mt-1">
-                            Record Quality Defect
-                        </h1>
-                        <p className="text-xs text-muted-foreground">
-                            Simulate creating a SAP QM Quality Notification, generating standard OData Deep Structure JSON, and initiating the AI 8D Copilot workflow.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowJsonPreview(!showJsonPreview)}
-                        className="gap-1.5 text-xs"
-                    >
-                        <Code2 className="w-4 h-4 text-muted-foreground" />
-                        {showJsonPreview ? 'Hide JSON Payload' : 'Inspect JSON Payload'}
-                    </Button>
-                </div>
-            </div>
-
-            {/* Quick Demo Presets Banner */}
-            <Card className="bg-gradient-to-r from-primary/5 via-card to-card border-primary/20">
-                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Quick Demo Presets
-                        </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                        Click to autofill sample SAP QM defect data for live demo
-                    </span>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {PRESETS.map((preset) => (
-                            <button
-                                key={preset.id}
-                                type="button"
-                                onClick={() => applyPreset(preset)}
-                                className="flex flex-col items-start p-2.5 rounded-lg border border-border/80 bg-card hover:bg-accent/50 hover:border-primary/50 text-left transition-all group cursor-pointer shadow-sm"
-                            >
-                                <div className="flex items-center justify-between w-full mb-1">
-                                    <span className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
-                                        {preset.title}
-                                    </span>
-                                    <Badge
-                                        variant="outline"
-                                        className={cn(
-                                            'text-[10px] px-1.5 py-0 shrink-0 font-mono',
-                                            preset.badge.includes('Q1')
-                                                ? 'bg-destructive/10 text-destructive border-destructive/30'
-                                                : 'bg-info/10 text-info border-info/30',
-                                        )}
-                                    >
-                                        {preset.badge}
-                                    </Badge>
-                                </div>
-                                <span className="text-[11px] text-muted-foreground line-clamp-2">
-                                    {preset.description}
+        <Dialog
+            open={open}
+            onOpenChange={(v) => {
+                if (!busy) {
+                    onOpenChange(v);
+                }
+            }}
+        >
+            <DialogContent className="w-[95vw] sm:max-w-5xl md:max-w-6xl lg:max-w-7xl max-h-[90vh] overflow-y-auto p-6">
+                <DialogHeader className="pb-3 border-b border-border">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-primary/10 text-primary text-xs font-mono px-2 py-0.5 rounded font-semibold border border-primary/20">
+                                    SAP UI5 QM Simulation
                                 </span>
-                            </button>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
+                                <Badge variant="outline" className="text-xs">
+                                    Fiori Record Defect
+                                </Badge>
+                            </div>
+                            <DialogTitle className="text-lg font-bold text-foreground">
+                                Record Quality Defect
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Simulate creating a SAP QM Quality Notification, generating standard OData Deep Structure JSON, and initiating the AI 8D Copilot workflow.
+                            </DialogDescription>
+                        </div>
 
+                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowJsonPreview(!showJsonPreview)}
+                                className="gap-1.5 text-xs"
+                            >
+                                <Code2 className="w-4 h-4 text-muted-foreground" />
+                                {showJsonPreview ? 'Hide JSON Payload' : 'Inspect JSON Payload'}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="space-y-6 pt-2">
             {/* Collapsible Live JSON Payload Inspector */}
             {showJsonPreview && (
                 <Card className="border-primary/30 bg-slate-950 text-slate-100 dark">
@@ -830,7 +630,7 @@ export function CreateDefectPage() {
                         type="button"
                         variant="outline"
                         disabled={busy}
-                        onClick={() => navigate('/8d')}
+                        onClick={() => onOpenChange(false)}
                     >
                         Cancel
                     </Button>
@@ -844,8 +644,11 @@ export function CreateDefectPage() {
                     </Button>
                 </div>
             </form>
-        </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
-export default CreateDefectPage;
+export const CreateDefectPage = CreateDefectDialog;
+export default CreateDefectDialog;

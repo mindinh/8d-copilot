@@ -4,12 +4,10 @@
         "description": "CNMA Proresolve Application"
     },
     "nav": {
-        "home": "Startseite",
         "settings": "Einstellungen",
         "admin": "Administrator",
         "user": "Benutzer",
         "logOut": "Abmelden",
-        "aiSettings": "KI-Einstellungen",
         "workflow": "Training Center"
     },
     "common": {
@@ -32,12 +30,6 @@
         "next": "Weiter",
         "submit": "Senden",
         "noData": "Keine Daten verfügbar"
-    },
-    "home": {
-        "title": "Willkommen bei CNMA Proresolve",
-        "subtitle": "Ihre SAP CAP-Anwendung ist bereit.",
-        "gettingStarted": "Erste Schritte",
-        "gettingStartedDesc": "Fügen Sie Seiten und Routen in App.tsx hinzu. Verwenden Sie das @cnma/react-ui-Paket für UI-Komponenten."
     },
     "errors": {
         "boundary": {

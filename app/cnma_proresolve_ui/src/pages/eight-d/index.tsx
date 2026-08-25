@@ -14,7 +14,7 @@ import {
     TableRow,
     cn,
 } from '@cnma/react-ui';
-import { Check, ClipboardList, FileSpreadsheet, Info, PlusCircle, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
+import { Check, ClipboardList, Info, PlusCircle, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
 import {
     eightDService,
     originShort,
@@ -22,6 +22,7 @@ import {
 } from '@/services/eightd-service';
 import { ReportStatusBadge } from './status-badge';
 import { AnalyzeDialog } from './analyze-dialog';
+import { CreateDefectDialog } from '../create-defect';
 
 /**
  * Danh sách báo cáo 8D.
@@ -111,9 +112,19 @@ function AiVerdictCell({ report }: { report: Report8D }) {
     );
 }
 
+function RunningSpinner() {
+    return (
+        <div className="flex items-center gap-1.5 text-primary">
+            <Spinner className="w-3.5 h-3.5" />
+            <span className="text-xs">Analyzing…</span>
+        </div>
+    );
+}
+
 export function EightDListPage() {
     const navigate = useNavigate();
     const [analyzeOpen, setAnalyzeOpen] = useState(false);
+    const [createDefectOpen, setCreateDefectOpen] = useState(false);
 
     const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
         queryKey: ['8d', 'reports'],
@@ -125,17 +136,16 @@ export function EightDListPage() {
         },
     });
 
-    const reports = data?.value ?? [];
-    const running = reports.filter((r) => r.status === 'Analyzing').length;
+    const rows = data?.value ?? [];
+    const running = rows.filter((r) => r.status === 'Analyzing').length;
 
     return (
         <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
-
-            {/* ── Header ── */}
+            {/* ── Tiêu đề & thanh thao tác ── */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <ClipboardList className="w-5 h-5 text-primary" />
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                        <ClipboardList className="w-6 h-6" />
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-foreground">8D Reports</h1>
@@ -150,7 +160,7 @@ export function EightDListPage() {
                         <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
                         Refresh
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => navigate('/create-defect')} className="gap-1.5">
+                    <Button variant="outline" size="sm" onClick={() => setCreateDefectOpen(true)} className="gap-1.5">
                         <PlusCircle className="w-4 h-4 text-primary" />
                         Record Defect (SAP UI5)
                     </Button>
@@ -180,68 +190,66 @@ export function EightDListPage() {
                 </div>
             </Card>
 
-            {/* ── Bảng danh sách ── */}
-            {isLoading ? (
-                <Card className="p-12 items-center text-center">
-                    <Spinner className="w-6 h-6 text-muted-foreground mb-2" />
-                    <p className="text-xs text-muted-foreground">Loading cases…</p>
+            {/* ── Trạng thái tải / lỗi / rỗng ── */}
+            {isLoading && (
+                <div className="flex justify-center p-12">
+                    <Spinner className="w-6 h-6 text-primary" />
+                </div>
+            )}
+
+            {isError && (
+                <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    Failed to load reports: {(error as Error).message}
+                </div>
+            )}
+
+            {!isLoading && !isError && rows.length === 0 && (
+                <Card className="p-12 text-center text-muted-foreground">
+                    <p className="text-base font-semibold">No 8D reports yet</p>
+                    <p className="text-xs mt-1">
+                        Use <strong className="text-foreground">Record Defect (SAP UI5)</strong> to create an SAP defect notification, or click <strong className="text-foreground">Analyze from JSON</strong> to start an analysis.
+                    </p>
                 </Card>
-            ) : isError ? (
-                <Card className="p-6 border-destructive/50 text-destructive text-sm">
-                    Failed to load 8D cases: {(error as Error)?.message}
-                </Card>
-            ) : reports.length === 0 ? (
-                <Card className="p-12 items-center text-center space-y-3">
-                    <FileSpreadsheet className="w-10 h-10 text-muted-foreground" />
-                    <div>
-                        <p className="text-sm font-medium">No 8D reports yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Click "Analyze new case" to start from an incoming complaint or defect record.
-                        </p>
-                    </div>
-                    <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
-                        <Sparkles className="w-4 h-4" />
-                        Analyze new case
-                    </Button>
-                </Card>
-            ) : (
-                <Card className="p-0 overflow-hidden">
-                    <Table containerClassName="overflow-x-auto overflow-y-hidden">
+            )}
+
+            {/* ── Bảng dữ liệu chính ── */}
+            {!isLoading && !isError && rows.length > 0 && (
+                <Card className="overflow-hidden border border-border/70 shadow-sm">
+                    <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-32">Notification</TableHead>
-                                <TableHead className="w-16">Origin</TableHead>
-                                <TableHead>Symptom</TableHead>
-                                <TableHead className="w-36">Material</TableHead>
-                                <TableHead className="w-32">Work Center</TableHead>
-                                <TableHead className="w-32">Root Cause</TableHead>
-                                <TableHead className="w-36">AI, unaided</TableHead>
-                                <TableHead className="w-24 text-right">CoPQ</TableHead>
-                                <TableHead className="w-28">Status</TableHead>
-                                <TableHead className="w-36">AI Models</TableHead>
-                                <TableHead className="w-32">Analyzed</TableHead>
+                            <TableRow className="bg-muted/40">
+                                <TableHead className="w-[120px]">Notification</TableHead>
+                                <TableHead className="w-[70px]">Origin</TableHead>
+                                <TableHead className="min-w-[220px]">Symptom</TableHead>
+                                <TableHead className="w-[110px]">Material</TableHead>
+                                <TableHead className="w-[110px]">Work Center</TableHead>
+                                <TableHead className="min-w-[160px]">Root Cause</TableHead>
+                                <TableHead className="w-[130px]">AI, unaided</TableHead>
+                                <TableHead className="w-[100px]">CoPQ</TableHead>
+                                <TableHead className="w-[100px]">Status</TableHead>
+                                <TableHead className="w-[120px]">AI Models</TableHead>
+                                <TableHead className="w-[120px]">Analyzed</TableHead>
                             </TableRow>
                         </TableHeader>
-
                         <TableBody>
-                            {reports.map((r) => (
+                            {rows.map((r) => (
                                 <TableRow
                                     key={r.ID}
                                     onClick={() => navigate(`/8d/${r.ID}`)}
-                                    className="cursor-pointer"
+                                    className="cursor-pointer hover:bg-accent/50 transition-colors"
                                 >
-                                    <TableCell className="font-mono text-xs font-medium">
+                                    <TableCell className="font-mono font-medium text-xs">
                                         {r.notificationId}
                                     </TableCell>
-
                                     <TableCell>
                                         <Badge
                                             variant="outline"
                                             className={cn(
-                                                'font-mono text-xs',
-                                                originShort(r.origin) === 'Q1'
-                                                    ? 'bg-destructive/10 text-destructive border-destructive/20'
-                                                    : 'bg-muted text-muted-foreground border-border',
+                                                'text-[10px] px-1.5 py-0 font-mono font-semibold uppercase',
+                                                originShort(r.origin) === 'Q1' && 'border-destructive/40 text-destructive bg-destructive/5',
+                                                originShort(r.origin) === 'Q2' && 'border-warning/40 text-warning bg-warning/5',
+                                                originShort(r.origin) === 'Q3' && 'border-info/40 text-info bg-info/5',
+                                                originShort(r.origin) === 'Q4' && 'border-primary/40 text-primary bg-primary/5',
                                             )}
                                         >
                                             {originShort(r.origin)}
@@ -249,32 +257,36 @@ export function EightDListPage() {
                                     </TableCell>
 
                                     <TableCell className="max-w-xs">
-                                        <div className="truncate text-sm">{r.symptomShortText}</div>
-                                        {r.status === 'Failed' && r.errorMessage && (
-                                            <div className="truncate text-xs text-destructive mt-0.5">
-                                                {r.errorMessage}
-                                            </div>
+                                        <div className="truncate text-xs font-medium text-foreground">{r.symptomShortText}</div>
+                                        {r.defectText && (
+                                            <div className="text-[11px] text-muted-foreground truncate">{r.defectText}</div>
                                         )}
                                     </TableCell>
 
                                     <TableCell>
-                                        <div className="text-xs font-mono">{r.materialId}</div>
-                                        <div className="text-xs text-muted-foreground truncate">
-                                            {r.materialDesc}
-                                        </div>
+                                        <div className="text-xs font-mono">{r.materialId ?? '—'}</div>
+                                        {r.materialDesc && (
+                                            <div className="text-[11px] text-muted-foreground truncate">
+                                                {r.materialDesc}
+                                            </div>
+                                        )}
                                     </TableCell>
 
-                                    <TableCell className="text-xs font-mono">{r.workCenterId}</TableCell>
+                                    <TableCell className="text-xs font-mono">{r.workCenterId ?? '—'}</TableCell>
 
                                     <TableCell>
-                                        <RootCauseBadge category={r.rootCauseCategory} />
+                                        {r.status === 'Analyzing' ? (
+                                            <RunningSpinner />
+                                        ) : (
+                                            <RootCauseBadge category={r.rootCauseCategory} />
+                                        )}
                                     </TableCell>
 
                                     <TableCell>
                                         <AiVerdictCell report={r} />
                                     </TableCell>
 
-                                    <TableCell className="text-right text-xs tabular-nums">
+                                    <TableCell className="text-right text-xs tabular-nums font-mono">
                                         {formatEur(r.copqEur)}
                                     </TableCell>
 
@@ -306,7 +318,7 @@ export function EightDListPage() {
                                         )}
                                     </TableCell>
 
-                                    <TableCell className="text-xs text-muted-foreground">
+                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                         {formatDateTime(r.analyzedAt)}
                                         {r.durationMs != null && (
                                             <div className="text-xs opacity-70">
@@ -327,6 +339,12 @@ export function EightDListPage() {
                 open={analyzeOpen}
                 onOpenChange={setAnalyzeOpen}
                 onScheduled={(reportID) => navigate(`/8d/${reportID}`)}
+            />
+
+            <CreateDefectDialog
+                open={createDefectOpen}
+                onOpenChange={setCreateDefectOpen}
+                onCreated={(reportID: string) => navigate(`/8d/${reportID}`)}
             />
         </div>
     );

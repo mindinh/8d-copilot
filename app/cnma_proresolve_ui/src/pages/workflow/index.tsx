@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@cnma/react-ui';
 import {
-    BookOpen, Cpu, FileText, Sliders, Sparkles,
+    BookOpen, Boxes, Cpu, FileText, Sliders,
 } from 'lucide-react';
+import { AiModelManagementPage } from '@cnma/sap-aicore-integrate/react';
+import { aiModelApi } from '@/services/ai-model-service';
 import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { GeneralSettingsTab } from '../ai-settings/general-settings-tab';
 import { DisciplineSection } from './discipline-section';
@@ -22,7 +24,7 @@ const DISCIPLINES = [
 export function WorkflowPage() {
     const prompts = useStepPrompts();
 
-    const [activeTab, setActiveTab] = useState<'global' | 'disciplines'>('global');
+    const [activeTab, setActiveTab] = useState<'global' | 'disciplines' | 'models'>('global');
     const [selectedDiscipline, setSelectedDiscipline] = useState<string>('D1');
 
     return (
@@ -46,12 +48,6 @@ export function WorkflowPage() {
                         <Link to="/guide" className="flex items-center gap-1.5">
                             <BookOpen className="h-4 w-4" />
                             User Guide
-                        </Link>
-                    </Button>
-                    <Button variant="default" size="sm" asChild>
-                        <Link to="/ai-settings" className="flex items-center gap-1.5">
-                            <Sparkles className="h-4 w-4" />
-                            AI Settings
                         </Link>
                     </Button>
                 </div>
@@ -79,6 +75,17 @@ export function WorkflowPage() {
                 >
                     <FileText className="h-3.5 w-3.5 mr-1.5" />
                     8D Disciplines Configuration (D1 – D8)
+                </Button>
+
+                {/* Tab 3: Model Registry */}
+                <Button
+                    variant={activeTab === 'models' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setActiveTab('models')}
+                    className="text-xs rounded-lg font-medium"
+                >
+                    <Boxes className="h-3.5 w-3.5 mr-1.5" />
+                    Model Registry
                 </Button>
             </div>
 
@@ -139,6 +146,20 @@ export function WorkflowPage() {
                             />
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ─── TAB 3: MODEL REGISTRY ─── */}
+            {activeTab === 'models' && (
+                <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+                    <div>
+                        <h2 className="text-lg font-semibold tracking-tight">AI Core Model Registry</h2>
+                        <p className="text-xs text-muted-foreground">
+                            Synchronize deployed LLMs from SAP AI Core, manage availability, and set rate limits.
+                        </p>
+                    </div>
+
+                    <AiModelManagementPage api={aiModelApi} />
                 </div>
             )}
         </div>

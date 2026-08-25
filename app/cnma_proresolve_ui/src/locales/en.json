@@ -4,12 +4,10 @@
         "description": "CNMA Proresolve Application"
     },
     "nav": {
-        "home": "Home",
         "settings": "Settings",
         "admin": "Administrator",
         "user": "User",
         "logOut": "Log Out",
-        "aiSettings": "AI Settings",
         "workflow": "Training Center"
     },
     "common": {
@@ -32,12 +30,6 @@
         "next": "Next",
         "submit": "Submit",
         "noData": "No data available"
-    },
-    "home": {
-        "title": "Welcome to CNMA Proresolve",
-        "subtitle": "Your SAP CAP application is ready.",
-        "gettingStarted": "Getting Started",
-        "gettingStartedDesc": "Add your pages and routes in App.tsx. Use the @cnma/react-ui package for UI components."
     },
     "errors": {
         "boundary": {

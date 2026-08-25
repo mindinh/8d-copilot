@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
-    LayoutDashboard,
-    Building2,
-    Bot,
     Workflow,
     ClipboardList,
-    PlusCircle,
     Menu,
     ChevronLeft,
     ChevronRight,
@@ -43,15 +39,8 @@ type NavEntry = NavLeaf | NavGroup;
 function useNavTree(): NavEntry[] {
     const { t } = useTranslation();
     return [
-        { type: 'leaf', to: '/', icon: LayoutDashboard, label: t('nav.home') },
         { type: 'leaf', to: '/8d', icon: ClipboardList, label: '8D Reports' },
-        { type: 'leaf', to: '/create-defect', icon: PlusCircle, label: 'Create Defect (SAP UI5)' },
-        { type: 'leaf', to: '/organization', icon: Building2, label: 'Organization' },
-        // Lưu ý: cờ `adminOnly` có trong interface NavLeaf nhưng CHƯA được dùng
-        // để lọc ở đâu cả — đặt vào đây sẽ không ẩn mục nào. Khi nào phân quyền
-        // sidebar được nối dây thì thêm `adminOnly: true` cho mục này.
         { type: 'leaf', to: '/workflow', icon: Workflow, label: t('nav.workflow') },
-        { type: 'leaf', to: '/ai-settings', icon: Bot, label: t('nav.aiSettings') },
     ];
 }
 

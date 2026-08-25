@@ -6,14 +6,9 @@ import { ErrorBoundary } from '@/components/common';
 import { useFLPSyncDirect, getInitialFLPRoute } from '@/hooks/use-flpsync';
 
 import {
-    HomePage,
-    OrganizationPage,
-    AiSettingsPage,
-    StepPromptEditorPage,
     WorkflowPage,
     EightDListPage,
     EightDDetailPage,
-    CreateDefectPage,
 } from '@/pages';
  
 // Sync React Router navigation with parent FLP shell URL
@@ -48,18 +43,14 @@ export default function App() {
             <div className="min-h-screen bg-background">
                 <ErrorBoundary>
                     <Routes>
-                        <Route path="/ai-settings/step-prompts/:stepCode" element={<StepPromptEditorPage />} />
                         <Route element={<MainLayout />}>
                             {/* ─── Application Routes ─── */}
-                            <Route path="/" element={<HomePage />} />
+                            <Route path="/" element={<Navigate to="/8d" replace />} />
                             <Route path="/8d" element={<EightDListPage />} />
                             <Route path="/8d/:id" element={<EightDDetailPage />} />
-                            <Route path="/create-defect" element={<CreateDefectPage />} />
-                            <Route path="/organization" element={<OrganizationPage />} />
                             <Route path="/workflow" element={<WorkflowPage />} />
-                            <Route path="/ai-settings" element={<AiSettingsPage />} />
 
-                            <Route path="*" element={<Navigate to="/" replace />} />
+                            <Route path="*" element={<Navigate to="/8d" replace />} />
                         </Route>
                     </Routes>
                 </ErrorBoundary>
