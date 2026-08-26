@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fillPlaceholderOnTab } from '@/hooks/use-placeholder-autofill';
 import {
     Badge,
     Button,
@@ -312,7 +313,9 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
             )}
 
             {/* SAP QM Defect Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {/* onKeyDown gắn ở đây, không gắn lên từng ô: keydown nổi bọt lên nên
+                một handler phủ hết mọi ô bên trong, thêm ô mới không phải nối dây lại. */}
+            <form onSubmit={handleSubmit} onKeyDown={fillPlaceholderOnTab} className="space-y-6">
                 {/* 1. Header Information */}
                 <Card className="shadow-sm">
                     <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">

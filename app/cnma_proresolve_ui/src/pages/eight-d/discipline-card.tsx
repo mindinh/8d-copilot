@@ -3,6 +3,7 @@ import { Badge, Button, Card, cn } from '@cnma/react-ui';
 import { ChevronDown, TriangleAlert } from 'lucide-react';
 import { parseList, type Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
+import { SourceChips } from './evidence-drawer';
 
 /**
  * Một discipline trong dòng thời gian 8D.
@@ -22,7 +23,14 @@ function confidenceStyle(score: number): string {
     return 'bg-destructive/10 text-destructive border-destructive/20';
 }
 
-export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
+export function DisciplineCard({
+    discipline,
+    caseContext = null,
+}: {
+    discipline: Discipline8D;
+    /** CaseContext của report, để bấm vào nguồn là xem được bản ghi thật. */
+    caseContext?: string | null | undefined;
+}) {
     const [open, setOpen] = useState(false);
 
     const actionItems = parseList(discipline.actionItems);
@@ -132,16 +140,7 @@ export function DisciplineCard({ discipline }: { discipline: Discipline8D }) {
                                 No source data — this discipline is a proposal.
                             </p>
                         ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                                {sources.map((s, i) => (
-                                    <code
-                                        key={i}
-                                        className="max-w-full break-all rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
-                                    >
-                                        {s}
-                                    </code>
-                                ))}
-                            </div>
+                            <SourceChips sources={sources} caseContext={caseContext} />
                         )}
                     </div>
                 </div>

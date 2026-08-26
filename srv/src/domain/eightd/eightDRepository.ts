@@ -19,9 +19,16 @@
 
 import cds from '@sap/cds';
 import type { AnalyzeOutcome, CaseContext } from './types';
+import {
+    evaluateClosureGate,
+    normalizeStatus,
+    type ClosureGate,
+    type ReviewStatus,
+} from './review';
 
 const REPORTS = 'cnma.proresolve.Reports';
 const DISCIPLINES = 'cnma.proresolve.Disciplines';
+const REVIEW_EVENTS = 'cnma.proresolve.ReviewEvents';
 
 export interface ReportRow {
     ID: string;
@@ -305,4 +312,98 @@ export async function saveDisciplineFieldValue(
 
     await UPDATE(DISCIPLINES).set({ resultJson: JSON.stringify(data) }).where({ ID: disciplineID });
     cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Duyệt từng bước
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReviewResult {
+    disciplineID: string;
+    code: string;
+    fromStatus: ReviewStatus;
+    toStatus: ReviewStatus;
+    reviewedBy: string;
+    reviewedAt: string;
+    gate: ClosureGate;
+}
+
+/**
+ * Ghi một quyết định duyệt, kèm một dòng vết KHÔNG XOÁ được.
+ *
+ * Hai thao tác ghi phải đi cùng nhau: trạng thái hiện tại để UI và cổng D8 đọc,
+ * và dòng lịch sử để trả lời được "đã qua mấy vòng". Ghi trạng thái mà quên vết
+ * thì một case bị trả lại rồi duyệt lại trông y hệt case duyệt thẳng.
+ *
+ * `actor` lấy từ `req.user` ở tầng service, KHÔNG nhận từ client — chữ ký mà
+ * client tự khai được thì không phải chữ ký.
+ */
+export async function reviewDiscipline(
+    disciplineID: string,
+    toStatus: ReviewStatus,
+    note: string | null,
+    actor: string,
+): Promise<ReviewResult> {
+    const row = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'reviewStatus', 'report_ID')
+        .where({ ID: disciplineID });
+    if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+
+    const reportID = String((row as any).report_ID ?? '');
+    const fromStatus = normalizeStatus((row as any).reviewStatus);
+    const at = new Date().toISOString();
+
+    await UPDATE(DISCIPLINES).set({
+        reviewStatus: toStatus,
+        reviewedBy: actor,
+        reviewedAt: at,
+        // Ghi chú thuộc về quyết định vừa rồi. Duyệt xong mà giữ lại ghi chú của
+        // lần trả lại trước thì màn hình nói ngược với trạng thái.
+        reviewNote: note ?? null,
+    }).where({ ID: disciplineID });
+
+    await INSERT.into(REVIEW_EVENTS).entries({
+        reportID,
+        disciplineCode: String(row.code ?? ''),
+        fromStatus,
+        toStatus,
+        note: note ?? null,
+        actor,
+        at,
+    });
+
+    // Đọc lại CẢ report để tính cổng: cổng là thuộc tính của toàn case, không suy
+    // ra được từ một bước vừa đổi.
+    const siblings = await SELECT.from(DISCIPLINES)
+        .columns('code', 'reviewStatus')
+        .where({ report_ID: reportID });
+
+    cds.log('eightd-repo').info(
+        `Review ${row.code} ${fromStatus} -> ${toStatus} by ${actor} on report ${reportID}`,
+    );
+
+    return {
+        disciplineID,
+        code: String(row.code ?? ''),
+        fromStatus,
+        toStatus,
+        reviewedBy: actor,
+        reviewedAt: at,
+        gate: evaluateClosureGate(siblings as any[]),
+    };
+}
+
+/** Vết duyệt của một report, mới nhất trước. Dùng cho panel audit trên UI. */
+export async function getReviewTrail(reportID: string): Promise<Record<string, unknown>[]> {
+    return SELECT.from(REVIEW_EVENTS)
+        .where({ reportID })
+        .orderBy('at desc') as unknown as Record<string, unknown>[];
+}
+
+/** Cổng đóng case, đọc thẳng từ DB. */
+export async function getClosureGate(reportID: string): Promise<ClosureGate> {
+    const rows = await SELECT.from(DISCIPLINES)
+        .columns('code', 'reviewStatus')
+        .where({ report_ID: reportID });
+    return evaluateClosureGate(rows as any[]);
 }

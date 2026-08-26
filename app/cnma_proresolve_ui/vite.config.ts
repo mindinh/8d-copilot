@@ -3,6 +3,20 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import * as path from 'path'
 
+// Backend CAP chạy ở 4008 — xem package.json → scripts.dev:backend. Đổi port thì
+// sửa đúng dòng này; trước đây 6 route mỗi route ghi cứng một địa chỉ nên chỉ cần
+// bỏ sót một chỗ là FE gọi trượt sang cổng không có ai nghe.
+const BACKEND_URL = 'http://127.0.0.1:4008'
+
+/** Mọi route API proxy giống hệt nhau: cùng backend, cùng basic-auth của user mocked. */
+const api = (extra = {}) => ({
+    target: BACKEND_URL,
+    changeOrigin: true,
+    secure: false,
+    headers: { Authorization: 'Basic YWRtaW46MTIz' },
+    ...extra,
+})
+
 export default defineConfig({
     plugins: [
         react(),
@@ -43,45 +57,16 @@ export default defineConfig({
     server: {
         port: 5544,
         proxy: {
-            '/odata': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-            },
-            '/api/cnma': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-            },
-            '/identity': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-            },
-            '/identity-admin': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-                configure: (proxy) => {
-                    proxy.on('error', (err) => console.error('[Vite Proxy Error /identity-admin]:', err.message));
+            '/odata': api(),
+            '/api/cnma': api(),
+            '/identity': api(),
+            '/identity-admin': api({
+                configure: (proxy: any) => {
+                    proxy.on('error', (err: Error) => console.error('[Vite Proxy Error /identity-admin]:', err.message));
                 },
-            },
-            '/workflow': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-            },
-            '/workflow-admin': {
-                target: 'http://127.0.0.1:4004',
-                changeOrigin: true,
-                secure: false,
-                headers: { Authorization: 'Basic YWRtaW46MTIz' },
-            },
+            }),
+            '/workflow': api(),
+            '/workflow-admin': api(),
         },
     },
 })

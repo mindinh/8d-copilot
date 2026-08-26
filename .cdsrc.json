@@ -1,25 +1,16 @@
 {
   "//": [
-    "CHỈ dành cho chạy local. Mọi mục dưới đây PHẢI nằm trong [development].",
+    "CHỈ dành cho chạy local.",
     "",
-    "`.cdsrc.json` có độ ưu tiên CAO HƠN khối `cds` trong package.json. Khai",
-    "`kind: sqlite` không kèm profile ở đây sẽ đè lên cả `[production]`, và app",
-    "trên Cloud Foundry sẽ nối vào sqlite thay vì HANA — không báo lỗi cấu hình,",
-    "chỉ vỡ ở lời gọi DB đầu tiên:",
-    "    libm.so.6: version `GLIBC_2.38' not found (required by node_sqlite3.node)",
+    "KHÔNG khai `db` ở file này. `.cdsrc.json` có độ ưu tiên CAO HƠN khối `cds`",
+    "trong package.json, và `cds watch` LUÔN bật kèm profile [development] — kể cả",
+    "khi gọi --profile hybrid (profiles = [\"hybrid\",\"development\"]). Mọi thứ khai ở",
+    "đây vì thế áp lên cả lượt chạy hybrid và có thể kéo DB về sai driver.",
     "",
-    "Cấu hình cho production nằm ở package.json → cds.requires."
+    "DB là HANA ở mọi profile: xem package.json → cds.requires.db.",
+    "Credential local lấy từ .cdsrc-private.json (đã gitignore)."
   ],
   "requires": {
-    "db": {
-      "[development]": {
-        "kind": "sqlite",
-        "impl": "@sap/cds/libx/_runtime/sqlite/Service.js",
-        "credentials": {
-          "url": "sqlite.db"
-        }
-      }
-    },
     "auth": {
       "[development]": {
         "kind": "mocked",

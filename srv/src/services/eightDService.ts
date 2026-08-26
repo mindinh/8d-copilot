@@ -34,15 +34,23 @@ import { blockingIssues, validateDataset } from '../domain/eightd/datasetValidat
 import { getGlobalModelConfig } from '../core/ai/globalModelConfig';
 import {
     createReport,
+    getClosureGate,
     getReportForRerun,
+    getReviewTrail,
     markAnalyzing,
     markFailed,
+    reviewDiscipline,
     saveAssignedTeam,
     saveDisciplineFieldValue,
     saveResult,
     sweepStuckAnalyzing,
     type AssignedTeamRow,
 } from '../domain/eightd/eightDRepository';
+import {
+    isReviewDecision,
+    statusForDecision,
+    REVIEW_DECISIONS,
+} from '../domain/eightd/review';
 import { PipelineError, type CaseContext } from '../domain/eightd/types';
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
@@ -240,6 +248,60 @@ export function registerEightDHandlers(srv: any): void {
         if (!cases.length) return req.error(400, 'payload is empty — no cases to seed.');
 
         return JSON.stringify(await seedLibrary(cases));
+    });
+
+    // ── reviewDiscipline ─────────────────────────────────────────────────────
+    //
+    // Đường ghi duy nhất cho quyết định của con người trên một bước D.
+    srv.on('reviewDiscipline', async (req: any) => {
+        const disciplineID = req.data?.disciplineID;
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID is required.');
+        }
+
+        const decision = String(req.data?.decision ?? '').trim();
+        if (!isReviewDecision(decision)) {
+            return req.error(400, `decision must be one of ${REVIEW_DECISIONS.join(', ')}.`);
+        }
+
+        const note = String(req.data?.note ?? '').trim() || null;
+        // Trả lại mà không nói sửa gì thì người nhận không làm được gì — chặn ở
+        // đây chứ không nhắc nhở trên UI, vì UI là thứ duy nhất thay thế được.
+        if (decision === 'request-change' && !note) {
+            return req.error(400, 'note is required when requesting a change.');
+        }
+        if (note && note.length > 500) {
+            return req.error(400, `note is ${note.length} characters; the limit is 500.`);
+        }
+
+        // Danh tính lấy từ ngữ cảnh xác thực, không từ payload.
+        const actor = String(req.user?.id ?? 'anonymous');
+
+        try {
+            const result = await reviewDiscipline(
+                disciplineID,
+                statusForDecision(decision),
+                note,
+                actor,
+            );
+            return JSON.stringify(result);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
+    });
+
+    srv.on('getReviewTrail', async (req: any) => {
+        const reportID = String(req.data?.reportID ?? '').trim();
+        if (!reportID) return req.error(400, 'reportID is required.');
+        try {
+            const [trail, gate] = await Promise.all([
+                getReviewTrail(reportID),
+                getClosureGate(reportID),
+            ]);
+            return JSON.stringify({ gate, trail });
+        } catch (e: any) {
+            return req.error(500, describe(e));
+        }
     });
 
     // ── saveTeamRoster ───────────────────────────────────────────────────────

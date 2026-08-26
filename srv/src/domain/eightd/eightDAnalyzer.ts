@@ -266,7 +266,7 @@ async function generateReport(
     );
 
     const responseSchema = buildFlexibleResponseSchema(normalizedConfigs);
-    let { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
+    const { value } = await callAndParse<EightDResult>(ACTIVITY_ANALYZE, async (repairHint) => {
         const res = await complete(
             [
                 { role: 'system', content: systemPrompt },
@@ -331,10 +331,14 @@ async function generateReport(
                     }),
                 },
             ], {
-                activity: ACTIVITY_ANALYZE,
+                // PHẢI là ACTIVITY_STRUCTURE, không phải ACTIVITY_ANALYZE. Khai
+                // nhầm ở đây thì bước điền form âm thầm chạy model của bước viết
+                // báo cáo, và mọi cấu hình model riêng cho nó không bao giờ có
+                // hiệu lực — đúng lỗi cũ, đo được ~90s cho một thao tác ánh xạ.
+                activity: ACTIVITY_STRUCTURE,
                 temperature: 0,
-                max_tokens: BUDGET.analyze.maxTokens,
-                thinkingBudget: BUDGET.analyze.thinkingBudget,
+                max_tokens: BUDGET.structure.maxTokens,
+                thinkingBudget: BUDGET.structure.thinkingBudget,
                 responseMimeType: 'application/json',
                 responseSchema: structuredSchema,
             });
@@ -364,22 +368,20 @@ async function generateReport(
             : [];
     });
     if (errors.length) {
-        const configuredData = new Map(value.disciplines.map((discipline) => [discipline.code, discipline.data]));
-        const repaired = await callAndParse<EightDResult>(`${ACTIVITY_ANALYZE}-configured-repair`, async (repairHint) => {
-            const res = await complete([
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: `${renderPrompt()}\n\n## CONFIGURATION VALIDATION ERRORS\n${JSON.stringify(errors, null, 2)}\nReturn the complete corrected report.${repairHint ? `\n${repairHint}` : ''}` },
-            ], { activity: ACTIVITY_ANALYZE, temperature: 0, max_tokens: BUDGET.analyze.maxTokens, thinkingBudget: BUDGET.analyze.thinkingBudget, responseMimeType: 'application/json', responseSchema });
-            tokens += res.usage?.totalTokens ?? 0;
-            return { content: res.content, finishReason: res.finishReason };
-        });
-        value = repaired.value;
-        for (const discipline of value.disciplines ?? []) {
-            // The narrative repair schema intentionally keeps data open to avoid
-            // Gemini's serving-state limit, so it must not erase structured output.
-            discipline.data = configuredData.get(discipline.code) ?? discipline.data ?? {};
-            syncLegacyFields(discipline);
-        }
+        // KHÔNG gọi lại model để "sửa" các lỗi này — lượt gọi đó không sửa được gì.
+        //
+        // Mọi vi phạm ở đây đều đọc từ `discipline.data` (xem `validateFlexibleResult`).
+        // Bản cũ chụp lại `data` đang lỗi, gọi model 32K token bảo nó "return the
+        // complete corrected report", rồi ngay sau đó GHI ĐÈ `data` bằng đúng bản
+        // đã chụp — nên vi phạm còn nguyên theo đúng cấu trúc code, chỉ phần lời
+        // văn là bị viết lại. Bắt buộc phải ghi đè như vậy vì schema của lượt sửa
+        // để `data` mở (né giới hạn serving-state của Gemini), nên kết quả trả về
+        // có thể rỗng và sẽ xoá mất output đã cấu trúc hoá ở bước trước.
+        //
+        // Đo thực tế: lượt gọi này tốn ~85s trong tổng 317s — 27% thời gian cho
+        // một thao tác vô hiệu. `postProcess` phía sau mới là chỗ thật sự chữa
+        // được, và phần còn lại đi thẳng vào `validationJson` cho UI hiển thị.
+        LOG.warn(`Cấu hình còn ${errors.length} vi phạm — chuyển cho postProcess và báo lên UI: ${errors.map((e) => `${e.code}.${e.path}`).join(', ')}`);
     }
     return {
         result: value,
@@ -435,31 +437,44 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
     );
 
     // ── AI ──
-    const { enrichment, tokens: parseTokens } = await enrichContext(raw, context);
+    // Đo từng pha: cả lượt chạy tốn 1.5-4 phút, và không có mốc thời gian thì
+    // không thể biết pha nào ăn thời gian khi cần chỉnh model hay budget.
+    const phase = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+        const t = Date.now();
+        try { return await fn(); } finally { LOG.info(`[phase] ${name}: ${Date.now() - t}ms`); }
+    };
 
-    // Chẩn đoán mù chạy TRƯỚC bước viết báo cáo và trên bộ input đã bị cắt đáp
-    // án. Kết luận của nó được đưa vào bước sau để D4 nêu được cả hai góc nhìn.
-    const { analysis: independent, tokens: diagnoseTokens } = await diagnoseIndependently(context);
-
-    // ── Tiền lệ ──
-    // Chạy TRƯỚC bước viết báo cáo và độc lập với nó: đây là 100% code, và khi
-    // case mới chưa có điều tra gì thì nó là nguồn duy nhất để D1/D3/D5/D7 dựa
-    // vào thay vì nói chung chung.
+    // Ba bước này ĐỘC LẬP nhau — làm giàu ngữ cảnh chỉ cần `raw`+`context`, chẩn
+    // đoán mù chỉ cần `context`, tìm tiền lệ chỉ cần `context`+`raw`. Chỉ bước
+    // viết báo cáo phía dưới mới cần cả ba, nên chạy chúng cùng lúc.
     //
-    // Hỏng thì đi tiếp với danh sách rỗng — mất phần gợi ý theo tiền lệ vẫn còn
-    // cả báo cáo, đổi cả lượt phân tích lấy một sự cố truy vấn là quá đắt.
+    // Đo được khi còn chạy nối tiếp: parse 15.0s + diagnose 15.7s + precedents
+    // 16.9s = 47.6s; song song thì chỉ tốn bằng bước lâu nhất. Giới hạn đồng thời
+    // của CDK (`AICORE_MAX_CONCURRENT`) mặc định là 3 — vừa đủ cho đúng ba bước
+    // này, nên không bước nào phải xếp hàng.
     //
-    // Mỗi bước D chạy profile của riêng nó, nên một bước có thể có tiền lệ trong
-    // khi bước khác không — đó là điều BÌNH THƯỜNG, không phải lỗi. Xem
-    // `findPrecedentsByStep`.
-    let perStep = emptyPerStepPrecedents();
-    try {
+    // Tiền lệ hỏng thì đi tiếp với danh sách rỗng — mất phần gợi ý theo tiền lệ
+    // vẫn còn cả báo cáo, đổi cả lượt phân tích lấy một sự cố truy vấn là quá đắt.
+    // Bắt lỗi NGAY TRONG nhánh của nó, không để `Promise.all` kéo đổ hai bước kia.
+    const [
+        { enrichment, tokens: parseTokens },
+        { analysis: independent, tokens: diagnoseTokens },
+        perStep,
+    ] = await Promise.all([
+        phase('parse', () => enrichContext(raw, context)),
+        // Chẩn đoán mù chạy trên bộ input đã bị cắt đáp án. Kết luận của nó được
+        // đưa vào bước sau để D4 nêu được cả hai góc nhìn.
+        phase('diagnose', () => diagnoseIndependently(context)),
         // Truyền `raw`: tiêu chí trỏ vào một đường dẫn payload SAP chỉ so được khi
         // case đang mở cũng có payload đã làm phẳng.
-        perStep = await findPrecedentsByStep(context, raw);
-    } catch (e: any) {
-        LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
-    }
+        //
+        // Mỗi bước D chạy profile của riêng nó, nên một bước có thể có tiền lệ
+        // trong khi bước khác không — BÌNH THƯỜNG, không phải lỗi.
+        phase('precedents', () => findPrecedentsByStep(context, raw)).catch((e: any) => {
+            LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
+            return emptyPerStepPrecedents();
+        }),
+    ]);
     const precedents = perStep.union;
 
     const {
@@ -469,7 +484,7 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         inputs: runtimeInputs,
         diagnostics: inputDiagnostics,
     } =
-        await generateReport(context, enrichment, independent, perStep);
+        await phase('analyze', () => generateReport(context, enrichment, independent, perStep));
 
     // ── Lưới an toàn ──
     const constraintConfigs = Object.fromEntries((await Promise.all(['D1', 'D2', 'D3', 'D4'].map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {
