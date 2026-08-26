@@ -144,4 +144,14 @@ export const BUDGET = {
      */
     diagnose: { maxTokens: 16_000, thinkingBudget: 8_192 },
     analyze: { maxTokens: 32_000, thinkingBudget: 4_096 },
+    /**
+     * Điền form: ánh xạ narrative ĐÃ VIẾT XONG vào các ô đã cấu hình. Không suy
+     * luận, không sinh nội dung mới, output chỉ là một mảng {code, path,
+     * valueJson} — nên 8K là dư và thinking budget là tiền vứt đi.
+     *
+     * Trước đây bước này dùng chung `analyze` (32K + 4096 thinking) vì chỗ gọi
+     * khai nhầm `activity: ACTIVITY_ANALYZE`. Đo được: ~90s cho một thao tác
+     * đáng lẽ vài giây.
+     */
+    structure: { maxTokens: 8_000, thinkingBudget: 0 },
 } as const;

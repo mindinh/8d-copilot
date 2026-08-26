@@ -7,37 +7,38 @@ import {
 } from '@/services/retrieval-service';
 
 /**
- * Trạng thái của trang Object Schema.
+ * State for the Object Schema workbench.
  *
- * ── Ranh giới với tab Similarity của từng bước D ──
- * Trang này định nghĩa profile so NHỮNG FIELD NÀO. Tab Similarity của từng bước
- * chỉnh trọng số, cách so, sàn cosine và ngưỡng — tức là những field đó nặng nhẹ
- * ra sao với riêng bước đó.
+ * ── One screen, not two ──
+ * Which fields a step compares and how heavily each one counts are the same
+ * decision seen from two sides: dropping a field changes the reachable score,
+ * and the threshold only means something against that score. Splitting them
+ * across two screens meant every edit on one could silently overwrite the other,
+ * and neither screen could show the consequence of its own change.
  *
- * Ranh giới này không phải sở thích trình bày. Cùng một profile phục vụ nhiều
- * bước, và trọng số là thứ khác nhau giữa các bước; còn bộ field thì không. Trộn
- * hai thứ vào một màn hình nghĩa là mỗi lần kéo thêm một field ở đây sẽ ghi đè
- * trọng số mà ai đó vừa chỉnh ở tab kia — âm thầm. Xem `criteriaFields` trong
- * `profileRepository.saveProfile`.
+ * So this hook owns the whole profile: identity, the 8D step it serves, the
+ * fields it compares, their weights, and the retrieval thresholds.
  *
- * ── Vì sao có bản nháp thay vì ghi thẳng ──
- * Kéo field và gán bước D chỉ có nghĩa CÙNG NHAU: gán một bước cho profile chưa
- * có field nào là để bước đó không tìm ra tiền lệ nào. Sửa trên bản nháp rồi gửi
- * trạng thái mong muốn trong MỘT lượt thì không có khoảnh khắc nửa vời nào.
+ * ── Draft, not live writes ──
+ * These parts only mean something together — binding a step to a profile with no
+ * fields is binding it to "never find a precedent". Edit a draft, then send the
+ * desired state in ONE call, so there is no half-applied moment.
  */
 
-/** Bản nháp của một profile — đúng những gì Save sẽ gửi đi. */
+/** A profile draft — exactly what Save sends. */
 export interface ProfileDraft {
     label: string;
     description: string;
-    /**
-     * Field của profile. Giữ nguyên `ProfileCriterion` để hiện được tham số chấm
-     * điểm ở dạng CHỈ ĐỌC — người dùng cần thấy field này đang nặng bao nhiêu để
-     * biết bỏ nó ra thì mất gì. Save chỉ gửi phần định danh.
-     */
+    /** Fields this profile compares, with their scoring parameters. */
     fields: ProfileCriterion[];
-    /** Bước D trỏ vào profile này. Một bước chỉ nằm trong đúng một profile. */
+    /** The 8D step this profile serves. At most one — see `blockingError`. */
     steps: string[];
+    /** Below this score no precedent is surfaced at all. */
+    minScore: number;
+    /** How many precedents to hand the step. */
+    topN: number;
+    /** Only completed / closed cases qualify as precedents. */
+    closedOnly: boolean;
 }
 
 export interface ObjectSchemaState {
@@ -64,6 +65,8 @@ export interface ObjectSchemaState {
     ownerByStep: Record<string, string>;
     /** Số field của từng profile — panel danh sách cần, và nó là số của trang này. */
     fieldCountByProfile: Record<string, number>;
+    /** Reachable score: the weights of every enabled field in the draft. */
+    maxScore: number;
 
     save: () => Promise<void>;
     discard: () => void;
@@ -86,10 +89,19 @@ function toDraft(
             .filter((c) => c.profile_profileKey === profile.profileKey)
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
         steps: assignedSteps.slice(0, 1),
+        minScore: profile.minScore,
+        topN: profile.topN,
+        closedOnly: profile.closedOnly,
     };
 }
 
-export function useObjectSchema(): ObjectSchemaState {
+/**
+ * @param stepCode when given, the workbench opens the profile that this 8D step
+ *        runs and stays on it. The step editor embeds this hook that way, so a
+ *        step's schema tab always shows the step's own profile rather than
+ *        whichever profile was last opened on the standalone page.
+ */
+export function useObjectSchema(stepCode?: string): ObjectSchemaState {
     const [catalog, setCatalog] = useState<SourceFieldInfo[]>([]);
     const [catalogCaseCount, setCatalogCaseCount] = useState(0);
     const [profiles, setProfiles] = useState<RetrievalProfile[]>([]);
@@ -100,19 +112,28 @@ export function useObjectSchema(): ObjectSchemaState {
     const [activeProfileKey, setActiveProfileKey] = useState('default');
     const [draft, setDraftState] = useState<ProfileDraft | null>(null);
 
-    const reload = useCallback(async (selectKey?: string) => {
+    const reload = useCallback(async (selectKey?: string, skipCatalog = false) => {
+        const fetchCatalog = skipCatalog
+            ? Promise.resolve(null)
+            : getSourceFieldCatalog();
         const [cat, p, c, b] = await Promise.all([
-            getSourceFieldCatalog(), getProfiles(), getProfileCriteria(), getStepBindings(),
+            fetchCatalog, getProfiles(), getProfileCriteria(), getStepBindings(),
         ]);
-        setCatalog(cat.fields ?? []);
-        setCatalogCaseCount(cat.caseCount ?? 0);
+        if (cat) {
+            setCatalog(cat.fields ?? []);
+            setCatalogCaseCount(cat.caseCount ?? 0);
+        }
         setProfiles(p);
         setCriteria(c);
         setBindings(b);
 
-        // Profile đang mở vừa bị xoá ⇒ về bộ đầu tiên. Không làm thì panel giữa
-        // trống trơn và không có gì nói vì sao.
-        const wanted = selectKey ?? activeProfileKey;
+        // A step-scoped workbench always follows its step's binding. Otherwise
+        // keep whatever profile is open — unless it was just deleted, in which
+        // case fall back to the first one rather than showing an empty panel.
+        const boundToStep = stepCode
+            ? b.find((row) => row.stepCode === stepCode)?.profile_profileKey
+            : undefined;
+        const wanted = selectKey ?? boundToStep ?? activeProfileKey;
         const target = p.find((row) => row.profileKey === wanted) ?? p[0] ?? null;
         if (target) {
             setActiveProfileKey(target.profileKey);
@@ -120,7 +141,7 @@ export function useObjectSchema(): ObjectSchemaState {
         } else {
             setDraftState(null);
         }
-    }, [activeProfileKey]);
+    }, [activeProfileKey, stepCode]);
 
     useEffect(() => {
         reload()
@@ -136,18 +157,18 @@ export function useObjectSchema(): ObjectSchemaState {
         return profile ? toDraft(profile, criteria, bindings) : null;
     }, [profiles, criteria, bindings, activeProfileKey]);
 
-    /**
-     * So phần Save THẬT SỰ gửi đi, không so cả bản nháp.
-     *
-     * `fields` mang theo trọng số chỉ để hiển thị; đưa chúng vào phép so sẽ báo
-     * "chưa lưu" mỗi khi tab Similarity đổi một con số, và nút Save sẽ mời người
-     * dùng ghi đè đúng thứ vừa đổi.
-     */
+    /** Everything Save sends — this screen owns all of it, so compare all of it. */
     const saveShape = useCallback((d: ProfileDraft) => JSON.stringify({
         label: d.label,
         description: d.description,
-        fields: d.fields.map((f) => f.criterionKey),
         steps: d.steps,
+        minScore: d.minScore,
+        topN: d.topN,
+        closedOnly: d.closedOnly,
+        fields: d.fields.map((f) => [
+            f.criterionKey, f.label, f.sourceField, f.matchType, f.weight,
+            f.minSimilarity, f.enabled, f.fallbackMatch, f.fallbackField, f.fallbackWeight,
+        ]),
     }), []);
 
     const dirty = useMemo(
@@ -182,7 +203,22 @@ export function useObjectSchema(): ObjectSchemaState {
             return 'Each profile can only be assigned to a single 8D step.';
         }
         if (draft.steps.length && !draft.fields.length) {
-            return `Profile is assigned to ${draft.steps.join(', ')} but contains no fields — these steps will never match any precedent.`;
+            return `Profile is assigned to ${draft.steps.join(', ')} but contains no fields — that step would never match any precedent.`;
+        }
+        const maxScore = draft.fields
+            .filter((f) => f.enabled)
+            .reduce((sum, f) => sum + (f.weight ?? 0), 0);
+        if (draft.steps.length && maxScore === 0) {
+            return 'No field is enabled — the reachable score is 0, so nothing can pass the threshold.';
+        }
+        if (maxScore > 0 && draft.minScore > maxScore) {
+            return `Threshold ${draft.minScore} is above the reachable score ${maxScore} — no case can ever qualify.`;
+        }
+        const cosineOnWrongField = draft.fields.find(
+            (f) => f.matchType === 'cosine' && f.sourceField !== 'embedding',
+        );
+        if (cosineOnWrongField) {
+            return `"${cosineOnWrongField.label}" uses Vector matching on "${cosineOnWrongField.sourceField}" — only the embedding field carries a vector.`;
         }
         return null;
     }, [draft]);
@@ -194,17 +230,15 @@ export function useObjectSchema(): ObjectSchemaState {
             await saveRetrievalProfile(activeProfileKey, {
                 label: draft.label,
                 description: draft.description,
-                criteriaFields: draft.fields.map((f) => ({
-                    criterionKey: f.criterionKey,
-                    label: f.label,
-                    description: f.description,
-                    sourceTable: f.sourceTable,
-                    sourceField: f.sourceField,
-                    matchType: f.matchType,
-                })),
+                minScore: draft.minScore,
+                topN: draft.topN,
+                closedOnly: draft.closedOnly,
+                // Full criteria, not just membership: this screen owns the weights
+                // too now, so there is no other writer whose edits could be lost.
+                criteria: draft.fields,
                 steps: draft.steps,
             });
-            await reload(activeProfileKey);
+            await reload(activeProfileKey, true);
             toast.success(`Saved profile "${draft.label}".`);
         } catch (e: any) {
             toast.error(`Save failed: ${e?.response?.data?.error?.message ?? e.message}`);
@@ -260,6 +294,9 @@ export function useObjectSchema(): ObjectSchemaState {
         fieldByPath,
         ownerByStep,
         fieldCountByProfile,
+        maxScore: (draft?.fields ?? [])
+            .filter((f) => f.enabled)
+            .reduce((sum, f) => sum + (f.weight ?? 0), 0),
         save,
         discard,
         reload,

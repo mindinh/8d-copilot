@@ -7,6 +7,8 @@ import type { Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
 import { AiSuggestWidget, DecisionTableWidget, TeamRosterProvider, type RosterRow } from './team-roster-widget';
 import { ComplaintReferenceWidget, IsBoxWidget, IsNotBoxWidget, ProblemStatementWidget, W2hCellWidget } from './problem-widgets';
+import { ActionCardsWidget, IshikawaGridWidget, WhyChainWidget } from './cause-widgets';
+import { ClosureGateWidget, FmeaLinkWidget } from './closure-widgets';
 
 interface SnapshotField { key: string; label: string; widget: string; visible?: boolean; colSpan?: number; rowSpan?: number }
 interface SnapshotGroup { id: string; label: string; fieldKeys: string[]; order?: number }
@@ -46,6 +48,14 @@ const SELF_LABELLED_WIDGETS = new Set(['w2h-cell', 'is-box', 'isnot-box', 'compl
 const SELF_EMPTY_WIDGETS = new Set([
     'w2h-cell', 'is-box', 'isnot-box', 'complaint-reference',
     'ai-suggest', 'decision-table', 'problem-statement',
+    // `ishikawa-grid` doc tu caseContext chu khong tu gia tri field, nen gia tri
+    // luon rong — khong co mat o day thi no khong bao gio duoc goi.
+    // Hai cai con lai tu ve dong "chua co gi", de nguoi doc biet la trong that
+    // chu khong phai man hinh hong.
+    'ishikawa-grid', 'why-chain', 'action-cards',
+    // 'fmea-link' phai ve duoc trang thai CHUA lien ket — do la lo hong that cua
+    // case, khong phai o trong. 'closure-gate' thi khong doc gia tri field nao ca.
+    'fmea-link', 'closure-gate',
 ]);
 
 
@@ -122,7 +132,7 @@ function EvidenceList({ paths, context }: { paths: string[]; context: Record<str
     })}</div>;
 }
 
-function FieldValue({ field, value, context, disciplineID, data }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown> }) {
+function FieldValue({ field, value, context, disciplineID, data, siblings }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[] }) {
     if ((value === undefined || value === null || value === '') && !SELF_EMPTY_WIDGETS.has(field.widget)) return <span className="text-sm italic text-muted-foreground">Not provided</span>;
     if (field.widget === 'evidence-list' && Array.isArray(value)) return <EvidenceList paths={value.map(String)} context={context} />;
     // Hai widget co HANH VI cua D1. Chung khong tu giu state - state nhom nam
@@ -156,6 +166,16 @@ function FieldValue({ field, value, context, disciplineID, data }: { field: Snap
     }
     if (field.widget === 'is-box') return <IsBoxWidget value={value} />;
     if (field.widget === 'isnot-box') return <IsNotBoxWidget value={value} />;
+    // D4/D3 — ba widget nay phai dung TRUOC nhanh Array chung ben duoi, neu khong
+    // `ObjectTable` nuot het va lai ve ra bang phang nhu cu.
+    if (field.widget === 'why-chain') return <WhyChainWidget value={value} />;
+    if (field.widget === 'ishikawa-grid') return <IshikawaGridWidget context={context} />;
+    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} />;
+    if (field.widget === 'fmea-link') return <FmeaLinkWidget value={value} />;
+    // Cổng đóng case là sự thật về CẢ report, nên nó đọc trạng thái duyệt của các
+    // bước anh em chứ không đọc `resultJson` — để model tự trả lời câu này là để
+    // nó tự cấp phép đóng case.
+    if (field.widget === 'closure-gate') return <ClosureGateWidget siblings={siblings} />;
     if (field.widget === 'markdown' || field.widget === 'textarea') return <Markdown>{String(value)}</Markdown>;
     if (field.widget === 'status') return <Badge variant={/ready|agree|complete|verified|effective/i.test(String(value)) ? 'success' : 'secondary'} className="max-w-full whitespace-normal break-words text-left leading-relaxed">{String(value)}</Badge>;
     if (typeof value === 'boolean') return <Badge variant={value ? 'success' : 'secondary'}>{value ? 'Yes' : 'No'}</Badge>;
@@ -168,15 +188,23 @@ function FieldValue({ field, value, context, disciplineID, data }: { field: Snap
     return <span className="break-words whitespace-pre-wrap text-sm leading-relaxed">{String(value)}</span>;
 }
 
-function FieldBlock({ field, value, violations, context, disciplineID, data }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown> }) {
+function FieldBlock({ field, value, violations, context, disciplineID, data, siblings }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[] }) {
     const hasError = violations.some((item) => item.severity === 'error');
     const hasWarning = violations.some((item) => item.severity === 'warning');
-    return <div className={cn('min-w-0 overflow-hidden rounded-xl', SELF_LABELLED_WIDGETS.has(field.widget) ? 'p-0' : 'p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}>{!SELF_LABELLED_WIDGETS.has(field.widget) && <div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div>}<div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
+    return <div className={cn('min-w-0 overflow-hidden rounded-xl', SELF_LABELLED_WIDGETS.has(field.widget) ? 'p-0' : 'p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}>{!SELF_LABELLED_WIDGETS.has(field.widget) && <div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div>}<div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} siblings={siblings} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
 }
 
-export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson }: {
+export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson, siblings = [] }: {
     discipline: Discipline8D;
     caseContext?: string;
+    /**
+     * Tam buoc cua cung report.
+     *
+     * Chi widget `closure-gate` cua D8 can den: "case nay dong duoc chua" la su
+     * that ve CA report chu khong phai ket luan cua rieng mot buoc, nen no phai
+     * doc trang thai duyet cua cac buoc anh em.
+     */
+    siblings?: Discipline8D[];
     /**
      * Bo cuc dang cau hinh trong Form Editor, doc song tu `StepPrompts`.
      *
@@ -219,5 +247,5 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
     const violations = validation?.violations ?? [];
     const errorCount = violations.filter((item) => item.severity === 'error').length;
     const warningCount = violations.filter((item) => item.severity === 'warning').length;
-    return <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')}><div className="min-w-0 space-y-3"><Card className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-border/70 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><Badge variant="outline">{discipline.code}</Badge><div className="min-w-0"><div className="break-words font-semibold">{discipline.title}</div><div className="text-xs text-muted-foreground">Schema-driven result</div></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant={discipline.dataBacked ? 'success' : 'warning'}>{discipline.dataBacked ? 'Data backed' : 'Inference / incomplete data'}</Badge><Badge variant="outline">{Math.round(Number(discipline.confidence ?? 0) * 100)}% confidence</Badge>{errorCount > 0 ? <Badge variant="destructive">{errorCount} errors</Badge> : warningCount > 0 ? <Badge variant="warning">{warningCount} warnings</Badge> : <Badge variant="success"><CheckCircle2 className="h-3.5 w-3.5" />Validation passed</Badge>}</div></Card><Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">{visibleGroups.map((group) => <AccordionItem key={group.id} value={group.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"><AccordionTrigger className="min-w-0 px-4 py-3 hover:no-underline"><span className="break-words text-left text-sm font-semibold">{group.label}</span></AccordionTrigger><AccordionContent className="border-t px-4 py-4"><div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">{group.fieldKeys.map((key) => { const field = fieldMap.get(key); if (!field || field.visible === false) return null; const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key); return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} />; })}</div></AccordionContent></AccordionItem>)}</Accordion></div></TeamRosterProvider>;
+    return <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')}><div className="min-w-0 space-y-3"><Card className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-border/70 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><Badge variant="outline">{discipline.code}</Badge><div className="min-w-0"><div className="break-words font-semibold">{discipline.title}</div><div className="text-xs text-muted-foreground">Schema-driven result</div></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant={discipline.dataBacked ? 'success' : 'warning'}>{discipline.dataBacked ? 'Data backed' : 'Inference / incomplete data'}</Badge><Badge variant="outline">{Math.round(Number(discipline.confidence ?? 0) * 100)}% confidence</Badge>{errorCount > 0 ? <Badge variant="destructive">{errorCount} errors</Badge> : warningCount > 0 ? <Badge variant="warning">{warningCount} warnings</Badge> : <Badge variant="success"><CheckCircle2 className="h-3.5 w-3.5" />Validation passed</Badge>}</div></Card><Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">{visibleGroups.map((group) => <AccordionItem key={group.id} value={group.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"><AccordionTrigger className="min-w-0 px-4 py-3 hover:no-underline"><span className="break-words text-left text-sm font-semibold">{group.label}</span></AccordionTrigger><AccordionContent className="border-t px-4 py-4"><div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">{group.fieldKeys.map((key) => { const field = fieldMap.get(key); if (!field || field.visible === false) return null; const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key); return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} siblings={siblings} />; })}</div></AccordionContent></AccordionItem>)}</Accordion></div></TeamRosterProvider>;
 }

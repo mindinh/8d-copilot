@@ -45,8 +45,7 @@ export async function getGlobalModelConfig(): Promise<Record<string, unknown>> {
   if (cached && Date.now() - cachedAt < CACHE_TTL_MS) return cached;
 
   try {
-    const db = await cds.connect.to('db');
-    const row = await db.run(SELECT.one.from(ENTITY).where({ ID: GLOBAL_SETTINGS_ID }));
+    const row = await SELECT.one.from(ENTITY).where({ ID: GLOBAL_SETTINGS_ID });
     const raw = row?.aiAgentConfig;
     cached = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
   } catch (e: any) {

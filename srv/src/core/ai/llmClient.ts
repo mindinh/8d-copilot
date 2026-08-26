@@ -12,7 +12,12 @@ import type {
   AIToolResponse,
   ToolSchema,
 } from '@cnma/sap-aicore-integrate/types';
-import { AICORE_DEFAULT_MODEL, EMBEDDING_DIM, DEFAULT_EMBEDDING_MODEL } from '../../config/ai';
+import {
+  ACTIVITY_MODEL_DEFAULTS,
+  AICORE_DEFAULT_MODEL,
+  EMBEDDING_DIM,
+  DEFAULT_EMBEDDING_MODEL,
+} from '../../config/ai';
 import { APP_EMBEDDING_CORPORA } from './embeddingCorpora';
 import { getGlobalModelConfig } from './globalModelConfig';
 
@@ -80,13 +85,31 @@ function maybeInstallMock(): void {
   mockInstalled = true;
 }
 
+/** Đọc `models[activity]` mà KHÔNG rơi về `model` chung. */
+function explicitActivityModel(
+  cfg: Record<string, unknown> | string | null | undefined,
+  activity: string,
+): string | undefined {
+  const parsed = typeof cfg === 'string' ? safeParseConfig(cfg) : (cfg ?? undefined);
+  const models = parsed?.models as Record<string, unknown> | undefined;
+  const value = models?.[activity];
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 /**
  * Chọn model cho một activity.
  *
  * Thứ tự ưu tiên:
  *   1. cấu hình truyền thẳng vào lời gọi (theo tenant / theo đối tượng)
- *   2. cấu hình chung lưu trong DB — đây là thứ trang AI Settings ghi
- *   3. `AICORE_DEFAULT_MODEL` (mặc định gemini-2.5-pro)
+ *   2. `models[activity]` của cấu hình chung — trang AI Settings ghi đè từng bước
+ *   3. `ACTIVITY_MODEL_DEFAULTS` — ý kiến của ứng dụng cho các bước cơ khí
+ *   4. `model` của cấu hình chung — lựa chọn mặc định cho phần còn lại
+ *   5. `AICORE_DEFAULT_MODEL`
+ *
+ * (3) đứng TRÊN (4) là có chủ ý: `model` là một lựa chọn chung, không phải lời
+ * khẳng định rằng bước điền form cũng đáng chạy model đắt nhất. Xem chú thích
+ * dài ở `config/ai.ts`. Muốn ép một bước cụ thể thì khai `models[activity]` —
+ * mục (2) luôn thắng.
  */
 async function resolveModel(
   activity: string,
@@ -96,6 +119,13 @@ async function resolveModel(
   if (perCall) return perCall;
 
   const globalCfg = await getGlobalModelConfig();
+
+  const explicit = explicitActivityModel(globalCfg, activity);
+  if (explicit) return explicit;
+
+  const appDefault = ACTIVITY_MODEL_DEFAULTS[activity];
+  if (appDefault) return appDefault;
+
   const globalModel = resolveActivityModel(globalCfg, activity);
   if (globalModel) return globalModel;
 

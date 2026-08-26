@@ -37,8 +37,10 @@ service EightDService {
      * Chạy pipeline: validate dataset → map facts → AI parseData → AI analyzeDefect
      * → lưu. Trả về ID của report vừa tạo.
      *
-     * Chạy ĐỒNG BỘ — action chỉ trả về khi AI xong, khoảng 20-40 giây. Client
-     * phải nới timeout tương ứng (axios mặc định 30s trong repo này là KHÔNG đủ).
+     * Chạy Ở NỀN qua `cds.spawn`: action trả về reportID NGAY, trạng thái bản ghi
+     * đi Analyzing -> Analyzed/Failed. Client theo dõi bằng cách poll `status`,
+     * không chờ response. Một lượt phân tích mất khoảng 3 phút — chờ đồng bộ thì
+     * mọi timeout HTTP trên đường đi đều cắt trước khi AI xong.
      *
      * Lỗi ở giữa chừng vẫn để lại một bản ghi Reports với status = Failed và
      * `errorMessage`, chứ không nuốt lỗi — có bản ghi thì còn debug được.
@@ -115,6 +117,29 @@ service EightDService {
      * @param valueJson    Gia tri, ma hoa JSON (chuoi, so, mang... deu duoc).
      */
     action saveDisciplineField(disciplineID : String, fieldKey : String, valueJson : LargeString) returns String;
+
+    /**
+     * Ghi quyet dinh duyet cua ky su chat luong cho MOT buoc D.
+     *
+     * -- Vi sao can action rieng --
+     * AI chi soan nhap. Khong buoc nao duoc coi la chot cho toi khi mot con nguoi
+     * bam duyet, va D8 chi mo cong dong case khi D1-D7 deu Approved. Khong co
+     * duong ghi nay thi ca hai luat do khong ton tai trong du lieu.
+     *
+     * Moi lan bam ghi hai cho: trang thai hien tai tren `Disciplines`, va mot dong
+     * KHONG XOA DUOC trong `ReviewEvents`. Danh tinh nguoi bam lay tu `req.user`,
+     * KHONG nhan tu client - chu ky ma client tu khai duoc thi khong phai chu ky.
+     *
+     * @param disciplineID ID dong trong `Disciplines`.
+     * @param decision     'approve' | 'request-change' | 'reopen'.
+     * @param note         Bat buoc voi 'request-change'. Tra lai ma khong noi sua
+     *                     gi thi nguoi nhan khong lam gi duoc.
+     * @returns            JSON { code, fromStatus, toStatus, reviewedBy, reviewedAt, gate }
+     */
+    action reviewDiscipline(disciplineID : String, decision : String, note : String) returns String;
+
+    /** Vet duyet cua mot report, moi nhat truoc. Nguon cho panel audit tren UI. */
+    function getReviewTrail(reportID : String) returns String;
 
     /**
      * Nạp case vào kho tiền lệ.

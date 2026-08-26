@@ -7,11 +7,11 @@
   "private": true,
   "scripts": {
     "start": "cds-serve",
-    "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve\" \"npm run dev --prefix app/cnma_proresolve_ui\"",
-    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve",
-    "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js serve",
+    "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 < NUL",
+    "dev:frontend": "node scripts/wait-backend.mjs && npm run dev --prefix app/cnma_proresolve_ui",
+    "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008",
     "dev:all": "powershell -ExecutionPolicy Bypass -File .\\start-dev.ps1",
-    "deploy:sqlite": "cds deploy --to sqlite:sqlite.db",
     "clean": "node -e \"['gen','mta_archives','ui_resources','app/ui_resources','.cnma_proresolve_mta_build_tmp'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch(e){}}); try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
     "build": "npm run bundle:library && cds build --production && npm run compile:srv",
     "build:mta": "mbt build --mtar cnma_proresolve_0.0.1.mtar && node -e \"try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
@@ -19,6 +19,7 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "export:prompts": "node --import ./node_modules/tsx/dist/loader.mjs scripts/export-step-prompts.mjs",
     "bundle:library": "node scripts/bundle-library.mjs",
     "compile:srv": "node scripts/compile-srv.mjs",
     "predeploy": "node scripts/check-approuter-route.mjs && npm run build:cf",
@@ -29,8 +30,7 @@
     "cf:sandbox": "cf target -o proconarum-sandbox-system -s Training",
     "cf:target": "cf target",
     "cf:logs": "cf logs cnma_proresolve_srv",
-    "cf:logs:last": "cf logs cnma_proresolve_srv --recent",
-    "db:local": "cds deploy --to sqlite:sqlite.db"
+    "cf:logs:last": "cf logs cnma_proresolve_srv --recent"
   },
   "dependencies": {
     "@cnma/cap-core": "^1.0.0",
@@ -48,8 +48,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "passport": "^0.7.0",
-    "sqlite3": "^6.0.1"
+    "passport": "^0.7.0"
   },
   "devDependencies": {
     "@cap-js/cds-types": "^0.9.0",
@@ -84,23 +83,12 @@
         "app/**",
         "*.md",
         "resources/**",
-        "dist/**",
-        "sqlite.db*",
-        "db.sqlite*"
+        "dist/**"
       ]
     },
     "requires": {
       "db": {
-        "[development]": {
-          "kind": "sqlite",
-          "impl": "@sap/cds/libx/_runtime/sqlite/Service.js",
-          "credentials": {
-            "url": "sqlite.db"
-          }
-        },
-        "[production]": {
-          "kind": "hana-cloud"
-        }
+        "kind": "hana-cloud"
       },
       "auth": {
         "[development]": {

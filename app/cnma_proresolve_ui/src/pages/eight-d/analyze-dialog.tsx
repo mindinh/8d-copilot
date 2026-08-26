@@ -156,7 +156,10 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         try {
             const reportID = await eightDService.analyzeFromJson(text);
             toast.success(`Analysis scheduled for ${result.caseId}`, {
-                description: 'This takes 60–90 seconds. The page updates automatically.',
+                // Con số đo được, không phải ước lượng: ~3 phút cho một case điển
+                // hình. Hứa 60-90 giây thì đúng lúc chạy bình thường người dùng
+                // đã tưởng hệ thống treo và bấm lại.
+                description: 'This takes about 3 minutes. The page updates automatically.',
             });
             reset();
             onOpenChange(false);

@@ -51,6 +51,33 @@ interface WorkingRow {
 }
 
 const PARTNER_ROLES = ['8D Team Leader', '8D Team Member'] as const;
+type PartnerRole = typeof PARTNER_ROLES[number];
+
+/** Mot dong sap them vao bang, kem vai tro 8D ma AI de xuat (neu co). */
+interface RosterAddition {
+    partnerId: string;
+    /** `assigned8DRole` cua dong AI. Free text, nen phai chuan hoa truoc khi dung. */
+    suggestedRole?: string;
+}
+
+/**
+ * Doi vai tro AI de xuat ve dung mot gia tri cua bang quyet dinh.
+ *
+ * Schema backend khai `assigned8DRole` la `type: 'string'` khong kem enum, nen
+ * khong the tin no lun tra dung chuoi. Thuc te no tra dung "8D Team Leader" /
+ * "8D Team Member", nhung mot lan doi prompt hay doi model la co the thanh
+ * "Team Leader" hay "Champion" — nen bat ca bien the, va tra `null` khi khong
+ * chac de cho phia goi tu quyet dinh thay vi doan bua.
+ */
+function normalize8DRole(raw: string | undefined): PartnerRole | null {
+    const text = (raw ?? '').trim().toLowerCase();
+    if (!text) return null;
+    const exact = PARTNER_ROLES.find((role) => role.toLowerCase() === text);
+    if (exact) return exact;
+    if (/leader|lead\b|champion/.test(text)) return PARTNER_ROLES[0];
+    if (/member|participant/.test(text)) return PARTNER_ROLES[1];
+    return null;
+}
 
 /** Radix Select khong nhan `value=""`, nen dong chua gan nguoi can mot gia tri canh rieng. */
 const UNASSIGNED = '__unassigned__';
@@ -127,8 +154,8 @@ interface TeamRosterState {
     caseContext: Record<string, unknown> | null;
     lookup: (partnerId: string) => PartnerDirectoryEntry | null;
     onTeam: (partnerId: string | null) => boolean;
-    addOne: (partnerId: string) => void;
-    addMany: (partnerIds: string[]) => void;
+    addOne: (addition: RosterAddition) => void;
+    addMany: (additions: RosterAddition[]) => void;
     addEmpty: () => void;
     patch: (key: string, next: Partial<WorkingRow>) => void;
     remove: (key: string) => void;
@@ -208,9 +235,26 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
     const onTeam = (partnerId: string | null) =>
         Boolean(partnerId) && workingRows.some((row) => row.partnerId === partnerId);
 
-    const addMany = (partnerIds: string[]) => {
+    /**
+     * Them nguoi vao bang quyet dinh, GIU vai tro 8D ma AI da chi dinh.
+     *
+     * -- Loi cu --
+     * Ham nay tung chi nhan `partnerId[]` va gan vai tro theo VI TRI: dong dau
+     * tien thanh Team Leader, con lai thanh Team Member. `assigned8DRole` cua AI
+     * bi vut di du man hinh van in no ra ngay canh ten.
+     *
+     * Hau qua khong phai truong hop hiem: bang duoc mo san bang nhom ghi tren
+     * case (xem effect khoi tao), nen luc bam "Accept all suggested" thi
+     * `workingRows.length` da khac 0 — va MOI nguoi AI de xuat deu thanh Team
+     * Member, ke ca nguoi AI chi dinh lam truong nhom. Them tung nguoi mot bang
+     * nut "+ Add" thi con lech kieu khac: ai duoc bam truoc thanh truong nhom.
+     *
+     * Vi tri chi con la duong lui khi AI khong noi gi hoac noi thu khong hieu
+     * duoc.
+     */
+    const addMany = (entries: RosterAddition[]) => {
         const additions: WorkingRow[] = [];
-        for (const partnerId of partnerIds) {
+        for (const { partnerId, suggestedRole } of entries) {
             // `additions` phai duoc tinh vao: hai de xuat cung tro mot nguoi se tao
             // hai dong trung neu chi kiem tra `workingRows`.
             if (!partnerId) continue;
@@ -219,11 +263,32 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
             additions.push({
                 key: nextKey(),
                 partnerId,
-                partnerRole: workingRows.length + additions.length === 0
-                    ? PARTNER_ROLES[0] : PARTNER_ROLES[1],
+                partnerRole: normalize8DRole(suggestedRole)
+                    ?? (workingRows.length + additions.length === 0
+                        ? PARTNER_ROLES[0] : PARTNER_ROLES[1]),
             });
         }
-        if (additions.length) mutate([...workingRows, ...additions]);
+        if (!additions.length) return;
+
+        // Mot nhom 8D chi co MOT truong nhom. AI tra free text nen ve nguyen tac
+        // co the chi dinh hai nguoi; giu nguoi dau, ha phan con lai.
+        let leaderSeen = false;
+        for (const row of additions) {
+            if (row.partnerRole !== PARTNER_ROLES[0]) continue;
+            if (leaderSeen) row.partnerRole = PARTNER_ROLES[1];
+            leaderSeen = true;
+        }
+
+        // Nguoi dung vua bam "chap nhan de xuat cua AI", nen truong nhom AI chi
+        // dinh la truong nhom that. Truong nhom cu — thuong chi la nguoi dung dau
+        // danh sach ghi tren case, khong phai mot quyet dinh cua ai ca — xuong lam
+        // thanh vien thay vi de bang co hai truong nhom.
+        const existing = leaderSeen
+            ? workingRows.map((row) => (row.partnerRole === PARTNER_ROLES[0]
+                ? { ...row, partnerRole: PARTNER_ROLES[1] } : row))
+            : workingRows;
+
+        mutate([...existing, ...additions]);
     };
 
     const persistableRows = (): AssignedTeamRow[] => workingRows
@@ -241,7 +306,7 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
     const value: TeamRosterState = {
         rows: workingRows, directory, directoryError, dirty, saving, saveError, savedLabel,
         caseContext, lookup, onTeam, addMany,
-        addOne: (partnerId) => addMany([partnerId]),
+        addOne: (addition) => addMany([addition]),
         addEmpty: () => mutate([...workingRows, { key: nextKey(), partnerId: '', partnerRole: PARTNER_ROLES[1] }]),
         patch: (key, next) => mutate(workingRows.map((row) => (row.key === key ? { ...row, ...next } : row))),
         remove: (key) => mutate(workingRows.filter((row) => row.key !== key)),
@@ -313,7 +378,7 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
                         ) : partnerId ? (
                             <button
                                 type="button"
-                                onClick={() => ctx.addOne(partnerId)}
+                                onClick={() => ctx.addOne({ partnerId, suggestedRole: row.assigned8DRole })}
                                 className="ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/10"
                             >
                                 + Add
@@ -332,7 +397,10 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
             {pending.length > 0 ? (
                 <button
                     type="button"
-                    onClick={() => ctx.addMany(pending.map((item) => item.partnerId!))}
+                    onClick={() => ctx.addMany(pending.map((item) => ({
+                        partnerId: item.partnerId!,
+                        suggestedRole: item.row.assigned8DRole,
+                    })))}
                     className="rounded-md border border-input bg-card px-4 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/60"
                 >
                     ✓ Accept all suggested ({pending.length})

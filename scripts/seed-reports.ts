@@ -30,7 +30,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const HOST = process.env.SEED_HOST ?? 'http://localhost:4004';
+const HOST = process.env.SEED_HOST ?? 'http://127.0.0.1:4004';
 const SRV = `${HOST}/api/cnma/EIGHTD_SRV`;
 const USER = process.env.SEED_USER ?? 'admin';
 const PASS = process.env.SEED_PASS ?? '123';

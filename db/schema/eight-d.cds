@@ -144,4 +144,41 @@ entity Disciplines : cuid, managed {
     validationJson : LargeString;
     configVersion  : String(64);
     aiGenerated : Boolean default true;
+
+    // ── Người duyệt ──────────────────────────────────────────────────────────
+    // AI chỉ soạn nháp; không bước nào được coi là chốt cho tới khi một kỹ sư
+    // chất lượng bấm duyệt. Không có mấy cột này thì không thể trả lời câu hỏi
+    // đầu tiên của mọi cuộc audit — "ai duyệt, lúc nào" — và cổng đóng case ở D8
+    // cũng không có gì để kiểm.
+
+    /** 'Draft' | 'Approved' | 'ChangeRequested'. Xem ReviewDecision ở service. */
+    reviewStatus : String(16) default 'Draft';
+    /** Ai bấm. Lấy từ req.user, không cho client tự khai. */
+    reviewedBy   : String(120);
+    reviewedAt   : DateTime;
+    /** Bắt buộc khi ChangeRequested — "cần sửa" mà không nói sửa gì thì vô dụng. */
+    reviewNote   : String(500);
+}
+
+/**
+ * Vết duyệt — CHỈ THÊM, không sửa không xoá.
+ *
+ * `Disciplines.reviewStatus` chỉ giữ trạng thái HIỆN TẠI. Một case bị trả lại
+ * rồi duyệt lại hai vòng trông y hệt một case duyệt thẳng, mà đó lại đúng là thứ
+ * người audit muốn thấy. Bảng này giữ trọn chuỗi quyết định.
+ *
+ * Không có association ngược về Disciplines: hàng ở đây phải sống sót kể cả khi
+ * report bị chạy lại (reanalyze) và discipline cũ bị thay. Khoá là cặp
+ * (reportID, disciplineCode) dạng giá trị, không phải con trỏ.
+ */
+entity ReviewEvents : cuid {
+    reportID       : String(36);
+    /** 'D1' … 'D8'. */
+    disciplineCode : String(4);
+    fromStatus     : String(16);
+    toStatus       : String(16);
+    note           : String(500);
+    /** Danh tính lấy từ req.user lúc ghi. */
+    actor          : String(120);
+    at             : DateTime;
 }

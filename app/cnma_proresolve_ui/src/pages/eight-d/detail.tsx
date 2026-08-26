@@ -33,6 +33,12 @@ import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { ReportStatusBadge } from './status-badge';
 import { ReasoningPanel } from './reasoning-panel';
 import { PrecedentPanel } from './precedent-panel';
+import { DisciplineReviewBox } from './review-controls';
+import { ActionChecklist, parseCaseActions } from './action-checklist';
+import { CaseStepper } from './case-stepper';
+import { AuditTrailPanel } from './audit-trail-panel';
+
+type SideTab = 'audit' | 'similar';
 
 /**
  * Chi tiết một báo cáo 8D.
@@ -66,6 +72,8 @@ export function EightDDetailPage() {
     const queryClient = useQueryClient();
     const [showPayload, setShowPayload] = useState(false);
     const [activeDiscipline, setActiveDiscipline] = useState('D1');
+    const [mainTab, setMainTab] = useState<'disciplines' | 'summary'>('disciplines');
+    const [sideTab, setSideTab] = useState<SideTab>('audit');
 
     // Bo cuc SONG, doc thang tu StepPrompts - khong phai ban chup luc phan tich.
     //
@@ -79,17 +87,27 @@ export function EightDDetailPage() {
         queryKey: ['8d', 'report', id],
         queryFn: () => eightDService.getWithDisciplines(id),
         enabled: !!id,
+        // Mặc định toàn cục là staleTime 5 phút. Với một bản ghi đang đổi trạng
+        // thái thì đó là sai: quay lại trang trong vòng 5 phút sẽ dựng từ cache
+        // cũ, hiện `Analyzing` dù phân tích đã xong từ lâu.
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: true,
         refetchInterval: (query) =>
             (query.state.data as Report8D | undefined)?.status === 'Analyzing'
                 ? POLL_INTERVAL_MS
                 : false,
+        // Một lượt phân tích mất 3-5 phút. Mặc định React Query dừng đếm giờ khi
+        // tab bị ẩn, nên đổi tab đi làm việc khác rồi quay lại là gặp đúng cái
+        // spinner cũ. Cho chạy tiếp cả khi tab ở nền.
+        refetchIntervalInBackground: true,
     });
 
     const reanalyze = useMutation({
         mutationFn: () => eightDService.reanalyze(id),
         onSuccess: () => {
             toast.success('Re-analysis scheduled', {
-                description: 'This takes 60–90 seconds. The page updates automatically.',
+                description: 'This takes about 3 minutes. The page updates automatically.',
             });
             queryClient.invalidateQueries({ queryKey: ['8d'] });
         },
@@ -128,9 +146,10 @@ export function EightDDetailPage() {
     const inferredCount = disciplines.filter((d) => !d.dataBacked).length;
     const running = report.status === 'Analyzing';
     const independent = parseFinding(report.aiFinding);
+    const caseActions = parseCaseActions(report.caseContext);
 
     return (
-        <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
 
             {/* ── Header ── */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -185,156 +204,209 @@ export function EightDDetailPage() {
                 </div>
             )}
 
-            {/* ── Case tiền lệ ──
-                Đặt NGAY ĐẦU, trên cả chẩn đoán độc lập. Với một sự vụ vừa được
-                ghi nhận thì đây là phần duy nhất dựa trên dữ liệu có thật — mọi
-                thứ khác trên trang lúc đó đều là suy luận.
-                Nó cũng có sớm nhất: khoảng hai giây, trong khi báo cáo mất hơn
-                một phút. */}
-            <PrecedentPanel reportID={report.ID} />
+            {/* ── Main Navigation Tabs ── */}
+            <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'disciplines' | 'summary')} className="w-full space-y-6">
+                <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/60 p-1 rounded-lg border">
+                    <TabsTrigger value="disciplines" className="font-semibold text-xs py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        8D Disciplines
+                    </TabsTrigger>
+                    <TabsTrigger value="summary" className="font-semibold text-xs py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        Case Overview & AI Insights
+                    </TabsTrigger>
+                </TabsList>
 
-            {/* ── Chẩn đoán độc lập ──
-                Đặt TRÊN thông tin case có chủ đích: đây là thứ phân biệt công cụ
-                này với một trình định dạng dữ liệu, nên nó phải là điều đầu tiên
-                người đọc nhìn thấy sau phần đầu trang. */}
-            {independent && <ReasoningPanel analysis={independent} />}
+                {/* ── Tab 1: 8D Disciplines (Clean Detail View) ── */}
+                <TabsContent value="disciplines" className="mt-0 outline-none">
+                    {disciplines.length === 0 ? (
+                        <div className="py-12 text-center text-sm text-muted-foreground">
+                            No 8D disciplines available.
+                        </div>
+                    ) : (
+                        /*
+                          Ba cot, dung theo ban mockup flagship:
+                            trai   dieu huong  - di den dau roi, con bao nhieu buoc
+                            giua   noi dung    - buoc dang mo
+                            phai   tham chieu  - vet duyet va case tuong tu
 
-            {/* ── Thông tin case ── */}
-            <Card className="p-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Field label="Origin">{report.origin}</Field>
-                    <Field label="SAP status">{report.sapStatus}</Field>
-                    <Field label="Found">{report.foundDate ?? '—'}</Field>
-                    <Field label="Extent">{report.quantityExtent}</Field>
+                          Truoc day ba thu nay xep chong len nhau theo chieu doc, nen
+                          phai cuon qua het panel tien le va chan doan mu moi toi duoc
+                          noi dung buoc. Tach cot thi ca ba nhin duoc cung luc, va do
+                          moi la cach mot ky su that su lam viec: doc buoc hien tai
+                          trong khi liec sang case cu.
+                        */
+                        <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
 
-                    <Field label="Material">
-                        <span className="font-mono text-xs">{report.materialId}</span>
-                        <div className="text-xs text-muted-foreground">{report.materialDesc}</div>
-                    </Field>
-                    <Field label="Batch"><span className="font-mono text-xs">{report.batchId}</span></Field>
-                    <Field label="Defect">
-                        <span className="font-mono text-xs">{report.defectCode}</span>
-                        <div className="text-xs text-muted-foreground">{report.defectText}</div>
-                    </Field>
-                    <Field label="Work center">
-                        <span className="font-mono text-xs">{report.workCenterId}</span>
-                        <div className="text-xs text-muted-foreground">{report.workCenterDesc}</div>
-                    </Field>
+                            {/* ── Cot trai: tien do + dieu huong ── */}
+                            <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+                                <Card className="overflow-hidden py-3">
+                                    <CaseStepper
+                                        disciplines={disciplines}
+                                        active={activeDiscipline}
+                                        onSelect={setActiveDiscipline}
+                                    />
+                                </Card>
+                            </aside>
 
-                    <Field label="Root cause">{report.rootCauseCategory ?? '—'}</Field>
-                    <Field label="Cost of poor quality">{formatEur(report.copqEur)}</Field>
-                    <Field label="FMEA">{report.fmeaId ?? '—'}</Field>
-                    <Field label="Team size">{report.teamSize ?? '—'}</Field>
-                </div>
-            </Card>
+                            {/* ── Cot giua: buoc dang mo ── */}
+                            <section className="min-w-0 space-y-4">
+                                {inferredCount > 0 && (
+                                    <p className="flex items-center gap-1.5 text-xs text-warning">
+                                        <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                                        {inferredCount} of {disciplines.length} disciplines have no source data in the dataset
+                                    </p>
+                                )}
 
-            {/* ── Tóm tắt ── */}
-            {(report.internalSummary || report.customerSummary) && (
-                <Tabs defaultValue="internal">
-                    <TabsList>
-                        <TabsTrigger value="internal">Internal summary</TabsTrigger>
-                        {customerFacing && (
-                            <TabsTrigger value="customer">Customer summary</TabsTrigger>
-                        )}
-                    </TabsList>
+                                {disciplines
+                                    .filter((discipline) => discipline.code === activeDiscipline)
+                                    .map((discipline) => (
+                                        <div key={discipline.ID} className="min-w-0 space-y-4">
+                                            {/* Nut duyet len TREN noi dung, dung nhu mockup: quyet dinh la
+                                                viec chinh cua man hinh nay, khong phai phan phu o cuoi trang. */}
+                                            <DisciplineReviewBox discipline={discipline} />
 
-                    <TabsContent value="internal" className="mt-3">
-                        <Card className="p-5 text-sm leading-relaxed">
-                            {report.internalSummary ?? '—'}
-                        </Card>
-                    </TabsContent>
+                                            {discipline.code === 'D6' && <ActionChecklist actions={caseActions} />}
 
-                    {customerFacing && (
-                        <TabsContent value="customer" className="mt-3">
-                            <Card className="p-5 text-sm leading-relaxed">
-                                {report.customerSummary ?? '—'}
-                                <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
-                                    Written for the customer — no employee names, equipment IDs or cost figures.
-                                </p>
-                            </Card>
-                        </TabsContent>
+                                            {discipline.formSchemaJson && discipline.resultJson
+                                                ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[discipline.code]?.formSchemaJson ?? null} siblings={disciplines} />
+                                                : <DisciplineCard discipline={discipline} caseContext={report.caseContext} />}
+
+                                            {/* Chan doan mu chi thuoc ve D4 — do la buoc no doi chieu. Truoc
+                                                day no nam dau trang va xuat hien o moi buoc, ke ca nhung buoc
+                                                khong lien quan gi den nguyen nhan goc. */}
+                                            {discipline.code === 'D4' && independent && (
+                                                <ReasoningPanel analysis={independent} />
+                                            )}
+                                        </div>
+                                    ))}
+                            </section>
+
+                            {/* ── Cot phai: tham chieu ── */}
+                            <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+                                <Tabs value={sideTab} onValueChange={(v) => setSideTab(v as SideTab)}>
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="audit" className="text-xs">Audit trail</TabsTrigger>
+                                        <TabsTrigger value="similar" className="text-xs">Similar cases</TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="audit" className="mt-3">
+                                        <Card className="overflow-hidden py-1">
+                                            <AuditTrailPanel reportID={report.ID} />
+                                        </Card>
+                                    </TabsContent>
+
+                                    <TabsContent value="similar" className="mt-3">
+                                        <PrecedentPanel reportID={report.ID} />
+                                    </TabsContent>
+                                </Tabs>
+                            </aside>
+                        </div>
                     )}
-                </Tabs>
-            )}
+                </TabsContent>
+                {/* ── Tab 2: Case Overview & AI Insights ── */}
+                <TabsContent value="summary" className="mt-0 space-y-6 outline-none">
+                    {/* ── Thông tin case ── */}
+                    <Card className="p-5">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <Field label="Origin">{report.origin}</Field>
+                            <Field label="SAP status">{report.sapStatus}</Field>
+                            <Field label="Found">{report.foundDate ?? '—'}</Field>
+                            <Field label="Extent">{report.quantityExtent}</Field>
 
-            {/* ── 8 discipline ── */}
-            {disciplines.length > 0 && (
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                            Eight disciplines
-                        </h2>
+                            <Field label="Material">
+                                <span className="font-mono text-xs">{report.materialId}</span>
+                                <div className="text-xs text-muted-foreground">{report.materialDesc}</div>
+                            </Field>
+                            <Field label="Batch"><span className="font-mono text-xs">{report.batchId}</span></Field>
+                            <Field label="Defect">
+                                <span className="font-mono text-xs">{report.defectCode}</span>
+                                <div className="text-xs text-muted-foreground">{report.defectText}</div>
+                            </Field>
+                            <Field label="Work center">
+                                <span className="font-mono text-xs">{report.workCenterId}</span>
+                                <div className="text-xs text-muted-foreground">{report.workCenterDesc}</div>
+                            </Field>
 
-                        {inferredCount > 0 && (
-                            <span className="flex items-center gap-1.5 text-xs text-warning">
-                                <TriangleAlert className="w-3.5 h-3.5" />
-                                {inferredCount} of {disciplines.length} have no source data in the dataset
-                            </span>
-                        )}
-                    </div>
+                            <Field label="Root cause">{report.rootCauseCategory ?? '—'}</Field>
+                            <Field label="Cost of poor quality">{formatEur(report.copqEur)}</Field>
+                            <Field label="FMEA">{report.fmeaId ?? '—'}</Field>
+                            <Field label="Team size">{report.teamSize ?? '—'}</Field>
+                        </div>
+                    </Card>
 
-                    <Tabs value={activeDiscipline} onValueChange={setActiveDiscipline} className="min-w-0">
-                        <div className="rounded-xl border bg-card p-2 shadow-sm">
-                            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 bg-transparent p-0 sm:grid-cols-8">
-                                {disciplines.map((discipline) => (
-                                    <TabsTrigger
-                                        key={discipline.ID}
-                                        value={discipline.code}
-                                        className="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                                    >
-                                        {discipline.code}
-                                    </TabsTrigger>
-                                ))}
+                    {/* ── Tóm tắt AI ── */}
+                    {(report.internalSummary || report.customerSummary) && (
+                        <Tabs defaultValue="internal">
+                            <TabsList>
+                                <TabsTrigger value="internal">Internal summary</TabsTrigger>
+                                {customerFacing && (
+                                    <TabsTrigger value="customer">Customer summary</TabsTrigger>
+                                )}
                             </TabsList>
-                        </div>
-                        {disciplines.map((discipline) => (
-                            <TabsContent key={discipline.ID} value={discipline.code} className="mt-4 min-w-0">
-                                {discipline.formSchemaJson && discipline.resultJson
-                                    ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[discipline.code]?.formSchemaJson ?? null} />
-                                    : <DisciplineCard discipline={discipline} />}
+
+                            <TabsContent value="internal" className="mt-3">
+                                <Card className="p-5 text-sm leading-relaxed">
+                                    {report.internalSummary ?? '—'}
+                                </Card>
                             </TabsContent>
-                        ))}
-                    </Tabs>
-                </div>
-            )}
 
-            {/* ── Vết chạy & Model AI ── */}
-            {report.analyzedAt && (
-                <Card className="p-4 bg-muted/30 border border-border/60">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-foreground flex items-center gap-1.5">
-                                <Cpu className="w-3.5 h-3.5 text-primary" />
-                                AI Models Used:
-                            </span>
-                            {report.aiModelParse && (
-                                <Badge variant="secondary" className="font-mono text-xs gap-1">
-                                    <span className="text-xs text-muted-foreground font-sans">Parse:</span>
-                                    {report.aiModelParse}
-                                </Badge>
+                            {customerFacing && (
+                                <TabsContent value="customer" className="mt-3">
+                                    <Card className="p-5 text-sm leading-relaxed">
+                                        {report.customerSummary ?? '—'}
+                                        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                                            Written for the customer — no employee names, equipment IDs or cost figures.
+                                        </p>
+                                    </Card>
+                                </TabsContent>
                             )}
-                            {report.aiModelAnalyze && (
-                                <Badge variant="secondary" className="font-mono text-xs gap-1">
-                                    <span className="text-xs text-muted-foreground font-sans">Analyze:</span>
-                                    {report.aiModelAnalyze}
-                                </Badge>
-                            )}
-                        </div>
+                        </Tabs>
+                    )}
 
-                        <div className="flex items-center gap-3 shrink-0 text-xs">
-                            <span>Generated: <strong className="font-normal text-foreground">{new Date(report.analyzedAt).toLocaleString('en-GB')}</strong></span>
-                            <span>·</span>
-                            <span>Tokens: <strong className="font-normal text-foreground">{report.tokensUsed?.toLocaleString()}</strong></span>
-                            {report.durationMs != null && (
-                                <>
+                    {/* ── Chẩn đoán độc lập ── */}
+                    {independent && <ReasoningPanel analysis={independent} />}
+
+                    {/* ── Case tiền lệ ── */}
+                    <PrecedentPanel reportID={report.ID} />
+
+                    {/* ── Vết chạy & Model AI ── */}
+                    {report.analyzedAt && (
+                        <Card className="p-4 bg-muted/30 border border-border/60">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-foreground flex items-center gap-1.5">
+                                        <Cpu className="w-3.5 h-3.5 text-primary" />
+                                        AI Models Used:
+                                    </span>
+                                    {report.aiModelParse && (
+                                        <Badge variant="secondary" className="font-mono text-xs gap-1">
+                                            <span className="text-xs text-muted-foreground font-sans">Parse:</span>
+                                            {report.aiModelParse}
+                                        </Badge>
+                                    )}
+                                    {report.aiModelAnalyze && (
+                                        <Badge variant="secondary" className="font-mono text-xs gap-1">
+                                            <span className="text-xs text-muted-foreground font-sans">Analyze:</span>
+                                            {report.aiModelAnalyze}
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0 text-xs">
+                                    <span>Generated: <strong className="font-normal text-foreground">{new Date(report.analyzedAt).toLocaleString('en-GB')}</strong></span>
                                     <span>·</span>
-                                    <span>Duration: <strong className="font-normal text-foreground">{(report.durationMs / 1000).toFixed(0)}s</strong></span>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </Card>
-            )}
+                                    <span>Tokens: <strong className="font-normal text-foreground">{report.tokensUsed?.toLocaleString()}</strong></span>
+                                    {report.durationMs != null && (
+                                        <>
+                                            <span>·</span>
+                                            <span>Duration: <strong className="font-normal text-foreground">{(report.durationMs / 1000).toFixed(0)}s</strong></span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                    )}
+                </TabsContent>
+            </Tabs>
 
             {/* ── JSON gốc ── */}
             <Dialog open={showPayload} onOpenChange={setShowPayload}>

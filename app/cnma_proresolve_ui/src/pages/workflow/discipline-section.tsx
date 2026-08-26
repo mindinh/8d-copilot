@@ -4,21 +4,20 @@ import {
     Label, Spinner, Switch, Textarea,
 } from '@cnma/react-ui';
 import {
-    Braces, LayoutTemplate, MessageSquareCode, ShieldAlert, Save, RotateCcw,
+    LayoutTemplate, MessageSquareCode, ShieldAlert, Save, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateStepPrompt, resetRetrievalConfig, type StepPrompt } from '@/services/retrieval-service';
 import { ConstraintsEditor } from '../ai-settings/step-prompt-editor/ConstraintsEditor';
-import { DataSchemaEditor } from '../ai-settings/step-prompt-editor/DataSchemaEditor';
 import { FormMappingEditor } from '../ai-settings/step-prompt-editor/FormMappingEditor';
-import { normalizeDataSchema, normalizeFormSchema, parseConfig, stringifyConfig } from '../ai-settings/step-prompt-editor/json';
+import { normalizeFormSchema, parseConfig, stringifyConfig } from '../ai-settings/step-prompt-editor/json';
 import { RawConfigEditor } from '../ai-settings/step-prompt-editor/RawConfigEditor';
 import { StepEditorTabNavigation, type StepEditorTab } from '../ai-settings/step-prompt-editor/StepEditorTabNavigation';
-import { StepSimilarityEditor } from '../ai-settings/step-prompt-editor/StepSimilarityEditor';
+import { StepObjectSchemaEditor } from '../object-schema/StepObjectSchemaEditor';
 import type { ConstraintsConfig, FormSchemaConfig } from '../ai-settings/step-prompt-editor/types';
 
-type ConfigField = 'inputSchemaJson' | 'combinedPrompt' | 'formSchemaJson' | 'constraintsJson';
-const CONFIG_FIELDS: ConfigField[] = ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'];
+type ConfigField = 'combinedPrompt' | 'formSchemaJson' | 'constraintsJson';
+const CONFIG_FIELDS: ConfigField[] = ['combinedPrompt', 'formSchemaJson', 'constraintsJson'];
 
 const FALLBACK_STEP_PROMPTS: Record<string, Partial<StepPrompt>> = {
     D1: {
@@ -184,13 +183,12 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
     const activePrompt: StepPrompt = (prompt || fallback) as StepPrompt;
 
     const [draft, setDraft] = useState<Record<ConfigField, string>>({
-        inputSchemaJson: '', combinedPrompt: '', formSchemaJson: '', constraintsJson: '',
+        combinedPrompt: '', formSchemaJson: '', constraintsJson: '',
     });
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<StepEditorTab>('prompt');
+    const [activeTab, setActiveTab] = useState<StepEditorTab>('schema');
 
     const loadDraft = useCallback((p: StepPrompt) => setDraft({
-        inputSchemaJson: p.inputSchemaJson ?? '',
         combinedPrompt: p.combinedPrompt ?? p.systemPrompt ?? '',
         formSchemaJson: p.formSchemaJson ?? '',
         constraintsJson: p.constraintsJson ?? '',
@@ -202,10 +200,6 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
 
     const dirty = CONFIG_FIELDS.some((f) => draft[f] !== (activePrompt[f] ?? (f === 'combinedPrompt' ? activePrompt.systemPrompt : '') ?? ''));
 
-    const input = useMemo(() => {
-        const parsed = parseConfig<unknown>(draft.inputSchemaJson, {});
-        return { value: normalizeDataSchema(parsed.value), error: parsed.error };
-    }, [draft.inputSchemaJson]);
 
     const form = useMemo(() => {
         const parsed = parseConfig<FormSchemaConfig>(draft.formSchemaJson, { fields: [] });
@@ -217,7 +211,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
     const setField = (field: ConfigField, value: string) => setDraft((prev) => ({ ...prev, [field]: value }));
 
     async function handleSave() {
-        if (input.error || form.error || constraints.error) {
+        if (form.error || constraints.error) {
             toast.error('Fix invalid JSON before saving');
             return;
         }
@@ -291,7 +285,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
 
                     <Button
                         size="sm"
-                        disabled={!dirty || saving || Boolean(input.error || form.error || constraints.error)}
+                        disabled={!dirty || saving || Boolean(form.error || constraints.error)}
                         onClick={handleSave}
                         className="text-xs font-semibold"
                     >
@@ -333,32 +327,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                         </div>
                     )}
 
-                    {/* Tab 2: Input Data Schema */}
-                    {activeTab === 'data' && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-semibold flex items-center gap-2">
-                                    <Braces className="h-4 w-4 text-primary" />
-                                    Input Data Schema (What {activePrompt.stepCode} receives)
-                                </h4>
-                            </div>
-                            {input.error ? (
-                                <RawConfigEditor
-                                    value={draft.inputSchemaJson}
-                                    error={input.error}
-                                    onChange={(v) => setField('inputSchemaJson', v)}
-                                />
-                            ) : (
-                                <DataSchemaEditor
-                                    stepCode={activePrompt.stepCode}
-                                    value={input.value}
-                                    onChange={(v) => setField('inputSchemaJson', stringifyConfig(v))}
-                                />
-                            )}
-                        </div>
-                    )}
-
-                    {/* Tab 3: Output Form Mapping */}
+                    {/* Tab 2: Output Form Mapping */}
                     {activeTab === 'form' && (
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
@@ -383,15 +352,15 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                         </div>
                     )}
 
-                    {/* Tab 5: Precedent Search & Similarity
-                        Không nằm trong `draft`/Save của khối này: nó ghi thẳng
-                        vào profile chấm điểm, không phải vào bản ghi prompt.
-                        Nút "Save D… Configuration" ở trên chỉ nói về prompt. */}
-                    {activeTab === 'similarity' && (
-                        <StepSimilarityEditor
-                            stepCode={activePrompt.stepCode}
-                            stepLabel={activePrompt.label}
-                        />
+                    {/* Object Schema — has its own Save. The header's
+                        "Save D… Configuration" covers the prompt tabs only. */}
+                    {activeTab === 'schema' && (
+                        <div className="-m-4 flex min-h-160 flex-col">
+                            <StepObjectSchemaEditor
+                                stepCode={activePrompt.stepCode}
+                                stepLabel={activePrompt.label}
+                            />
+                        </div>
                     )}
 
                     {/* Tab 4: Guardrails & Constraints */}

@@ -106,78 +106,185 @@ export function buildEnrichmentPrompt(raw: unknown, context: CaseContext): strin
  * Text ở đây được seed thẳng vào bảng `StepPrompts` để admin nhìn thấy và sửa
  * từ bản đang chạy, thay vì phải đi tìm trong code rồi chép sang.
  */
-export const DEFAULT_DISCIPLINE_GUIDE: Record<DisciplineCode, string> = {
-    D1: `Name the leader and members with their functions. Explain in one or two
-    sentences why this mix of skills suits this specific defect.
 
-    When no team is recorded on this case, do NOT fall back to generic job
-    titles. Propose the actual people from the precedent teams, by name and
-    function, and say how many of the precedent cases each one worked. Rank them
-    by that count. Cite precedents#N for each name. If there are no precedents,
-    say a team must be assigned manually — that is the honest answer, and it is
-    better than a plausible list of invented roles.`,
+/**
+ * Bỏ phần thụt đầu dòng mà template literal thừa hưởng từ code.
+ *
+ * Không có nó thì mỗi dòng prompt mang theo 4 dấu cách của chỗ khai báo — chúng
+ * đi thẳng vào prompt gửi cho model, vào bảng `StepPrompts`, rồi hiện ra trong ô
+ * soạn thảo trên UI như một lỗi căn lề. Tính theo dòng thụt ÍT nhất (bỏ qua dòng
+ * đầu, vốn nằm ngay sau dấu backtick), nên thụt sâu hơn của danh sách con vẫn
+ * giữ nguyên tương quan.
+ */
+function dedent(text: string): string {
+    const lines = text.split('\n');
+    const indents = lines.slice(1).filter((l) => l.trim()).map((l) => l.match(/^ */)![0].length);
+    const base = indents.length ? Math.min(...indents) : 0;
+    return lines.map((l, i) => (i === 0 ? l : l.slice(base))).join('\n').trim();
+}
 
-    D2: `Write 5W2H: what, where, when, who, why it matters, how, how many. Quantify
-    with measured vs specification values and the extent affected. Use the
-    Is / Is-Not comparison to bound the problem — state explicitly what the
-    defect is NOT, since that is what narrows the cause.`,
+const GUIDE_SOURCE: Record<DisciplineCode, string> = {
+    D1: `Produce TWO separate lists, not one blended list.
 
-    D3: `Report the containment actions on record with their status. Explain what
-    each one protects and what residual exposure remains. If the case is a
-    customer complaint, address material already at the customer.
+      1. Suggested roles - the functions this work actually needs (Quality
+         Engineer, Production Engineer, and so on), taken from the teams of the
+         precedent cases that cleared the similarity threshold.
+      2. Suggested individuals - the specific people who served on those teams,
+         ranked by how many of the precedent cases each one worked. State that
+         count for every name.
 
-    When nothing is on record, propose what the precedents actually contained —
-    quote the action, name the case it came from, and adapt the batch and
-    quantity to this case. Cite precedents#N.`,
+    Cite the precedent behind every role and every name with precedents#N.
 
-    D4: `The most important discipline. Walk the 5-Why chain step by step, citing the
-    evidence at each step. Then state the confirmed Ishikawa category and why
-    the other five categories were ruled out — the CaseContext gives you a row
-    for each of the six. Distinguish the technical root cause from the systemic
-    one where the chain reveals both.
+    Precedents are scored: work centre +4, defect code +4 (or +2 when only the
+    defect text overlaps), material +3 (or +1 for the same material family), out
+    of 11. Below 3 is not a precedent. When no case clears 3, write that no team
+    suggestion is available and the team must be assigned manually. That is the
+    correct answer - a plausible list of invented roles is not.
 
-    You are also given INDEPENDENT DIAGNOSIS: a conclusion reached by a separate
-    analysis that saw ONLY the raw evidence, with the recorded 5-Why chain, the
-    root cause flag, the corrective actions and the FMEA link all withheld.
+    Where this case already records a team, name the leader and members with
+    their functions and say in one or two sentences why that skill mix fits THIS
+    defect. Bring in a precedent person only to cover a capability the current
+    team lacks.
 
-    Close D4 with a short paragraph headed "Independent verification":
-      - When it agrees with the recorded root cause, say so and note that the
-        conclusion was reached from the evidence alone, without access to the
-        recorded answer. That is corroboration, so state it plainly and briefly.
-      - When it disagrees, say so openly. Report which branch it chose and its
-        reasoning, then weigh that against the recorded conclusion. Do not
-        silently side with the recorded answer because it is the recorded
-        answer — if the independent reasoning is better supported by the
-        measurements, say that.
-      - Mention its confidence and any evidence gaps it flagged.
+    Never name a person who is not in the current team or a precedent team.
+    Never output team.assignedRoster: the quality engineer fills that table in on
+    the report screen, and email and telephone auto-fill from the business
+    partner record without your help.`,
+
+    D2: `Write the problem twice from the SAME facts - one short paragraph, then
+    the 5W2H grid. They must agree; the grid is not a second analysis.
+
+      What      the defect, and the measurement that proves it: measured value
+                against specification, with units, and say plainly whether it is
+                out of tolerance
+      Where     the work centre, by ID and name
+      When      the date the defect was found
+      Who       a customer complaint carries the customer contact. An internal
+                defect usually records no reporter - write that it is not
+                tracked rather than naming anyone
+      How       how the defect surfaced: in-process inspection, customer
+                complaint, final audit
+      How many  the quantity or extent affected, and the batch it belongs to
+
+    Every box names the field it came from. A box with no source says so; it does
+    not get a plausible value.
+
+    Is / Is-Not is a manual field on this screen. Use it only when it is already
+    filled in: quote what the defect IS, what a comparable situation it is NOT,
+    and point at the single difference between them, because that difference is
+    the lead. Never draft Is / Is-Not yourself - it needs a population of
+    comparable records this dataset does not carry.`,
+
+    D3: `Containment protects the customer and the line WHILE the cause is still
+    unknown. Judge every action against that, not against whether it fixes
+    anything.
+
+    Work in this order:
+      1. If this case already records containment actions, report them - the
+         action, the owner, the status, and what each one protects. You are
+         confirming what the team did, not proposing something new.
+      2. Only when nothing is recorded, propose the containment action from the
+         highest-scoring precedent. Quote what that case actually did, name the
+         case and its score, and adapt the batch and quantity to this case.
+
+    Label every row so recorded and proposed are told apart at a glance.
+
+    State the residual exposure left after the actions listed: stock already
+    shipped, other batches from the same run, the same part on other lines. For a
+    customer complaint, say explicitly what happens to material already at the
+    customer.`,
+
+    D4: `The discipline the whole report is judged on.
+
+    Take the recorded answer in this order:
+      1. the step of this case's 5-Why chain tagged as the root cause;
+      2. if no step is tagged, the Ishikawa row marked as the root cause.
+
+    Walk the chain step by step and cite the evidence at each step. Name the
+    confirmed Ishikawa category and say why the other five were ruled out - the
+    context gives you a row for each of the six. Where the chain shows both a
+    technical and a systemic cause, separate them.
+
+    A precedent root cause is a finding about ANOTHER case. Present it as a
+    hypothesis with the case ID and score, never as this case's cause, and for
+    each one name the single piece of evidence that would confirm or kill it
+    here.
+
+    You are also given INDEPENDENT DIAGNOSIS - a conclusion reached from the raw
+    evidence alone, with the 5-Why chain, the root-cause flag, the corrective
+    actions and the FMEA link all withheld. Close D4 with a short paragraph
+    headed "Independent verification":
+      - Agrees: say so, and note it was reached without access to the recorded
+        answer. That is corroboration; state it plainly and briefly.
+      - Disagrees: say so openly. Report which branch it chose and why, then
+        weigh that against the recorded conclusion. Do not side with the recorded
+        answer because it is the recorded answer - if the measurements support
+        the independent reasoning better, say so.
+      - Note its confidence and any evidence gap it flagged.
     Cite "independent" in this discipline's sources.
 
-    When this case has no 5-Why chain of its own, the precedents' confirmed root
-    causes are the strongest leads available. List them with the case they come
-    from, and for each one name the single piece of evidence that would confirm
-    or kill it here. Keep them clearly marked as hypotheses to check — a
-    precedent's root cause is a finding about ANOTHER case. Cite precedents#N.`,
+    You never confirm a root cause. The engineer sets that flag.`,
 
-    D5: `Report the corrective actions on record. For each, state explicitly which
-    step of the D4 chain it addresses. Flag any part of the root cause that no
-    corrective action currently covers.
+    D5: `Every corrective action must name the step of the D4 chain it removes. An
+    action that ties to no step is aimed either at a symptom or at a cause you
+    have not established - say which.
 
-    When nothing is on record, propose the precedents' corrective actions and
-    tie each to the hypothesis it would fix. Cite precedents#N.`,
+    Report the corrective actions on record with their status. Then state plainly
+    which part of the root cause no recorded action covers. That gap is the most
+    useful line on this page.
 
-    D6: `No data. Write the verification plan as described in rule 4.`,
+    When nothing is recorded, propose the corrective action from the
+    highest-scoring precedent, cite the case and its score, and tie it to the
+    hypothesis it would fix.
 
-    D7: `Report the preventive actions on record and how the FMEA entry should be
-    updated. Where the dataset has no preventive action or no FMEA link, say so
-    and propose what a systemic fix would need to cover.
+    Corrective is not containment. An action that only limits damage while the
+    cause remains belongs in D3.`,
 
-    Precedents are especially useful here: a preventive action that already
-    worked on the same line is worth more than a new proposal. Name the FMEA
-    entries the precedents link to. Cite precedents#N.`,
+    D6: `This dataset carries no verification evidence, so nothing here may be
+    called proven effective, however convincing the corrective action looks.
 
-    D8: `Summarise lessons learned, both what worked and what did not. Recognise the
-    team by name. State what remains open if the case is not yet closed.`,
+    Do two things:
+      1. List every recorded action with its current status, so the engineer sees
+         what is outstanding. Status changes are theirs to make, not yours.
+      2. Write the verification PLAN the case still needs: what to measure, on
+         what sample size, over what period, against what acceptance criterion,
+         and who signs it off. Anchor the criterion to the actual specification
+         value in inspections - "back within the 0.50mm tolerance on 30
+         consecutive parts" is a plan, "monitor the process" is not.`,
+
+    D7: `Preventive action stops the same cause reaching a different part, line or
+    shift. An action that only protects this material or this batch is corrective
+    and belongs in D5.
+
+    Report the preventive actions on record, then say which FMEA entry must
+    change and how: the occurrence rating, the detection rating, or the control
+    itself. Name the FMEA entry by ID when the case links one.
+
+    Where the dataset carries no preventive action or no FMEA link, say so and
+    state what a systemic fix would have to cover.
+
+    Precedents matter more here than anywhere else: a preventive action that
+    already worked on the same work centre outranks a fresh proposal. Name the
+    FMEA entries those precedents link to, with the case ID and score.`,
+
+    D8: `Closure is a gate, not a summary. Check D1 through D7 first: if any is
+    incomplete, name which ones and state that the case cannot be closed yet. You
+    never close a case - the engineer does, and only once that gate passes.
+
+    Then write the lessons learned, both halves and honestly:
+      - What worked - the specific thing worth repeating, not "good teamwork"
+      - What did not - the thing that cost time, or let the defect through
+
+    Recognise the team by name. Close by stating what remains open: actions still
+    unverified, an FMEA update still pending, any evidence gap the report could
+    not fill.`,
 };
+
+export const DEFAULT_DISCIPLINE_GUIDE: Record<DisciplineCode, string> = Object.freeze(
+    Object.fromEntries(
+        Object.entries(GUIDE_SOURCE).map(([code, text]) => [code, dedent(text)]),
+    ) as Record<DisciplineCode, string>,
+);
 
 /** Khung prompt sinh báo cáo. `{{DISCIPLINE_GUIDE}}` được thay lúc chạy. */
 const EIGHT_D_RULES = `

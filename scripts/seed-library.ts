@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const HOST = process.env.SEED_HOST ?? 'http://localhost:4004';
+const HOST = process.env.SEED_HOST ?? 'http://127.0.0.1:4004';
 const EIGHTD = `${HOST}/api/cnma/EIGHTD_SRV`;
 const AI = `${HOST}/api/cnma/AI_SRV`;
 

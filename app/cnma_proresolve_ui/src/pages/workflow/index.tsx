@@ -2,14 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@cnma/react-ui';
 import {
-    BookOpen, Cpu, FileText, Network, Sliders, Sparkles,
+    BookOpen, Boxes, Cpu, FileText, Sliders,
 } from 'lucide-react';
-import { useRetrievalConfig } from '@/hooks/use-retrieval-config';
+import { AiModelManagementPage } from '@cnma/sap-aicore-integrate/react';
+import { aiModelApi } from '@/services/ai-model-service';
 import { useStepPrompts } from '@/hooks/use-step-prompts';
-import { CriteriaPipelineSection } from '../ai-settings/sections/criteria-pipeline';
-import { EmbeddingSection } from '../ai-settings/sections/embedding-status';
-import { ScorePreviewSection } from '../ai-settings/sections/score-preview';
-import { ThresholdSection } from '../ai-settings/sections/threshold-settings';
 import { GeneralSettingsTab } from '../ai-settings/general-settings-tab';
 import { DisciplineSection } from './discipline-section';
 
@@ -25,14 +22,13 @@ const DISCIPLINES = [
 ];
 
 export function WorkflowPage() {
-    const retrieval = useRetrievalConfig();
     const prompts = useStepPrompts();
 
-    const [activeTab, setActiveTab] = useState<'global' | 'retrieval' | 'disciplines'>('global');
+    const [activeTab, setActiveTab] = useState<'global' | 'disciplines' | 'models'>('global');
     const [selectedDiscipline, setSelectedDiscipline] = useState<string>('D1');
 
     return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="p-6 space-y-6 w-full min-w-0">
             {/* ── Header ── */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
                 <div className="flex items-center gap-3">
@@ -54,12 +50,6 @@ export function WorkflowPage() {
                             User Guide
                         </Link>
                     </Button>
-                    <Button variant="default" size="sm" asChild>
-                        <Link to="/ai-settings" className="flex items-center gap-1.5">
-                            <Sparkles className="h-4 w-4" />
-                            AI Settings
-                        </Link>
-                    </Button>
                 </div>
             </div>
 
@@ -76,18 +66,7 @@ export function WorkflowPage() {
                     Global AI Model Routing
                 </Button>
 
-                {/* Tab 2: Precedent Search & Similarity */}
-                <Button
-                    variant={activeTab === 'retrieval' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setActiveTab('retrieval')}
-                    className="text-xs rounded-lg font-medium"
-                >
-                    <Network className="h-3.5 w-3.5 mr-1.5" />
-                    Precedent Search & Similarity
-                </Button>
-
-                {/* Tab 3: 8D Disciplines Configuration (D1 - D8) */}
+                {/* Tab 2: 8D Disciplines Configuration (D1 - D8) */}
                 <Button
                     variant={activeTab === 'disciplines' ? 'default' : 'ghost'}
                     size="sm"
@@ -96,6 +75,17 @@ export function WorkflowPage() {
                 >
                     <FileText className="h-3.5 w-3.5 mr-1.5" />
                     8D Disciplines Configuration (D1 – D8)
+                </Button>
+
+                {/* Tab 3: Model Registry */}
+                <Button
+                    variant={activeTab === 'models' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setActiveTab('models')}
+                    className="text-xs rounded-lg font-medium"
+                >
+                    <Boxes className="h-3.5 w-3.5 mr-1.5" />
+                    Model Registry
                 </Button>
             </div>
 
@@ -113,35 +103,7 @@ export function WorkflowPage() {
                 </div>
             )}
 
-            {/* ─── TAB 2: PRECEDENT SEARCH & SIMILARITY ─── */}
-            {activeTab === 'retrieval' && (
-                <div className="space-y-6">
-                    <div>
-                        <h2 className="text-lg font-semibold tracking-tight">Precedent Search & Similarity Engine</h2>
-                        <p className="text-xs text-muted-foreground">
-                            Tune vector embedding models, matching criteria weights, and minimum score thresholds for retrieving closed 8D cases.
-                        </p>
-                        {/*
-                         * Nói rõ đây là profile NÀO. Không có câu này thì người
-                         * dùng chỉnh trọng số ở đây rồi thắc mắc vì sao D4 không
-                         * đổi gì — trong khi D4 đang chạy một profile khác.
-                         */}
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Trang này chỉnh profile <span className="font-medium text-foreground">Default</span>.
-                            Bước D nào chạy profile riêng thì chỉnh ở tab{' '}
-                            <span className="font-medium text-foreground">Similarity search</span> của bước đó,
-                            trong 8D Disciplines Configuration.
-                        </p>
-                    </div>
-
-                    <ThresholdSection cfg={retrieval} />
-                    <CriteriaPipelineSection cfg={retrieval} />
-                    <EmbeddingSection cfg={retrieval} />
-                    <ScorePreviewSection cfg={retrieval} />
-                </div>
-            )}
-
-            {/* ─── TAB 3: 8D DISCIPLINE CONFIGURATION (D1 to D8) ─── */}
+            {/* ─── TAB 2: 8D DISCIPLINE CONFIGURATION (D1 to D8) ─── */}
             {activeTab === 'disciplines' && (
                 <div className="space-y-6">
                     <div>
@@ -184,6 +146,20 @@ export function WorkflowPage() {
                             />
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ─── TAB 3: MODEL REGISTRY ─── */}
+            {activeTab === 'models' && (
+                <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+                    <div>
+                        <h2 className="text-lg font-semibold tracking-tight">AI Core Model Registry</h2>
+                        <p className="text-xs text-muted-foreground">
+                            Synchronize deployed LLMs from SAP AI Core, manage availability, and set rate limits.
+                        </p>
+                    </div>
+
+                    <AiModelManagementPage api={aiModelApi} />
                 </div>
             )}
         </div>

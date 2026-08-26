@@ -36,6 +36,59 @@ export interface Discipline8D {
     validationJson: string | null;
     configVersion: string | null;
     aiGenerated: boolean;
+
+    /** 'Draft' | 'Approved' | 'ChangeRequested'. Null ở report phân tích trước khi có cột này. */
+    reviewStatus: ReviewStatus | null;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+    /** Lý do trả lại. Chỉ có nghĩa khi reviewStatus = 'ChangeRequested'. */
+    reviewNote: string | null;
+}
+
+export const REVIEW_STATUSES = ['Draft', 'Approved', 'ChangeRequested'] as const;
+export type ReviewStatus = typeof REVIEW_STATUSES[number];
+
+export type ReviewDecision = 'approve' | 'request-change' | 'reopen';
+
+/** Cổng đóng case — server tính, client chỉ hiển thị. */
+export interface ClosureGate {
+    canClose: boolean;
+    approved: number;
+    required: number;
+    blocking: string[];
+    reason: string;
+}
+
+export interface ReviewEvent {
+    ID: string;
+    reportID: string;
+    disciplineCode: string;
+    fromStatus: string;
+    toStatus: string;
+    note: string | null;
+    actor: string;
+    at: string;
+}
+
+export interface ReviewResult {
+    disciplineID: string;
+    code: string;
+    fromStatus: ReviewStatus;
+    toStatus: ReviewStatus;
+    reviewedBy: string;
+    reviewedAt: string;
+    gate: ClosureGate;
+}
+
+/**
+ * Trạng thái duyệt đã chuẩn hoá.
+ *
+ * Report phân tích TRƯỚC khi có cột duyệt đọc lên là null. Mặc định sai chiều ở
+ * đây sẽ hiện toàn bộ dữ liệu cũ là "đã duyệt" và mở cổng đóng case cho chúng.
+ */
+export function reviewStatusOf(discipline: Pick<Discipline8D, 'reviewStatus'>): ReviewStatus {
+    const value = discipline.reviewStatus;
+    return value && (REVIEW_STATUSES as readonly string[]).includes(value) ? value : 'Draft';
 }
 
 /** Một bước trong chuỗi 5-Why do AI tự dựng khi chưa thấy đáp án. */
@@ -202,11 +255,18 @@ class EightDService extends BaseODataService<Report8D> {
         return String(id);
     }
 
-    /** Danh sách, mới nhất trước. */
+    /**
+     * Danh sách, mới nhất trước.
+     *
+     * Kèm `code` + `reviewStatus` của tám discipline để bảng vẽ được cột tiến độ
+     * "x/8 đã duyệt". Chỉ hai cột đó, KHÔNG kéo `content`/`resultJson` — chúng là
+     * LargeString và sẽ biến một truy vấn danh sách thành vài megabyte.
+     */
     async list() {
         return this.getList(
             new ODataQueryBuilder()
                 .select(LIST_COLUMNS)
+                .expand('disciplines($select=code,reviewStatus)')
                 .orderBy('createdAt', 'desc')
                 .count(),
         );
@@ -428,4 +488,36 @@ export async function saveDisciplineField(
         fieldKey,
         valueJson: JSON.stringify(value ?? null),
     });
+}
+
+/**
+ * Ghi quyet dinh duyet cua ky su cho MOT buoc D.
+ *
+ * Server la noi quyet dinh: no lay danh tinh nguoi bam tu ngu canh xac thuc chu
+ * khong tu payload, bat buoc phai co `note` khi tra lai, va tra ve luon trang
+ * thai cong dong case sau thao tac - nen client khong phai tu tinh lai.
+ */
+export async function reviewDiscipline(
+    disciplineID: string,
+    decision: ReviewDecision,
+    note?: string | null,
+): Promise<ReviewResult> {
+    const response = await axiosInstance.post('api/cnma/EIGHTD_SRV/reviewDiscipline', {
+        disciplineID,
+        decision,
+        note: note ?? '',
+    });
+    const raw = response.data?.value ?? response.data;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
+/** Vet duyet + cong dong case cua mot report. Moi nhat truoc. */
+export async function getReviewTrail(
+    reportID: string,
+): Promise<{ gate: ClosureGate; trail: ReviewEvent[] }> {
+    const response = await axiosInstance.get(
+        `api/cnma/EIGHTD_SRV/getReviewTrail(reportID='${encodeURIComponent(reportID)}')`,
+    );
+    const raw = response.data?.value ?? response.data;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }

@@ -1,16 +1,14 @@
 import { Button, cn } from '@cnma/react-ui';
 
-export type StepEditorTab = 'data' | 'prompt' | 'form' | 'constraints' | 'similarity';
+export type StepEditorTab = 'schema' | 'prompt' | 'form' | 'constraints';
 
 const TABS: Array<{ id: StepEditorTab; label: string }> = [
-    { id: 'data', label: 'Data schema' },
+    // First, because it runs first: this tab decides which past cases the step
+    // is shown. The rest decide how it writes about them.
+    { id: 'schema', label: 'Object Schema' },
     { id: 'prompt', label: 'Prompt guide' },
     { id: 'form', label: 'Form editor' },
     { id: 'constraints', label: 'Constraints' },
-    // Tìm tiền lệ đứng TRƯỚC bốn tab kia về mặt thời gian — nó quyết định bước
-    // này nhìn thấy case nào. Đặt cuối vì bốn tab kia mới là thứ được sửa hằng
-    // ngày; tab này sửa một lần rồi để yên.
-    { id: 'similarity', label: 'Similarity search' },
 ];
 
 interface StepEditorTabNavigationProps {
@@ -19,8 +17,8 @@ interface StepEditorTabNavigationProps {
     /**
      * Tab được phép hiện. Bỏ trống ⇒ tất cả.
      *
-     * D5–D8 chưa có editor prompt cấu trúc, nhưng chúng VẪN tìm tiền lệ — nên
-     * chúng mở đúng một tab thay vì bị chặn khỏi cả trang.
+     * D5–D8 have no structured prompt editor yet, but they still retrieve
+     * precedents — so they open on that one tab instead of being locked out.
      */
     availableTabs?: readonly StepEditorTab[];
 }

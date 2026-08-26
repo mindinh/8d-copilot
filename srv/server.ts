@@ -42,8 +42,13 @@ cds.on('bootstrap', (app: express.Application) => {
     }));
 
     // ===== REQUEST LOGGING =====
+    // Một dòng mỗi request, qua cds.log — KHÔNG console.log. Trước đây có thêm
+    // một console.log('[HTTP INCOMING]') ngay đầu middleware: hai dòng mỗi
+    // request, và trên Windows stdout của tiến trình con (chạy qua concurrently)
+    // là pipe GHI ĐỒNG BỘ 64KB — console kẹt (QuickEdit, bôi đen…) là buffer
+    // đầy và process.stdout.write chặn cứng CẢ EVENT LOOP: server còn listening
+    // nhưng không trả lời bất kỳ request nào nữa.
     app.use((req, res, next) => {
-        console.log(`[HTTP INCOMING] ${req.method} ${req.url}`);
         const start = Date.now();
         res.on('finish', () => {
             const duration = Date.now() - start;
@@ -99,30 +104,85 @@ cds.on('serving', (srv) => {
     }
 });
 
-cds.on('served', async () => {
+cds.on('served', () => {
     logger.info('All CDS services served successfully');
 
     // Báo AI Core có thông hay không ngay bây giờ, thay vì để vỡ ở lời gọi model
     // đầu tiên. Không chặn khởi động.
     runAiStartupProbes();
+});
 
+/**
+ * Khởi tạo dữ liệu — chạy SAU khi cổng đã mở.
+ *
+ * ── Vì sao không đặt trong 'served' ──
+ * CAP *chờ* handler 'served' bất đồng bộ chạy xong rồi mới gọi `listen()`. Để
+ * chuỗi seed ở đó nghĩa là cổng chỉ mở khi seed xong. Đo trên hybrid/HANA Cloud:
+ *
+ *     sweepOnStartup         5.3s
+ *     seedRetrievalConfig   20.0s
+ *     seedRetrievalProfiles  1.4s
+ *     seedLibraryFromBundle 17.5s
+ *     ────────────────────────────
+ *     tổng                  44.3s   ← cổng 4008 im lặng suốt quãng này
+ *
+ * Gần như toàn bộ quãng đó chỉ để XÁC NHẬN dữ liệu vốn đã có. Chi phí nằm ở
+ * round-trip tới EU10 với pool `min: 0` — mỗi truy vấn đầu phải dựng lại một
+ * connection TLS mới — chứ không phải khối lượng dữ liệu.
+ *
+ * Chuyển sang 'listening' thì server nhận request ngay từ ~10s, seed chạy nền
+ * phía sau. An toàn vì mọi bước đều idempotent và chỉ bù phần còn thiếu.
+ *
+ * ── Vì sao local dev BỎ QUA seed ──
+ * Local hybrid nối vào đúng cái HANA mà deploy đã seed rồi — 44s kia chỉ để xác
+ * nhận lại điều đó qua round-trip EU10, ở MỌI lần boot, và `cds watch` thì boot
+ * liên tục. Seed thuộc về vòng đời deploy, không thuộc vòng đời dev. Nhận diện
+ * local qua profile `development` (`cds watch` luôn bật nó kèm theo; trên CF chỉ
+ * có `production`). Cần ép chạy tại chỗ — DB mới tinh, hoặc test lại seeder —
+ * thì đặt CNMA_STARTUP_SEED=1.
+ */
+cds.on('listening', () => {
+    void startupTasks();
+});
+
+async function startupTasks(): Promise<void> {
     // Job phân tích 8D sống trong tiến trình này. Server chết giữa chừng thì bản
     // ghi kẹt ở 'Analyzing' và UI quay vòng mãi không dừng — dọn ngay lúc boot.
-    await sweepOnStartup();
+    // Bước này KHÔNG thuộc nhóm seed và chạy cả ở local: report kẹt sinh ra từ
+    // chính tiến trình local chết giữa chừng, không phải từ deploy.
+    try {
+        await sweepOnStartup();
+    } catch (e: any) {
+        logger.error('Không dọn được report kẹt lúc boot:', e?.message ?? e);
+    }
 
-    // Trọng số chấm điểm và danh sách prompt bước D.
-    //
-    // Seed bằng code chứ không bằng CSV trong `db/data/`: HDI ghi đè CSV ở MỖI
-    // lần deploy, nên trọng số admin chỉnh trên UI sẽ bị xoá mà không ai được
-    // báo. Hàm này idempotent — chỉ ghi khi bảng còn rỗng.
-    await seedRetrievalConfig();
+    const isLocalDev = cds.env.profiles?.includes('development');
+    if (isLocalDev && process.env.CNMA_STARTUP_SEED !== '1') {
+        logger.info('Local dev — bỏ qua seed khởi động (ép chạy: CNMA_STARTUP_SEED=1).');
+        return;
+    }
 
-    // Profile chấm điểm và ràng buộc bước D → profile.
-    //
-    // PHẢI chạy sau `seedRetrievalConfig()`: profile `default` được dựng từ bộ
-    // trọng số toàn cục đang có trong DB, nên bảng đó phải tồn tại trước. Đảo thứ
-    // tự thì trên một DB mới, profile mặc định sinh ra rỗng.
-    await seedRetrievalProfiles();
+    // Cả chuỗi seed nằm chung một try: chạy trong `void startupTasks()`, nên một
+    // promise vỡ ở đây là unhandled rejection và giết cả tiến trình. Gộp chung
+    // cũng đúng về mặt phụ thuộc — hỏng `seedRetrievalConfig` thì bước profile
+    // phía sau không còn cơ sở để chạy.
+    try {
+        // Trọng số chấm điểm và danh sách prompt bước D.
+        //
+        // Seed bằng code chứ không bằng CSV trong `db/data/`: HDI ghi đè CSV ở MỖI
+        // lần deploy, nên trọng số admin chỉnh trên UI sẽ bị xoá mà không ai được
+        // báo. Hàm này idempotent — chỉ ghi khi bảng còn rỗng.
+        await seedRetrievalConfig();
+
+        // Profile chấm điểm và ràng buộc bước D → profile.
+        //
+        // PHẢI chạy sau `seedRetrievalConfig()`: profile `default` được dựng từ bộ
+        // trọng số toàn cục đang có trong DB, nên bảng đó phải tồn tại trước. Đảo thứ
+        // tự thì trên một DB mới, profile mặc định sinh ra rỗng.
+        await seedRetrievalProfiles();
+    } catch (e: any) {
+        logger.error('Khởi tạo dữ liệu lúc boot thất bại:', e?.message ?? e);
+    }
 
     // Kho case tiền lệ. Chỉ BÙ case còn thiếu, không đụng case đã có — nên deploy
     // lại vừa mang được case mới lên, vừa giữ nguyên dữ liệu thật. Đây là đường
@@ -139,4 +199,4 @@ cds.on('served', async () => {
     // Vector cho tiêu chí ngữ nghĩa. Chạy ngầm — cần AI Core sống và mất vài
     // giây, không đáng để chặn khởi động.
     embedLibraryInBackground();
-});
+}

@@ -1,27 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import {
-    Badge,
-    Button,
-    Card,
-    Spinner,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-    cn,
-} from '@cnma/react-ui';
-import { Check, ClipboardList, FileSpreadsheet, Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Card, Spinner, cn } from '@cnma/react-ui';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
+import { ClipboardList, Info, PlusCircle, RefreshCw, Sparkles } from 'lucide-react';
 import {
     eightDService,
-    originShort,
+    isCustomerComplaint,
+    reviewStatusOf,
     type Report8D,
 } from '@/services/eightd-service';
 import { ReportStatusBadge } from './status-badge';
 import { AnalyzeDialog } from './analyze-dialog';
+import { CreateDefectDialog } from '../create-defect';
 
 /**
  * Danh sách báo cáo 8D.
@@ -34,108 +25,195 @@ import { AnalyzeDialog } from './analyze-dialog';
 
 const POLL_INTERVAL_MS = 4_000;
 
-function formatEur(value: number | null): string {
-    if (value == null) return '—';
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'EUR',
-        maximumFractionDigits: 0,
-    }).format(value);
-}
+/**
+ * Tiến độ duyệt của một case: x/8 bước đã được ký.
+ *
+ * ── Vì sao cột này đáng giá hơn tất cả những cột đã bỏ ──
+ * Bản mockup flagship đặt nó ở cuối worklist, và đúng: người mở danh sách 8D
+ * không hỏi "nguyên nhân gốc là gì" — họ hỏi "case nào còn dở". Một thanh tiến
+ * độ trả lời câu đó trong một cái liếc, còn nguyên nhân gốc thì phải đọc.
+ *
+ * Đếm theo `reviewStatus = 'Approved'`, tức chữ ký thật của con người, không
+ * phải "AI đã sinh ra chữ". Report phân tích trước khi có cột duyệt đọc lên là
+ * null và tính là chưa duyệt — xem `reviewStatusOf`.
+ */
+function CompletenessCell({ report }: { report: Report8D }) {
+    const steps = report.disciplines ?? [];
+    const approved = steps.filter((d) => reviewStatusOf(d) === 'Approved').length;
+    const done = approved === TOTAL_STEPS;
 
-function formatDateTime(value: string | null): string {
-    if (!value) return '—';
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-    });
-}
-
-/** Màu theo nhánh Ishikawa — cùng một nguyên nhân gốc luôn cùng màu ở mọi nơi. */
-const ROOT_CAUSE_STYLES: Record<string, string> = {
-    Man: 'bg-warning/10 text-warning border-warning/20',
-    Machine: 'bg-info/10 text-info border-info/20',
-    Method: 'bg-primary/10 text-primary border-primary/20',
-    Material: 'bg-warning/15 text-warning border-warning/30',
-    Measurement: 'bg-info/15 text-info border-info/30',
-    Environment: 'bg-success/10 text-success border-success/20',
-};
-
-function RootCauseBadge({ category }: { category: string | null }) {
-    if (!category) return <span className="text-muted-foreground">—</span>;
     return (
-        <Badge
-            variant="outline"
-            className={cn('font-medium', ROOT_CAUSE_STYLES[category] ?? 'bg-muted text-muted-foreground')}
-        >
-            {category}
-        </Badge>
+        <div className="min-w-0">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                <div
+                    className={cn('h-full rounded-full transition-all', done ? 'bg-success' : 'bg-primary')}
+                    style={{ width: `${(approved / TOTAL_STEPS) * 100}%` }}
+                />
+            </div>
+            <span className="mt-1 block text-[10.5px] tabular-nums text-muted-foreground">
+                {approved}/{TOTAL_STEPS} steps
+            </span>
+        </div>
     );
 }
 
+const TOTAL_STEPS = 8;
+
 /**
- * Kết luận của AI khi chưa thấy đáp án, kèm dấu trùng/lệch.
+ * Khai báo cột của bảng 8D Reports.
  *
- * Lệch được tô nổi hơn trùng: trùng chỉ xác nhận điều đã biết, còn lệch là lúc
- * cần người đọc để mắt tới.
+ * ── Vì sao là một mảng chứ không phải JSX ──
+ * Nhãn, bề rộng và cách vẽ của một cột nằm CÙNG một chỗ. Bản viết tay trước đây
+ * tách header và ô ra hai nơi, nên sửa một cột phải sửa hai chỗ — và đó đúng là
+ * cách cột CoPQ trôi thành canh phải ở dưới mà canh trái ở trên.
+ *
+ * ── Vì sao còn tám cột ──
+ * `Origin` gộp vào `Notification` (cùng trả lời "case nào"). `AI, unaided` gộp
+ * vào `Root cause` — hai cột cạnh nhau vốn hiện cùng một bộ sáu từ Ishikawa.
+ * `AI Models` bỏ hẳn: đó là siêu dữ liệu của LẦN CHẠY, không phải thông tin về
+ * case, và trang chi tiết đã có sẵn.
+ *
+ * `labelKey` đi qua i18n; khoá không có bản dịch thì `t()` trả lại chính chuỗi
+ * đó, nên viết thẳng tiếng Anh ở đây là an toàn.
  */
-function AiVerdictCell({ report }: { report: Report8D }) {
-    if (!report.aiRootCause) return <span className="text-muted-foreground text-xs">—</span>;
-
-    const agrees = report.aiAgreesWithRecord === true;
-
-    return (
-        <div className="flex items-center gap-1.5">
-            {agrees ? (
-                <Check className="w-3.5 h-3.5 text-success shrink-0" />
-            ) : (
-                <TriangleAlert className="w-3.5 h-3.5 text-warning shrink-0" />
-            )}
-            <Badge
-                variant="outline"
-                className={cn(
-                    'font-medium text-xs',
-                    agrees
-                        ? ROOT_CAUSE_STYLES[report.aiRootCause] ?? 'bg-muted'
-                        : 'bg-warning/10 text-warning border-warning/30',
-                )}
-            >
-                {report.aiRootCause}
-            </Badge>
-            {report.aiConfidence != null && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                    {Math.round(report.aiConfidence * 100)}%
+const REPORT_COLUMNS: DataTableColumn<Report8D>[] = [
+    {
+        key: 'notificationId',
+        labelKey: 'Case',
+        width: 150,
+        minWidth: 130,
+        className: 'font-mono text-xs font-semibold',
+    },
+    {
+        key: 'origin',
+        labelKey: 'Origin',
+        width: 170,
+        minWidth: 140,
+        renderType: 'custom',
+        // Chu day du, khong phai ma Q1/Q3. Nguoi doc worklist khong phai ai cung
+        // thuoc bang ma phan loai thong bao cua SAP — ban mockup viet thang ra, va
+        // do la lua chon dung.
+        render: (_v, row) => {
+            const q1 = isCustomerComplaint(row.origin);
+            return (
+                <span
+                    className={cn(
+                        'inline-block rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        q1 ? 'bg-destructive/10 text-destructive' : 'bg-info/10 text-info',
+                    )}
+                >
+                    {q1 ? 'Customer Complaint' : 'Internal Defect'}
                 </span>
-            )}
+            );
+        },
+    },
+    {
+        key: 'materialDesc',
+        labelKey: 'Material',
+        width: 190,
+        minWidth: 140,
+        renderType: 'custom',
+        // Mo ta truoc, ma sau va nho hon: "Bracket Housing X240" noi duoc voi nguoi
+        // doc, con "MAT-10247" thi chi noi duoc voi he thong.
+        render: (_v, row) => (
+            <div className="min-w-0">
+                <div className="text-xs">{row.materialDesc || row.materialId || '-'}</div>
+                {row.materialDesc && row.materialId && (
+                    <div className="font-mono text-[10.5px] text-muted-foreground">{row.materialId}</div>
+                )}
+            </div>
+        ),
+    },
+    {
+        key: 'symptomShortText',
+        labelKey: 'Symptom',
+        width: 340,
+        minWidth: 220,
+        renderType: 'custom',
+        render: (_v, row) => (
+            <span className="text-xs">{row.symptomShortText || '-'}</span>
+        ),
+    },
+    {
+        key: 'status',
+        labelKey: 'Status',
+        width: 130,
+        minWidth: 110,
+        renderType: 'custom',
+        render: (_v, row) => (
+            row.status === 'Analyzing' ? <RunningSpinner /> : <ReportStatusBadge status={row.status} />
+        ),
+    },
+    {
+        key: 'disciplines',
+        labelKey: 'Completeness',
+        width: 150,
+        minWidth: 130,
+        renderType: 'custom',
+        render: (_v, row) => <CompletenessCell report={row} />,
+    },
+];
+
+function RunningSpinner() {
+    return (
+        <div className="flex items-center gap-1.5 text-primary">
+            <Spinner className="w-3.5 h-3.5" />
+            <span className="text-xs">Analyzing…</span>
         </div>
     );
 }
 
 export function EightDListPage() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [analyzeOpen, setAnalyzeOpen] = useState(false);
+    const [createDefectOpen, setCreateDefectOpen] = useState(false);
+
+    /**
+     * Report vừa được xếp lịch: BỎ cache của bảng trước khi rời trang.
+     *
+     * Không bỏ thì cache còn giữ danh sách chụp TRƯỚC khi report tồn tại. Lúc
+     * người dùng bấm back, bảng dựng lại từ đúng bản chụp đó — thiếu hàng mới, và
+     * vì thiếu nên `refetchInterval` không thấy ai đang `Analyzing` nên không bao
+     * giờ bật polling. Bảng đứng im chứ không phải chậm.
+     */
+    const goToNewReport = (reportID: string) => {
+        void queryClient.invalidateQueries({ queryKey: ['8d'] });
+        navigate(`/8d/${reportID}`);
+    };
 
     const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
         queryKey: ['8d', 'reports'],
         queryFn: () => eightDService.list(),
+        // Mặc định toàn cục là staleTime 5 phút — SAI cho bảng này. Quay lại từ
+        // trang chi tiết trong vòng 5 phút thì React Query coi cache còn tươi và
+        // không hỏi lại, nên bảng thiếu hẳn report vừa tạo. Tệ hơn: thiếu hàng đó
+        // thì `refetchInterval` dưới đây thấy không có ai `Analyzing` và tắt luôn
+        // polling — bảng đứng im vĩnh viễn chứ không phải chậm vài giây.
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: true,
         // Chỉ quay vòng khi thật sự có việc đang chạy.
         refetchInterval: (query) => {
             const rows = query.state.data?.value ?? [];
             return rows.some((r: Report8D) => r.status === 'Analyzing') ? POLL_INTERVAL_MS : false;
         },
+        // Một lượt phân tích mất 3-5 phút; không ai ngồi nhìn hết chừng đó. Mặc
+        // định React Query dừng đếm giờ khi tab bị ẩn, nên đổi tab rồi quay lại
+        // là thấy trạng thái cũ. Cho chạy tiếp cả khi tab ở nền.
+        refetchIntervalInBackground: true,
     });
 
-    const reports = data?.value ?? [];
-    const running = reports.filter((r) => r.status === 'Analyzing').length;
+    const rows = data?.value ?? [];
+    const running = rows.filter((r) => r.status === 'Analyzing').length;
 
     return (
-        <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-
-            {/* ── Header ── */}
+        <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
+            {/* ── Tiêu đề & thanh thao tác ── */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <ClipboardList className="w-5 h-5 text-primary" />
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                        <ClipboardList className="w-6 h-6" />
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-foreground">8D Reports</h1>
@@ -150,6 +228,10 @@ export function EightDListPage() {
                         <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
                         Refresh
                     </Button>
+                    <Button variant="outline" size="sm" onClick={() => setCreateDefectOpen(true)} className="gap-1.5">
+                        <PlusCircle className="w-4 h-4 text-primary" />
+                        Record Defect (SAP UI5)
+                    </Button>
                     <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
                         <Sparkles className="w-4 h-4" />
                         Analyze from JSON
@@ -160,7 +242,7 @@ export function EightDListPage() {
             {running > 0 && (
                 <div className="flex items-center gap-2 text-xs text-info bg-info/5 border border-info/20 rounded-lg px-3 py-2">
                     <Spinner className="w-3.5 h-3.5" />
-                    {running} analysis running — this page refreshes automatically. Each run takes 60–90 seconds.
+                    {running} analysis running — this page refreshes automatically. Each run takes about 3 minutes.
                 </div>
             )}
 
@@ -169,160 +251,60 @@ export function EightDListPage() {
                 <div className="flex items-start gap-3 text-xs text-muted-foreground">
                     <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <div>
-                        <span className="font-semibold text-foreground">Why AI, unaided is highlighted when it disagrees:</span>{' '}
-                        TheCopilot runs an independent diagnosis without seeing the recorded 5-Why chain or root cause flag.
-                        Same conclusion confirms what you know; different conclusion points to a case worth double-checking.
+                        <span className="font-semibold text-foreground">Reading the root cause column:</span>{' '}
+                        The Copilot runs an independent diagnosis without seeing the recorded 5-Why chain or root
+                        cause flag. When it reaches the same conclusion, the column shows the root cause and nothing
+                        else. When it reaches a different one, a line underneath says what it read instead, and that
+                        case is worth a second look.
                     </div>
                 </div>
             </Card>
 
-            {/* ── Bảng danh sách ── */}
-            {isLoading ? (
-                <Card className="p-12 items-center text-center">
-                    <Spinner className="w-6 h-6 text-muted-foreground mb-2" />
-                    <p className="text-xs text-muted-foreground">Loading cases…</p>
-                </Card>
-            ) : isError ? (
-                <Card className="p-6 border-destructive/50 text-destructive text-sm">
-                    Failed to load 8D cases: {(error as Error)?.message}
-                </Card>
-            ) : reports.length === 0 ? (
-                <Card className="p-12 items-center text-center space-y-3">
-                    <FileSpreadsheet className="w-10 h-10 text-muted-foreground" />
-                    <div>
-                        <p className="text-sm font-medium">No 8D reports yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Click "Analyze new case" to start from an incoming complaint or defect record.
-                        </p>
-                    </div>
-                    <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
-                        <Sparkles className="w-4 h-4" />
-                        Analyze new case
-                    </Button>
-                </Card>
-            ) : (
-                <Card className="p-0 overflow-hidden">
-                    <Table containerClassName="overflow-x-auto overflow-y-hidden">
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-32">Notification</TableHead>
-                                <TableHead className="w-16">Origin</TableHead>
-                                <TableHead>Symptom</TableHead>
-                                <TableHead className="w-36">Material</TableHead>
-                                <TableHead className="w-32">Work Center</TableHead>
-                                <TableHead className="w-32">Root Cause</TableHead>
-                                <TableHead className="w-36">AI, unaided</TableHead>
-                                <TableHead className="w-24 text-right">CoPQ</TableHead>
-                                <TableHead className="w-28">Status</TableHead>
-                                <TableHead className="w-36">AI Models</TableHead>
-                                <TableHead className="w-32">Analyzed</TableHead>
-                            </TableRow>
-                        </TableHeader>
-
-                        <TableBody>
-                            {reports.map((r) => (
-                                <TableRow
-                                    key={r.ID}
-                                    onClick={() => navigate(`/8d/${r.ID}`)}
-                                    className="cursor-pointer"
-                                >
-                                    <TableCell className="font-mono text-xs font-medium">
-                                        {r.notificationId}
-                                    </TableCell>
-
-                                    <TableCell>
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(
-                                                'font-mono text-xs',
-                                                originShort(r.origin) === 'Q1'
-                                                    ? 'bg-destructive/10 text-destructive border-destructive/20'
-                                                    : 'bg-muted text-muted-foreground border-border',
-                                            )}
-                                        >
-                                            {originShort(r.origin)}
-                                        </Badge>
-                                    </TableCell>
-
-                                    <TableCell className="max-w-xs">
-                                        <div className="truncate text-sm">{r.symptomShortText}</div>
-                                        {r.status === 'Failed' && r.errorMessage && (
-                                            <div className="truncate text-xs text-destructive mt-0.5">
-                                                {r.errorMessage}
-                                            </div>
-                                        )}
-                                    </TableCell>
-
-                                    <TableCell>
-                                        <div className="text-xs font-mono">{r.materialId}</div>
-                                        <div className="text-xs text-muted-foreground truncate">
-                                            {r.materialDesc}
-                                        </div>
-                                    </TableCell>
-
-                                    <TableCell className="text-xs font-mono">{r.workCenterId}</TableCell>
-
-                                    <TableCell>
-                                        <RootCauseBadge category={r.rootCauseCategory} />
-                                    </TableCell>
-
-                                    <TableCell>
-                                        <AiVerdictCell report={r} />
-                                    </TableCell>
-
-                                    <TableCell className="text-right text-xs tabular-nums">
-                                        {formatEur(r.copqEur)}
-                                    </TableCell>
-
-                                    <TableCell>
-                                        <ReportStatusBadge status={r.status} />
-                                    </TableCell>
-
-                                    <TableCell>
-                                        {r.aiModelAnalyze ? (
-                                            <div className="flex flex-col gap-0.5 max-w-xs">
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="font-mono text-xs truncate justify-start"
-                                                    title={`Analyze: ${r.aiModelAnalyze}`}
-                                                >
-                                                    {r.aiModelAnalyze}
-                                                </Badge>
-                                                {r.aiModelParse && r.aiModelParse !== r.aiModelAnalyze && (
-                                                    <span
-                                                        className="text-xs text-muted-foreground font-mono truncate"
-                                                        title={`Parse: ${r.aiModelParse}`}
-                                                    >
-                                                        P: {r.aiModelParse}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-muted-foreground text-xs">—</span>
-                                        )}
-                                    </TableCell>
-
-                                    <TableCell className="text-xs text-muted-foreground">
-                                        {formatDateTime(r.analyzedAt)}
-                                        {r.durationMs != null && (
-                                            <div className="text-xs opacity-70">
-                                                {(r.durationMs / 1000).toFixed(0)}s
-                                                {r.tokensUsed != null &&
-                                                    ` · ${(r.tokensUsed / 1000).toFixed(1)}k tok`}
-                                            </div>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Card>
+            {/* ── Trạng thái tải / lỗi / rỗng ── */}
+            {isLoading && (
+                <div className="flex justify-center p-12">
+                    <Spinner className="w-6 h-6 text-primary" />
+                </div>
             )}
+
+            {isError && (
+                <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    Failed to load reports: {(error as Error).message}
+                </div>
+            )}
+
+            {/*
+              Bang chung DataTable, bung tu du an CLAIR2.
+
+              Truoc day day la mot bang viet tay: header va o duoc khai o hai cho
+              khac nhau, nen chinh mot cot phai sua hai noi va de lech - dung cach
+              cot CoPQ tung canh phai o duoi ma canh trai o tren. Voi DataTable thi
+              moi cot la MOT khai bao: nhan, be rong, cach ve. Sai lech kieu do
+              khong con cho de xay ra.
+
+              Kem theo mien phi: keo doi be rong cot, sap xep, loc, phan trang,
+              trang thai loading/rong/loi - tat ca da duoc dung san o do.
+            */}
+            <DataTable<Report8D>
+                data={rows}
+                columns={REPORT_COLUMNS}
+                isLoading={isLoading}
+                error={isError ? (error as Error) : null}
+                onRowClick={(row) => navigate(`/8d/${row.ID}`)}
+                emptyMessageKey="No 8D reports yet. Use Record Defect (SAP UI5) to create an SAP defect notification, or click Analyze from JSON to start an analysis."
+                errorMessageKey="Failed to load reports."
+            />
 
             <AnalyzeDialog
                 open={analyzeOpen}
                 onOpenChange={setAnalyzeOpen}
-                onScheduled={(reportID) => navigate(`/8d/${reportID}`)}
+                onScheduled={goToNewReport}
+            />
+
+            <CreateDefectDialog
+                open={createDefectOpen}
+                onOpenChange={setCreateDefectOpen}
+                onCreated={goToNewReport}
             />
         </div>
     );
