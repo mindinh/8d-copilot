@@ -62,11 +62,13 @@ function Blank({ label }: { label: string }) {
 function TaskDetail({
     task,
     initialEditing = false,
+    readOnly = false,
     onClose,
     onSave,
 }: {
     task: ActionTask | null;
     initialEditing?: boolean;
+    readOnly?: boolean;
     onClose: () => void;
     onSave: (updatedTask: ActionTask) => void;
 }) {
@@ -123,11 +125,11 @@ function TaskDetail({
                         <div className="flex items-center gap-1.5 shrink-0">
                             {task.origin === 'AI suggestion' ? (
                                 <Badge variant="outline" className="gap-1 text-[11px] font-normal border-primary/30 text-primary bg-primary/5">
-                                    <Sparkles className="h-3 w-3" /> AI Suggestion
+                                    <Sparkles className="h-3.5 w-3.5" /> AI Suggestion
                                 </Badge>
                             ) : (
                                 <Badge variant="outline" className="gap-1 text-[11px] font-normal text-muted-foreground">
-                                    <User className="h-3 w-3" /> User Added
+                                    <User className="h-3.5 w-3.5" /> User Added
                                 </Badge>
                             )}
                             <StatusChip status={isEditing ? status : task.status} />
@@ -232,7 +234,7 @@ function TaskDetail({
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
                                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <User className="h-3.5 w-3.5 text-muted-foreground" /> Assignee
+                                    <User className="h-4 w-4 text-muted-foreground" /> Assignee
                                 </div>
                                 <div className="text-xs font-semibold text-foreground truncate">
                                     {task.assignee || <Blank label="Unassigned" />}
@@ -295,9 +297,11 @@ function TaskDetail({
 
                         {/* Footer */}
                         <div className="flex items-center justify-end gap-2 pt-3 border-t">
-                            <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs gap-1.5">
-                                <Edit2 className="h-3.5 w-3.5" /> Edit Task
-                            </Button>
+                            {!readOnly && (
+                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs gap-1.5">
+                                    <Edit2 className="h-3.5 w-3.5" /> Edit Task
+                                </Button>
+                            )}
                             <Button size="sm" variant="default" onClick={onClose} className="h-8 text-xs">
                                 Close
                             </Button>
@@ -309,9 +313,10 @@ function TaskDetail({
     );
 }
 
-export function TaskTable({ tasks, onChange }: {
+export function TaskTable({ tasks, onChange, readOnly = false }: {
     tasks: ActionTask[];
     onChange: (next: ActionTask[]) => void;
+    readOnly?: boolean;
 }) {
     const [selectedTask, setSelectedTask] = useState<ActionTask | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -388,15 +393,16 @@ export function TaskTable({ tasks, onChange }: {
                                 <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5">
                                         {task.origin === 'AI suggestion' && (
-                                            <Sparkles className="h-3 w-3 shrink-0 text-primary" />
+                                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
                                         )}
                                         <span className="font-medium">{task.name}</span>
                                     </span>
                                 </td>
                                 <td className="px-3 py-2">
                                     {task.assignee
-                                        ? <span className="inline-flex items-center gap-1">
-                                            <User className="h-3 w-3 text-muted-foreground" />{task.assignee}
+                                        ? <span className="inline-flex items-center gap-1.5 text-foreground">
+                                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                                            <span>{task.assignee}</span>
                                         </span>
                                         : <Blank label="Unassigned" />}
                                 </td>
@@ -416,26 +422,30 @@ export function TaskTable({ tasks, onChange }: {
                                             <Eye className="h-3.5 w-3.5" />
                                             Detail
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
-                                            aria-label={`Edit ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
-                                            title="Edit task"
-                                        >
-                                            <Edit2 className="h-3.5 w-3.5" />
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeTask(task.id)}
-                                            aria-label={`Remove ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
-                                            title="Remove task"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                            Remove
-                                        </button>
+                                        {!readOnly && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
+                                                    aria-label={`Edit ${task.name}`}
+                                                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                    title="Edit task"
+                                                >
+                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeTask(task.id)}
+                                                    aria-label={`Remove ${task.name}`}
+                                                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
+                                                    title="Remove task"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    Remove
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -444,101 +454,104 @@ export function TaskTable({ tasks, onChange }: {
                 </table>
             </div>
 
-            {adding ? (
-                <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-                    <p className="text-xs font-semibold text-foreground">Add New Task</p>
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                            Task Name <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            type="text"
-                            placeholder="e.g. Replace clamp pads and perform calibration..."
-                            value={newTaskName}
-                            onChange={(e) => setNewTaskName(e.target.value)}
-                            className="h-8 text-xs bg-background"
-                            autoFocus
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                            Description & Instructions
-                        </Label>
-                        <Textarea
-                            placeholder="Detailed instructions, scope of work, or criteria..."
-                            value={newDescription}
-                            onChange={(e) => setNewDescription(e.target.value)}
-                            rows={2}
-                            className="text-xs leading-relaxed bg-background min-h-[60px]"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {!readOnly && (
+                adding ? (
+                    <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+                        <p className="text-xs font-semibold text-foreground">Add New Task</p>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">
-                                Assignee
+                                Task Name <span className="text-destructive">*</span>
                             </Label>
                             <Input
                                 type="text"
-                                placeholder="e.g. Quality Engineer"
-                                value={newAssignee}
-                                onChange={(e) => setNewAssignee(e.target.value)}
+                                placeholder="e.g. Replace clamp pads and perform calibration..."
+                                value={newTaskName}
+                                onChange={(e) => setNewTaskName(e.target.value)}
                                 className="h-8 text-xs bg-background"
+                                autoFocus
                             />
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">
-                                Duration (Days)
+                                Description & Instructions
                             </Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                placeholder="0"
-                                value={newDurationDays}
-                                onChange={(e) => setNewDurationDays(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                            <Textarea
+                                placeholder="Detailed instructions, scope of work, or criteria..."
+                                value={newDescription}
+                                onChange={(e) => setNewDescription(e.target.value)}
+                                rows={2}
+                                className="text-xs leading-relaxed bg-background min-h-[60px]"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
-                                Status
-                            </Label>
-                            <Select value={newStatus} onValueChange={setNewStatus}>
-                                <SelectTrigger className="h-8 text-xs bg-background w-full">
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {TASK_STATUSES.map((st) => (
-                                        <SelectItem key={st} value={st}>
-                                            {st}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Assignee
+                                </Label>
+                                <Input
+                                    type="text"
+                                    placeholder="e.g. Quality Engineer"
+                                    value={newAssignee}
+                                    onChange={(e) => setNewAssignee(e.target.value)}
+                                    className="h-8 text-xs bg-background"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Duration (Days)
+                                </Label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    placeholder="0"
+                                    value={newDurationDays}
+                                    onChange={(e) => setNewDurationDays(e.target.value)}
+                                    className="h-8 text-xs bg-background"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Status
+                                </Label>
+                                <Select value={newStatus} onValueChange={setNewStatus}>
+                                    <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TASK_STATUSES.map((st) => (
+                                            <SelectItem key={st} value={st}>
+                                                {st}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()}>
+                                Add task
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+                                Cancel
+                            </Button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()}>
-                            Add task
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
-                            Cancel
-                        </Button>
-                    </div>
-                </div>
-            ) : (
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => setAdding(true)}
-                >
-                    <Plus className="mr-1 h-3 w-3" /> Add task
-                </Button>
+                ) : (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={() => setAdding(true)}
+                    >
+                        <Plus className="mr-1 h-3 w-3" /> Add task
+                    </Button>
+                )
             )}
 
             <TaskDetail
                 task={selectedTask}
                 initialEditing={isEditMode}
+                readOnly={readOnly}
                 onClose={() => setSelectedTask(null)}
                 onSave={updateTask}
             />

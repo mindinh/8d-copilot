@@ -3,7 +3,7 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn,
 } from '@cnma/react-ui';
 import { AlertCircle, AlertTriangle, CheckCircle2, Link2 } from 'lucide-react';
-import type { Discipline8D } from '@/services/eightd-service';
+import { reviewStatusOf, type Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
 import { AiSuggestWidget, DecisionTableWidget, TeamRosterProvider, type RosterRow } from './team-roster-widget';
 import { ComplaintReferenceWidget, IsBoxWidget, IsNotBoxWidget, ProblemStatementWidget, W2hCellWidget } from './problem-widgets';
@@ -135,7 +135,7 @@ function EvidenceList({ paths, context }: { paths: string[]; context: Record<str
     })}</div>;
 }
 
-function FieldValue({ field, value, context, disciplineID, data, siblings }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[] }) {
+function FieldValue({ field, value, context, disciplineID, data, siblings, readOnly = false }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[]; readOnly?: boolean }) {
     if ((value === undefined || value === null || value === '') && !SELF_EMPTY_WIDGETS.has(field.widget)) return <span className="text-sm italic text-muted-foreground">Not provided</span>;
     if (field.widget === 'evidence-list' && Array.isArray(value)) return <EvidenceList paths={value.map(String)} context={context} />;
     // Hai widget co HANH VI cua D1. Chung khong tu giu state - state nhom nam
@@ -162,6 +162,7 @@ function FieldValue({ field, value, context, disciplineID, data, siblings }: { f
             statement={value}
             override={getPath(data, 'problem.statementOverride')}
             disciplineID={disciplineID}
+            readOnly={readOnly}
         />;
     }
     if (field.widget === 'w2h-cell') {
@@ -171,9 +172,20 @@ function FieldValue({ field, value, context, disciplineID, data, siblings }: { f
     if (field.widget === 'isnot-box') return <IsNotBoxWidget value={value} />;
     // D4/D3 — ba widget nay phai dung TRUOC nhanh Array chung ben duoi, neu khong
     // `ObjectTable` nuot het va lai ve ra bang phang nhu cu.
-    if (field.widget === 'why-chain') return <WhyChainWidget value={value} disciplineID={disciplineID} fieldKey={field.key} />;
-    if (field.widget === 'ishikawa-grid') return <IshikawaGridWidget context={context} proposed={value} disciplineID={disciplineID} />;
-    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} />;
+    if (field.widget === 'why-chain') return <WhyChainWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={readOnly} />;
+    if (field.widget === 'ishikawa-grid') {
+        return (
+            <IshikawaGridWidget
+                context={context}
+                proposed={value}
+                disciplineID={disciplineID}
+                savedFindings={getPath(data, 'ishikawaCustomFindings')}
+                savedRootCategory={getPath(data, 'selectedRootCategory')}
+                readOnly={readOnly}
+            />
+        );
+    }
+    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} readOnly={readOnly} />;
     if (field.widget === 'ai-draft') return <AiDraftWidget value={value} />;
     if (field.widget === 'fmea-link') return <FmeaLinkWidget value={value} />;
     // Cổng đóng case là sự thật về CẢ report, nên nó đọc trạng thái duyệt của các
@@ -192,10 +204,40 @@ function FieldValue({ field, value, context, disciplineID, data, siblings }: { f
     return <span className="break-words whitespace-pre-wrap text-sm leading-relaxed">{String(value)}</span>;
 }
 
-function FieldBlock({ field, value, violations, context, disciplineID, data, siblings }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[] }) {
+function FieldBlock({ field, value, violations, context, disciplineID, data, siblings, readOnly = false }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[]; readOnly?: boolean }) {
     const hasError = violations.some((item) => item.severity === 'error');
     const hasWarning = violations.some((item) => item.severity === 'warning');
-    return <div className={cn('min-w-0 overflow-hidden rounded-xl', SELF_LABELLED_WIDGETS.has(field.widget) ? 'p-0' : 'p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}>{!SELF_LABELLED_WIDGETS.has(field.widget) && <div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div>}<div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} siblings={siblings} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
+    const isSelfLabelled = SELF_LABELLED_WIDGETS.has(field.widget);
+
+    return (
+        <div className={cn(
+            'min-w-0 overflow-hidden rounded-xl',
+            isSelfLabelled ? 'p-0' : 'p-3.5 border border-border/70 bg-card shadow-xs',
+            COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))],
+            ROW_SPANS[field.rowSpan ?? 1],
+            field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4',
+            hasError && 'border border-destructive/40 bg-error-bg/40',
+            hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30',
+        )}>
+            {!isSelfLabelled && (
+                <div className="mb-2 pb-1.5 border-b border-border/50 flex min-w-0 items-center justify-between gap-2 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>
+                    <div className="flex items-center gap-1">
+                        {hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
+                        {hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}
+                    </div>
+                </div>
+            )}
+            <div className="min-w-0 overflow-hidden">
+                <FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} siblings={siblings} readOnly={readOnly} />
+            </div>
+            {violations.map((item) => (
+                <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>
+                    {item.message}
+                </span>
+            ))}
+        </div>
+    );
 }
 
 function isExcludedField(code: string, key: string, label?: string): boolean {
@@ -350,8 +392,9 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
     // dung Form Editor de tao ra mot buoc rong.
     const visibleGroups = groups;
     const violations = validation?.violations ?? [];
+    const isCompleted = reviewStatusOf(discipline) === 'Approved';
     return (
-        <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')}>
+        <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')} readOnly={isCompleted}>
             <div className="min-w-0 space-y-3">
                 <Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">
                     {visibleGroups.map((group) => (
@@ -365,7 +408,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
                                         const field = fieldMap.get(key);
                                         if (!field || field.visible === false || isExcludedField(discipline.code, key, field.label)) return null;
                                         const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key);
-                                        return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} siblings={siblings} />;
+                                        return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} siblings={siblings} readOnly={isCompleted} />;
                                     })}
                                 </div>
                             </AccordionContent>

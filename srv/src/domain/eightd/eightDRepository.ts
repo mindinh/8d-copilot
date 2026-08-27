@@ -270,9 +270,15 @@ export async function saveAssignedTeam(
     roster: AssignedTeamRow[],
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson')
+        .columns('ID', 'code', 'resultJson', 'reviewStatus')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
     if (row.code !== 'D1') {
         throw Object.assign(
             new Error(`Only D1 has a team roster to save; this discipline is ${row.code}.`),
@@ -336,9 +342,15 @@ export async function saveDisciplineFieldValue(
     value: unknown,
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson')
+        .columns('ID', 'code', 'resultJson', 'reviewStatus')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
 
     const allowed = HUMAN_WRITABLE_FIELDS[String(row.code)];
     if (!allowed?.has(fieldKey)) {

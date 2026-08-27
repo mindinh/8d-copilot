@@ -1,6 +1,7 @@
 import { BaseODataService } from './core/base-service';
 import { ODataQueryBuilder } from './core/odata-helper';
 import axiosInstance from './core/axios-instance';
+import { queryClient } from '@/query-client';
 import {
     normalizePrecedents as normalizeShape,
     parseStoredPrecedents as parseStoredShape,
@@ -503,6 +504,30 @@ export async function saveTeamRoster(
         disciplineID,
         roster: JSON.stringify(roster),
     });
+
+    queryClient.setQueriesData<{ disciplines?: Discipline8D[] }>({ queryKey: ['8d', 'report'] }, (old) => {
+        if (!old || !old.disciplines) return old;
+        return {
+            ...old,
+            disciplines: old.disciplines.map((d) => {
+                if (d.ID !== disciplineID) return d;
+                let data: Record<string, unknown> = {};
+                try {
+                    data = JSON.parse(d.resultJson || '{}');
+                } catch { /* empty */ }
+                const team = data.team && typeof data.team === 'object' && !Array.isArray(data.team)
+                    ? { ...(data.team as Record<string, unknown>) }
+                    : {};
+                team.assignedRoster = roster;
+                return {
+                    ...d,
+                    resultJson: JSON.stringify({ ...data, team }),
+                };
+            }),
+        };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['8d', 'report'] });
+
     const raw = response.data?.value ?? response.data;
     try {
         return (typeof raw === 'string' ? JSON.parse(raw) : raw)?.saved ?? roster.length;
@@ -530,6 +555,33 @@ export async function saveDisciplineField(
         fieldKey,
         valueJson: JSON.stringify(value ?? null),
     });
+
+    queryClient.setQueriesData<{ disciplines?: Discipline8D[] }>({ queryKey: ['8d', 'report'] }, (old) => {
+        if (!old || !old.disciplines) return old;
+        return {
+            ...old,
+            disciplines: old.disciplines.map((d) => {
+                if (d.ID !== disciplineID) return d;
+                let data: Record<string, unknown> = {};
+                try {
+                    data = JSON.parse(d.resultJson || '{}');
+                } catch { /* empty */ }
+                const parts = fieldKey.split('.');
+                let cursor: any = data;
+                for (const part of parts.slice(0, -1)) {
+                    cursor[part] = cursor[part] && typeof cursor[part] === 'object' && !Array.isArray(cursor[part])
+                        ? { ...cursor[part] } : {};
+                    cursor = cursor[part];
+                }
+                cursor[parts[parts.length - 1]] = value;
+                return {
+                    ...d,
+                    resultJson: JSON.stringify(data),
+                };
+            }),
+        };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['8d', 'report'] });
 }
 
 /**

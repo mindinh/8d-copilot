@@ -158,6 +158,7 @@ interface TeamRosterState {
     saveError: string | null;
     savedLabel: string | null;
     caseContext: Record<string, unknown> | null;
+    readOnly?: boolean;
     lookup: (partnerId: string) => PartnerDirectoryEntry | null;
     onTeam: (partnerId: string | null) => boolean;
     addOne: (addition: RosterAddition) => void;
@@ -170,10 +171,11 @@ interface TeamRosterState {
 
 const TeamRosterContext = createContext<TeamRosterState | null>(null);
 
-export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, children }: {
+export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, readOnly = false, children }: {
     disciplineID: string;
     caseContext: Record<string, unknown> | null;
     savedRoster: unknown;
+    readOnly?: boolean;
     children: ReactNode;
 }) {
     const [directory, setDirectory] = useState<PartnerDirectoryEntry[]>([]);
@@ -214,7 +216,6 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
     // nhom ghi nhan tren case: neu khong, mot lan luu nhom rong se bi nhom goc de
     // lai ngay o lan mo tiep theo.
     useEffect(() => {
-        if (rows !== null) return;
         const persisted = Array.isArray(savedRoster) ? savedRoster : null;
         if (persisted) {
             setRows(persisted.filter((item) => item && typeof item === 'object').map((item) => {
@@ -227,12 +228,14 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
             }));
             return;
         }
-        setRows(caseMembers.map((member, index) => ({
-            key: nextKey(),
-            partnerId: member.partnerId,
-            partnerRole: index === 0 ? PARTNER_ROLES[0] : PARTNER_ROLES[1],
-        })));
-    }, [caseMembers, rows, savedRoster]);
+        if (rows === null) {
+            setRows(caseMembers.map((member, index) => ({
+                key: nextKey(),
+                partnerId: member.partnerId,
+                partnerRole: index === 0 ? PARTNER_ROLES[0] : PARTNER_ROLES[1],
+            })));
+        }
+    }, [caseMembers, savedRoster]);
 
     const workingRows = rows ?? [];
     const persistableRows = (targetRows: WorkingRow[] = workingRows): AssignedTeamRow[] => targetRows
@@ -251,18 +254,16 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
         setRows(next);
         setDirty(false);
         const toSave = persistableRows(next);
-        if (toSave.length > 0) {
-            setSaving(true);
-            saveTeamRoster(disciplineID, toSave)
-                .then((count) => {
-                    setSavedLabel(`${count} member${count === 1 ? '' : 's'}`);
-                })
-                .catch((err) => {
-                    console.error('Failed to save team roster:', err);
-                    setDirty(true);
-                })
-                .finally(() => setSaving(false));
-        }
+        setSaving(true);
+        saveTeamRoster(disciplineID, toSave)
+            .then((count) => {
+                setSavedLabel(`${count} member${count === 1 ? '' : 's'}`);
+            })
+            .catch((err) => {
+                console.error('Failed to save team roster:', err);
+                setDirty(true);
+            })
+            .finally(() => setSaving(false));
     };
     const lookup = (partnerId: string) =>
         directory.find((entry) => entry.partnerId === partnerId) ?? null;
@@ -327,7 +328,7 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
 
     const value: TeamRosterState = {
         rows: workingRows, directory, directoryError, dirty, saving, saveError, savedLabel,
-        caseContext, lookup, onTeam, addMany,
+        caseContext, readOnly, lookup, onTeam, addMany,
         addOne: (addition) => addMany([addition]),
         addEmpty: () => mutate([...workingRows, { key: nextKey(), partnerId: '', partnerRole: PARTNER_ROLES[1] }]),
         patch: (key, next) => mutate(workingRows.map((row) => (row.key === key ? { ...row, ...next } : row))),
@@ -435,7 +436,7 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
                         )}
                         {ctx.onTeam(partnerId) ? (
                             <span className="ml-1.5 text-[11px] font-medium text-success">✓ on team</span>
-                        ) : partnerId ? (
+                        ) : partnerId && !ctx.readOnly ? (
                             <button
                                 type="button"
                                 onClick={() => ctx.addOne({ partnerId, suggestedRole: row.assigned8DRole })}
@@ -443,6 +444,8 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
                             >
                                 + Add
                             </button>
+                        ) : partnerId && ctx.readOnly ? (
+                            <span className="ml-1.5 text-[11px] text-muted-foreground">not assigned</span>
                         ) : (
                             // Khong noi duoc ve mot Business Partner that thi KHONG cho
                             // them: bang quyet dinh chi chua nguoi co ID tra cuu duoc.
@@ -454,7 +457,7 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
                 ))}
             </ul>
 
-            {pending.length > 0 ? (
+            {!ctx.readOnly && pending.length > 0 && (
                 <button
                     type="button"
                     onClick={() => ctx.addMany(pending.map((item) => ({
@@ -465,9 +468,10 @@ export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
                 >
                     ✓ Accept all suggested ({pending.length})
                 </button>
-            ) : (
+            )}
+            {pending.length === 0 && (
                 <span className="text-[12.5px] text-success">
-                    ✓ All suggested members added — remove any from the table below if not needed
+                    ✓ All suggested members added
                 </span>
             )}
         </div>
@@ -487,16 +491,18 @@ export function DecisionTableWidget() {
     return (
         <div className="min-w-0 space-y-2">
             <div className="rounded-lg border bg-card px-3.5 py-3">
-                <div className="mb-2 flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={ctx.addEmpty}
-                        disabled={ctx.saving}
-                        className="rounded-md border border-input bg-card px-4 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50"
-                    >
-                        Add
-                    </button>
-                </div>
+                {!ctx.readOnly && (
+                    <div className="mb-2 flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={ctx.addEmpty}
+                            disabled={ctx.saving}
+                            className="rounded-md border border-input bg-card px-4 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50"
+                        >
+                            Add
+                        </button>
+                    </div>
+                )}
 
                 <div className="max-w-full overflow-x-auto">
                     <table className="w-full border-collapse">
@@ -519,7 +525,7 @@ export function DecisionTableWidget() {
                             ) : ctx.rows.map((row) => {
                                 const partner = ctx.lookup(row.partnerId);
                                 return (
-                                    <tr key={row.key}>
+                                    <tr key={row.key} className={cn(ctx.readOnly && 'opacity-90')}>
                                         <td className="border-b px-2.5 py-2 align-middle">
                                             <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[#0a6ed1] text-[10.5px] font-bold text-white">
                                                 {partner ? initials(partner.partnerName) : '?'}
@@ -527,12 +533,13 @@ export function DecisionTableWidget() {
                                         </td>
                                         <td className="border-b px-2.5 py-2 align-middle">
                                             <Select
+                                                disabled={ctx.readOnly}
                                                 value={row.partnerId || UNASSIGNED}
                                                 onValueChange={(value) => ctx.patch(row.key, {
                                                     partnerId: value === UNASSIGNED ? '' : value,
                                                 })}
                                             >
-                                                <SelectTrigger className="h-8 max-w-[220px] text-[12.5px]">
+                                                <SelectTrigger className={cn('h-8 max-w-[220px] text-[12.5px]', ctx.readOnly && 'cursor-not-allowed opacity-75 bg-muted/40')}>
                                                     <SelectValue placeholder="— select partner —" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -548,10 +555,11 @@ export function DecisionTableWidget() {
                                         </td>
                                         <td className="border-b px-2.5 py-2 align-middle">
                                             <Select
+                                                disabled={ctx.readOnly}
                                                 value={row.partnerRole}
                                                 onValueChange={(value) => ctx.patch(row.key, { partnerRole: value })}
                                             >
-                                                <SelectTrigger className="h-8 max-w-[190px] text-[12.5px]"><SelectValue /></SelectTrigger>
+                                                <SelectTrigger className={cn('h-8 max-w-[190px] text-[12.5px]', ctx.readOnly && 'cursor-not-allowed opacity-75 bg-muted/40')}><SelectValue /></SelectTrigger>
                                                 <SelectContent>
                                                     {PARTNER_ROLES.map((role) => (
                                                         <SelectItem key={role} value={role}>{role}</SelectItem>
@@ -570,13 +578,15 @@ export function DecisionTableWidget() {
                                             {partner?.phone || '—'}
                                         </td>
                                         <td className="border-b px-2.5 py-2 text-right align-middle">
-                                            <button
-                                                type="button"
-                                                onClick={() => ctx.remove(row.key)}
-                                                className="rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold text-primary transition-colors hover:bg-muted/60"
-                                            >
-                                                Remove
-                                            </button>
+                                            {!ctx.readOnly && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => ctx.remove(row.key)}
+                                                    className="rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold text-primary transition-colors hover:bg-muted/60"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );
