@@ -314,14 +314,14 @@ export async function saveAssignedTeam(
  * ghi, nen mot lan luu khong bao gio de mat ket luan cua may.
  */
 const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
-    D1: new Set(['team.assignedRoster']),
+    D1: new Set(['team.assignedRoster', 'team.roster']),
     D2: new Set(['problem.statementOverride']),
-    D3: new Set(['containment.actions', 'containment.actionsOverride', 'actionItems', 'actions']),
-    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa']),
-    D5: new Set(['corrective.actions', 'actionItems', 'actions']),
-    D6: new Set(['implementation.actions', 'actionItems', 'actions']),
-    D7: new Set(['prevention.actions', 'actionItems', 'actions']),
-    D8: new Set(['closure.notes']),
+    D3: new Set(['containment.actions', 'containment.actionsOverride', 'containment.assignedActions', 'actionItems', 'actions']),
+    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa', 'rootCause.fiveWhy', 'rootCause.customFindings']),
+    D5: new Set(['corrective.actions', 'corrective.assignedActions', 'actionItems', 'actions']),
+    D6: new Set(['verification.plan', 'verification.assignedActions', 'implementation.actions', 'implementation.assignedActions', 'actionItems', 'actions']),
+    D7: new Set(['preventive.actions', 'preventive.assignedActions', 'preventive.fmea', 'prevention.actions', 'prevention.assignedActions', 'actionItems', 'actions']),
+    D8: new Set(['closure.notes', 'closure.teamRecognition', 'closure.lessonsWhatWorked', 'closure.lessonsWhatDidNot']),
 });
 
 /**

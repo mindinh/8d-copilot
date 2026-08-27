@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Button, cn } from '@cnma/react-ui';
+import {
+    Button,
+    Input,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    cn,
+} from '@cnma/react-ui';
 import { Plus, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
@@ -169,22 +179,32 @@ export function WhyChainWidget({ value, disciplineID, fieldKey }: {
             )}
 
             {isAdding ? (
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                    <p className="text-xs font-semibold">Add 5-Why Step</p>
-                    <input
-                        type="text"
-                        placeholder="Why did this happen? (Question)"
-                        value={newQuestion}
-                        onChange={(e) => setNewQuestion(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <input
-                        type="text"
-                        placeholder="Answer / Finding..."
-                        value={newAnswer}
-                        onChange={(e) => setNewAnswer(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+                    <p className="text-xs font-semibold text-foreground">Add 5-Why Step</p>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                            Question <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                            type="text"
+                            placeholder="Why did this happen? (e.g. Why did the clamp slip?)"
+                            value={newQuestion}
+                            onChange={(e) => setNewQuestion(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                            Answer / Finding
+                        </Label>
+                        <Input
+                            type="text"
+                            placeholder="Enter finding or verification result..."
+                            value={newAnswer}
+                            onChange={(e) => setNewAnswer(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                        />
+                    </div>
                     <div className="flex items-center gap-2 pt-1">
                         <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()}>
                             Add step
@@ -557,33 +577,49 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
             </div>
 
             {isAdding && (
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                    <p className="text-xs font-semibold">Add Action</p>
-                    <input
-                        type="text"
-                        placeholder="Action description..."
-                        value={newActionText}
-                        onChange={(e) => setNewActionText(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
+                <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+                    <p className="text-xs font-semibold text-foreground">Add Action</p>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                            Action Description <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
                             type="text"
-                            placeholder="Owner (e.g. Quality Engineer)"
-                            value={newOwner}
-                            onChange={(e) => setNewOwner(e.target.value)}
-                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                            placeholder="e.g. Sort batch 2605 and quarantine non-conforming parts..."
+                            value={newActionText}
+                            onChange={(e) => setNewActionText(e.target.value)}
+                            className="h-8 text-xs bg-background"
                         />
-                        <select
-                            value={newStatus}
-                            onChange={(e) => setNewStatus(e.target.value)}
-                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                        >
-                            <option value="Planned">Planned</option>
-                            <option value="In Process">In Process</option>
-                            <option value="Done">Done</option>
-                            <option value="Verified">Verified</option>
-                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Assignee
+                            </Label>
+                            <Input
+                                type="text"
+                                placeholder="e.g. Quality Engineer"
+                                value={newOwner}
+                                onChange={(e) => setNewOwner(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Status
+                            </Label>
+                            <Select value={newStatus} onValueChange={setNewStatus}>
+                                <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                    <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Planned">Planned</SelectItem>
+                                    <SelectItem value="In Process">In Process</SelectItem>
+                                    <SelectItem value="Done">Done</SelectItem>
+                                    <SelectItem value="Verified">Verified</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 pt-1">
                         <Button size="sm" onClick={handleAddAction} disabled={!newActionText.trim()}>
