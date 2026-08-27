@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, cn } from '@cnma/react-ui';
-import { Star } from 'lucide-react';
+import { Plus, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
@@ -447,6 +447,16 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
         persistTasks(next, incoming.length > 1 ? `${next.length - tasks.length} tasks added.` : 'Task added.');
     };
 
+    const removeAction = (index: number) => {
+        const nextActions = actions.filter((_, i) => i !== index);
+        setActions(nextActions);
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
+                .then(() => toast.success('Action removed.'))
+                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
+        }
+    };
+
     const persistTasks = (next: ActionTask[], message = 'Task list saved.') => {
         setTasks(next);
         if (!disciplineID) return;
@@ -493,47 +503,60 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                                 className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
                             >
                                 <p className="break-words text-[13px] font-medium">{text}</p>
-                                {isAccepted(row, tasks) ? (
-                                    <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-success">
-                                        ✓ Added
-                                    </span>
-                                ) : (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    {isAccepted(row, tasks) ? (
+                                        <span className="whitespace-nowrap text-[11px] font-medium text-success">
+                                            ✓ Added
+                                        </span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => accept([row])}
+                                            className="whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                                        >
+                                            + Add
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
-                                        onClick={() => accept([row])}
-                                        className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                                        onClick={() => removeAction(index)}
+                                        aria-label={`Remove action ${index + 1}`}
+                                        className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                        title="Remove action"
                                     >
-                                        + Add
+                                        <Trash2 className="h-3.5 w-3.5" />
                                     </button>
-                                )}
+                                </div>
                             </div>
                         );
                     })}
                 </div>
             )}
 
-            {pending.length > 1 && (
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => accept(pending)}
-                >
-                    ✓ Accept all suggested ({pending.length})
-                </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+                {pending.length > 1 && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={() => accept(pending)}
+                    >
+                        ✓ Accept all suggested ({pending.length})
+                    </Button>
+                )}
+                {!isAdding && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={() => setIsAdding(true)}
+                    >
+                        <Plus className="mr-1 h-3 w-3" /> Add action
+                    </Button>
+                )}
+            </div>
 
-            {/*
-              Bảng nằm NGAY TRONG widget này chứ không phải một field riêng trong
-              Form Editor. Bản đầu tôi khai nó thành field — hậu quả: nút Add hiện
-              ngay (vì nằm trong code) còn bảng thì chỉ xuất hiện sau khi đẩy cấu
-              hình xuống DB rồi phân tích lại. Người dùng bấm Add và không thấy gì.
-              Nút và chỗ nó ghi vào phải xuất hiện cùng nhau, nếu không thì cái nút
-              là một lời hứa suông.
-            */}
-            <TaskTable tasks={tasks} onChange={persistTasks} />
-
-            {isAdding ? (
+            {isAdding && (
                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                     <p className="text-xs font-semibold">Add Action</p>
                     <input
@@ -571,11 +594,9 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                         </Button>
                     </div>
                 </div>
-            ) : (
-                <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
-                    + Add action
-                </Button>
             )}
+
+            <TaskTable tasks={tasks} onChange={persistTasks} />
         </div>
     );
 }
