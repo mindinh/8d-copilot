@@ -198,6 +198,59 @@ function FieldBlock({ field, value, violations, context, disciplineID, data, sib
     return <div className={cn('min-w-0 overflow-hidden rounded-xl', SELF_LABELLED_WIDGETS.has(field.widget) ? 'p-0' : 'p-3', COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))], ROW_SPANS[field.rowSpan ?? 1], field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4', hasError && 'border border-destructive/40 bg-error-bg/40', hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30', !hasError && !hasWarning && field.widget !== 'callout' && 'border border-transparent')}>{!SELF_LABELLED_WIDGETS.has(field.widget) && <div className="mb-2 flex min-w-0 items-start gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>{hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}{hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}</div>}<div className="min-w-0 overflow-hidden"><FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} siblings={siblings} /></div>{violations.map((item) => <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>{item.message}</span>)}</div>;
 }
 
+function isExcludedField(code: string, key: string, label?: string): boolean {
+    const l = (label || '').toLowerCase();
+    if (code === 'D3' && (key === 'containment.gaps' || key === 'sources')) return true;
+    if (code === 'D4' && (key === 'rootCause.evidenceGaps' || key === 'sources')) return true;
+    if (code === 'D5') {
+        if (
+            key === 'sources'
+            || key === 'corrective.rootCauseCoverage'
+            || key === 'corrective.coverageAssessment'
+            || key === 'corrective.uncoveredCauses'
+            || key === 'corrective.uncoveredRootCauseElements'
+            || key === 'rootCauseCoverage'
+            || key === 'coverageAssessment'
+            || key === 'uncoveredCauses'
+            || key === 'uncoveredRootCauseElements'
+            || key === 'howEachActionRemovesTheCause'
+        ) return true;
+        if (
+            l.includes('removes the cause')
+            || l.includes('removes cause')
+            || l.includes('not yet covered')
+            || l.includes('uncovered cause')
+            || l.includes('root cause coverage')
+            || l.includes('coverage assessment')
+            || l.includes('evidence and traceability')
+            || l.includes('source records')
+            || l.includes('evidence sources')
+        ) return true;
+    }
+    if (code === 'D6') {
+        if (
+            key === 'sources'
+            || key === 'verification.evidenceStatus'
+            || key === 'verification.status'
+            || key === 'evidenceStatus'
+            || key === 'verification.whatIsStillUnproven'
+            || key === 'verification.unproven'
+            || key === 'verification.gaps'
+            || key === 'verification.unprovenGaps'
+            || key === 'whatIsStillUnproven'
+            || key === 'unproven'
+        ) return true;
+        if (
+            l.includes('evidence status')
+            || l.includes('unproven')
+            || l.includes('evidence and traceability')
+            || l.includes('source records')
+            || l.includes('evidence sources')
+        ) return true;
+    }
+    return false;
+}
+
 export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson, siblings = [] }: {
     discipline: Discipline8D;
     caseContext?: string;
@@ -262,7 +315,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
                                 <div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">
                                     {group.fieldKeys.map((key) => {
                                         const field = fieldMap.get(key);
-                                        if (!field || field.visible === false || (discipline.code === 'D4' && (key === 'rootCause.evidenceGaps' || key === 'sources')) || (discipline.code === 'D3' && (key === 'containment.gaps' || key === 'sources'))) return null;
+                                        if (!field || field.visible === false || isExcludedField(discipline.code, key, field.label)) return null;
                                         const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key);
                                         return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} siblings={siblings} />;
                                     })}

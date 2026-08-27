@@ -247,7 +247,7 @@ const D5_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('corrective.actions', 'Permanent corrective actions', 'action-cards', 'array', 12, { required: true, minItems: 1 }, { items: { type: 'object', properties: { action: { type: 'string', maxLength: 240, description: 'The action and its trigger. No owner, no status, no rationale - those are separate fields.' }, owner: { type: 'string', maxLength: 120, description: 'ONLY the person or function accountable. Leave empty when none is recorded.' }, status: { type: 'string', maxLength: 40, description: 'ONLY the current status, one or two words, e.g. "Planned", "In progress", "Done".' }, origin: { type: 'string', maxLength: 60, description: 'ONLY where it came from: "recorded" for an action already in the case, or "precedents#N" for a proposal.' }, protection: { type: 'string', maxLength: 200, description: 'One line.' } } } }),
     // Phan nguyen nhan goc chua ai che la dong huu ich nhat trang nay.
     structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
-], groups: [group('d5-ai-result', 'AI-generated corrective plan', ['corrective.objective', 'corrective.actions', 'sources'], '100', 10)] }, null, 2);
+], groups: [group('d5-ai-result', 'AI-generated corrective plan', ['corrective.objective', 'corrective.actions'], '100', 10)] }, null, 2);
 
 const D6_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('verification.objective', 'Verification objective', 'callout', 'string', 12, { required: true, maxLength: 260 }),
@@ -256,7 +256,7 @@ const D6_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('verification.plan', 'Verification plan', 'table', 'array', 12, { required: true, minItems: 1 }, { items: { type: 'object', properties: { measure: { type: 'string', maxLength: 200, description: 'One line.' }, sampleSize: { type: 'string', maxLength: 80, description: 'ONLY the sample size, e.g. "30 parts per shift".' }, period: { type: 'string', maxLength: 60, description: 'ONLY the period over which it runs, e.g. "4 weeks".' }, acceptanceCriterion: { type: 'string', maxLength: 220, description: 'The pass/fail threshold with its number, anchored to a real specification value.' }, signOff: { type: 'string', maxLength: 120, description: 'ONLY the role that signs it off.' } } } }),
     structuredField('verification.evidenceStatus', 'Evidence status', 'status', 'string', 4, { required: true, enum: ['No evidence yet', 'Partially verified', 'Verified'] }),
     structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
-], groups: [group('d6-ai-result', 'AI-generated verification plan', ['verification.objective', 'verification.plan', 'verification.evidenceStatus', 'sources'], '100', 10)] }, null, 2);
+], groups: [group('d6-ai-result', 'AI-generated verification plan', ['verification.objective', 'verification.plan'], '100', 10)] }, null, 2);
 
 const D7_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('preventive.objective', 'Preventive objective', 'callout', 'string', 12, { required: true, maxLength: 260 }),

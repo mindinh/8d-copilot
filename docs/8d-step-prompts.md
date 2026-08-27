@@ -1601,8 +1601,7 @@ Do not collapse the plan into one narrative paragraph.
       "label": "AI-generated corrective plan",
       "fieldKeys": [
         "corrective.objective",
-        "corrective.actions",
-        "sources"
+        "corrective.actions"
       ],
       "width": "100",
       "columns": 12,
@@ -1810,9 +1809,7 @@ Never describe a corrective action as proven effective.
       "label": "AI-generated verification plan",
       "fieldKeys": [
         "verification.objective",
-        "verification.plan",
-        "verification.evidenceStatus",
-        "sources"
+        "verification.plan"
       ],
       "width": "100",
       "columns": 12,
