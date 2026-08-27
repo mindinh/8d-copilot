@@ -2043,8 +2043,7 @@ An action that only protects this batch is corrective and belongs in D5.
       "fieldKeys": [
         "preventive.objective",
         "preventive.actions",
-        "preventive.fmea",
-        "sources"
+        "preventive.fmea"
       ],
       "width": "100",
       "columns": 12,
@@ -2236,9 +2235,7 @@ Never output closure.gate or closure.costOfPoorQuality. The screen computes the 
         "closure.costOfPoorQuality",
         "closure.lessonsWhatWorked",
         "closure.lessonsWhatDidNot",
-        "closure.teamRecognition",
-        "closure.openItems",
-        "sources"
+        "closure.teamRecognition"
       ],
       "width": "100",
       "columns": 12,

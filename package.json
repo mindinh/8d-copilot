@@ -14,7 +14,7 @@
     "dev:all": "powershell -ExecutionPolicy Bypass -File .\\start-dev.ps1",
     "clean": "node -e \"['gen','mta_archives','ui_resources','app/ui_resources','.cnma_proresolve_mta_build_tmp'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch(e){}}); try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
     "build": "npm run bundle:library && cds build --production && npm run compile:srv",
-    "build:mta": "mbt build --mtar cnma_proresolve_0.0.1.mtar && node -e \"try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
+    "build:mta": "mbt init && make -f Makefile.mta p=cf mtar=cnma_proresolve_0.0.1.mtar && node -e \"try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
     "build:cf": "npm run clean && npm run build && npm run build:mta",
     "test": "jest",
     "typecheck": "tsc --noEmit",

@@ -248,6 +248,54 @@ function isExcludedField(code: string, key: string, label?: string): boolean {
             || l.includes('evidence sources')
         ) return true;
     }
+    if (code === 'D7') {
+        if (
+            key === 'sources'
+            || key === 'preventive.systemicScope'
+            || key === 'preventive.whereElseThisApplies'
+            || key === 'preventive.whereElse'
+            || key === 'systemicScope'
+            || key === 'whereElseThisApplies'
+            || key === 'whereElse'
+            || key === 'preventive.gaps'
+            || key === 'preventive.openGaps'
+            || key === 'preventive.preventiveGaps'
+            || key === 'preventive.openPreventiveGaps'
+            || key === 'openPreventiveGaps'
+            || key === 'preventiveGaps'
+            || key === 'openGaps'
+            || key === 'gaps'
+        ) return true;
+        if (
+            l.includes('where else')
+            || l.includes('systemic scope')
+            || l.includes('preventive gap')
+            || l.includes('open gap')
+            || l.includes('open preventive')
+            || l.includes('evidence and traceability')
+            || l.includes('source records')
+            || l.includes('evidence sources')
+        ) return true;
+    }
+    if (code === 'D8') {
+        if (
+            key === 'sources'
+            || key === 'closure.openItems'
+            || key === 'closure.stillOpenAtClosure'
+            || key === 'closure.openGaps'
+            || key === 'closure.gaps'
+            || key === 'openItems'
+            || key === 'stillOpenAtClosure'
+            || key === 'stillOpen'
+        ) return true;
+        if (
+            l.includes('still open')
+            || l.includes('open items')
+            || l.includes('evidence and traceability')
+            || l.includes('source records')
+            || l.includes('evidence sources')
+        ) return true;
+    }
     return false;
 }
 
