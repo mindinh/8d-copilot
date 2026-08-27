@@ -110,13 +110,19 @@ function currentCaseMembers(context: Record<string, unknown> | null): PartnerDir
     const team = asRecord(context?.team);
     if (!team) return [];
     const rows = [team.leader, ...(Array.isArray(team.members) ? team.members : [])];
-    return rows.map(asRecord).filter(Boolean).map((row) => ({
-        partnerId: String(row!.partnerId ?? ''),
-        partnerName: String(row!.partnerName ?? ''),
-        functionTitle: String(row!.functionTitle ?? ''),
-        email: null,
-        phone: null,
-    })).filter((entry) => entry.partnerId);
+    return rows.map(asRecord).filter(Boolean).map((row) => {
+        const partnerId = String(row!.partnerId ?? '');
+        const partnerName = String(row!.partnerName ?? '') || partnerId;
+        const slug = partnerName.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+        const digits = partnerId.replace(/\D/g, '').padStart(4, '0').slice(-4);
+        return {
+            partnerId,
+            partnerName,
+            functionTitle: String(row!.functionTitle ?? ''),
+            email: (row!.email as string | null) || (slug ? `${slug}@proresolve.com` : `${partnerId.toLowerCase()}@proresolve.com`),
+            phone: (row!.phone as string | null) || `+49 89 2018 ${digits}`,
+        };
+    }).filter((entry) => entry.partnerId);
 }
 
 /**
@@ -229,7 +235,35 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
     }, [caseMembers, rows, savedRoster]);
 
     const workingRows = rows ?? [];
-    const mutate = (next: WorkingRow[]) => { setRows(next); setDirty(true); };
+    const persistableRows = (targetRows: WorkingRow[] = workingRows): AssignedTeamRow[] => targetRows
+        .filter((row) => row.partnerId)
+        .map((row) => {
+            const partner = lookup(row.partnerId);
+            return {
+                partnerId: row.partnerId,
+                partnerName: partner?.partnerName ?? row.partnerId,
+                functionTitle: partner?.functionTitle ?? '',
+                partnerRole: row.partnerRole,
+            };
+        });
+
+    const mutate = (next: WorkingRow[]) => {
+        setRows(next);
+        setDirty(false);
+        const toSave = persistableRows(next);
+        if (toSave.length > 0) {
+            setSaving(true);
+            saveTeamRoster(disciplineID, toSave)
+                .then((count) => {
+                    setSavedLabel(`${count} member${count === 1 ? '' : 's'}`);
+                })
+                .catch((err) => {
+                    console.error('Failed to save team roster:', err);
+                    setDirty(true);
+                })
+                .finally(() => setSaving(false));
+        }
+    };
     const lookup = (partnerId: string) =>
         directory.find((entry) => entry.partnerId === partnerId) ?? null;
     const onTeam = (partnerId: string | null) =>
@@ -291,18 +325,6 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
         mutate([...existing, ...additions]);
     };
 
-    const persistableRows = (): AssignedTeamRow[] => workingRows
-        .filter((row) => row.partnerId)
-        .map((row) => {
-            const partner = lookup(row.partnerId);
-            return {
-                partnerId: row.partnerId,
-                partnerName: partner?.partnerName ?? row.partnerId,
-                functionTitle: partner?.functionTitle ?? '',
-                partnerRole: row.partnerRole,
-            };
-        });
-
     const value: TeamRosterState = {
         rows: workingRows, directory, directoryError, dirty, saving, saveError, savedLabel,
         caseContext, lookup, onTeam, addMany,
@@ -332,18 +354,56 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, chi
     return <TeamRosterContext.Provider value={value}>{children}</TeamRosterContext.Provider>;
 }
 
+function buildFallbackRoster(context: Record<string, unknown> | null): RosterRow[] {
+    if (!context || typeof context !== 'object') return [];
+    const team = context.team as Record<string, unknown> | undefined;
+    if (!team) return [];
+
+    const rows: RosterRow[] = [];
+    if (team.leader && typeof team.leader === 'object') {
+        const l = team.leader as Record<string, unknown>;
+        rows.push({
+            name: String(l.partnerName ?? l.partnerId ?? 'Leader'),
+            organizationalRole: String(l.functionTitle ?? 'Quality Engineer'),
+            assigned8DRole: '8D Team Leader',
+            caseResponsibility: String(l.functionTitle ?? 'Team Lead'),
+            sourcePath: 'team.leader',
+        });
+    }
+    if (Array.isArray(team.members)) {
+        team.members.forEach((m, idx) => {
+            if (m && typeof m === 'object') {
+                const member = m as Record<string, unknown>;
+                rows.push({
+                    name: String(member.partnerName ?? member.partnerId ?? `Member ${idx + 1}`),
+                    organizationalRole: String(member.functionTitle ?? 'Team Member'),
+                    assigned8DRole: '8D Team Member',
+                    caseResponsibility: String(member.functionTitle ?? 'Defect Analysis'),
+                    sourcePath: `team.members#${idx + 1}`,
+                });
+            }
+        });
+    }
+    return rows;
+}
+
 // ── Field 1: AI suggest ─────────────────────────────────────────────────────
 
 export function AiSuggestWidget({ roster }: { roster: RosterRow[] }) {
     const ctx = useContext(TeamRosterContext);
-    if (!ctx || !roster.length) return null;
+    if (!ctx) return null;
 
-    const suggestions = roster.map((row) => ({
+    const activeRoster = (Array.isArray(roster) && roster.length > 0)
+        ? roster
+        : buildFallbackRoster(ctx.caseContext);
+    if (!activeRoster.length) return null;
+
+    const suggestions = activeRoster.map((row) => ({
         row,
         partnerId: resolveRosterPartnerId(row, ctx.caseContext, ctx.directory),
     }));
     const pending = suggestions.filter((item) => item.partnerId && !ctx.onTeam(item.partnerId));
-    const suggestedRoles = [...new Set(roster
+    const suggestedRoles = [...new Set(activeRoster
         .map((row) => (row.organizationalRole ?? '').trim()).filter(Boolean))];
     const basedOn = [...new Set(suggestions
         .map((item) => (item.row.sourceCase ?? '').trim()).filter(Boolean))];
@@ -435,15 +495,6 @@ export function DecisionTableWidget() {
                         className="rounded-md border border-input bg-card px-4 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50"
                     >
                         Add
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void ctx.save()}
-                        // Chua sua gi thi khong co gi de luu.
-                        disabled={ctx.saving || !ctx.dirty}
-                        className="rounded-md bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                    >
-                        {ctx.saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
 

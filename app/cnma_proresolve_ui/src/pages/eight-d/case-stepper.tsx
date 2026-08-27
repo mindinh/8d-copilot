@@ -1,23 +1,14 @@
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { cn } from '@cnma/react-ui';
 import { reviewStatusOf, type Discipline8D, type ReviewStatus } from '@/services/eightd-service';
+import { blockedBy, stepProgress, type StepCode } from '../../../../../shared/step-status';
 
 /**
  * Cột trái: tiến độ tám bước và điều hướng giữa chúng.
- *
- * ── Vì sao dọc chứ không phải tab ngang ──
- * 8D là một QUY TRÌNH có thứ tự, không phải tám ngăn ngang hàng. Tab ngang nói
- * "chọn cái nào cũng được"; danh sách dọc kèm trạng thái nói "đi từ trên xuống,
- * còn mấy bước nữa". Nó cũng là chỗ duy nhất trên trang trả lời được câu hỏi đầu
- * tiên của người mở case: còn bao nhiêu bước chưa ký.
+ * Hiển thị toàn bộ 8D steps D1..D8 từ đầu và cập nhật trạng thái thời gian thực.
  */
+const STEP_CODES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] as const;
 
-/**
- * Nhãn ngắn cho từng bước.
- *
- * Không dùng `discipline.title` từ dữ liệu: tiêu đề đầy đủ ("Interim Containment
- * Actions") dài gấp ba chiều rộng cột và bị cắt cụt. Cột này để quét, không để đọc.
- */
 const STEP_LABELS: Record<string, string> = {
     D1: 'Team',
     D2: 'Problem',
@@ -39,14 +30,18 @@ export function CaseStepper({
     disciplines,
     active,
     onSelect,
+    isAnalyzing = false,
 }: {
     disciplines: Discipline8D[];
     active: string;
     onSelect: (code: string) => void;
+    isAnalyzing?: boolean;
 }) {
-    const total = disciplines.length || 8;
+    const total = 8;
     const approved = disciplines.filter((d) => reviewStatusOf(d) === 'Approved').length;
-    const pct = total > 0 ? (approved / total) * 100 : 0;
+    const pct = (approved / total) * 100;
+    const byCode = new Map(disciplines.map((d) => [d.code, d]));
+    const completedCodes = new Set(disciplines.map((d) => d.code));
 
     return (
         <div className="min-w-0">
@@ -67,20 +62,38 @@ export function CaseStepper({
             </div>
 
             <nav className="min-w-0">
-                {disciplines.map((discipline, index) => {
-                    const status = reviewStatusOf(discipline);
-                    const isActive = discipline.code === active;
-                    const done = status === 'Approved';
+                {STEP_CODES.map((code, index) => {
+                    const discipline = byCode.get(code);
+                    const isActive = code === active;
+
+                    let statusText = 'Pending';
+                    let done = false;
+                    let isCurrentAnalyzing = false;
+
+                    if (discipline) {
+                        const revStatus = reviewStatusOf(discipline);
+                        done = revStatus === 'Approved';
+                        statusText = STATUS_TEXT[revStatus];
+                    } else if (isAnalyzing) {
+                        // Backend sinh theo ĐỢT song song, nên bước về đích không
+                        // theo thứ tự D1..D8 và không phải bước nào chưa có dữ
+                        // liệu cũng đang chạy. Suy trạng thái từ chính đồ thị phụ
+                        // thuộc: bước đã đủ tiền đề mới là đang sinh, còn lại là
+                        // đang chờ — và nói rõ chờ ai.
+                        const progress = stepProgress(code as StepCode, completedCodes, true);
+                        isCurrentAnalyzing = progress === 'generating';
+                        statusText = isCurrentAnalyzing
+                            ? 'Generating...'
+                            : `Waiting for ${blockedBy(code as StepCode, completedCodes).join(', ')}`;
+                    }
 
                     return (
                         <button
-                            key={discipline.ID}
+                            key={code}
                             type="button"
-                            onClick={() => onSelect(discipline.code)}
+                            onClick={() => onSelect(code)}
                             className={cn(
                                 'flex w-full min-w-0 items-start gap-2.5 px-3 py-2.5 text-left transition-colors',
-                                // Vạch dọc bên trái đánh dấu bước đang mở — cùng ngôn ngữ
-                                // với thanh điều hướng của SAP Fiori.
                                 isActive
                                     ? 'border-l-2 border-l-primary bg-primary/[0.06]'
                                     : 'border-l-2 border-l-transparent hover:bg-muted/60',
@@ -90,11 +103,19 @@ export function CaseStepper({
                                 className={cn(
                                     'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
                                     done && 'bg-success text-success-foreground',
-                                    !done && status === 'ChangeRequested' && 'bg-warning text-warning-foreground',
-                                    !done && status === 'Draft' && 'border border-border text-muted-foreground',
+                                    !done && discipline && reviewStatusOf(discipline) === 'ChangeRequested' && 'bg-warning text-warning-foreground',
+                                    !done && discipline && reviewStatusOf(discipline) === 'Draft' && 'border border-border text-muted-foreground',
+                                    !discipline && isCurrentAnalyzing && 'border border-info text-info bg-info/10',
+                                    !discipline && !isCurrentAnalyzing && 'border border-border/50 text-muted-foreground/50',
                                 )}
                             >
-                                {done ? <Check className="h-3 w-3" /> : index + 1}
+                                {done ? (
+                                    <Check className="h-3 w-3" />
+                                ) : isCurrentAnalyzing ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                    index + 1
+                                )}
                             </span>
 
                             <span className="min-w-0">
@@ -102,19 +123,21 @@ export function CaseStepper({
                                     className={cn(
                                         'block truncate text-[13px]',
                                         isActive ? 'font-semibold text-foreground' : 'font-medium',
+                                        !discipline && !isCurrentAnalyzing && 'text-muted-foreground/70',
                                     )}
                                 >
-                                    {discipline.code} · {STEP_LABELS[discipline.code] ?? discipline.title}
+                                    {code} · {STEP_LABELS[code]}
                                 </span>
                                 <span
                                     className={cn(
                                         'block text-[11px]',
                                         done ? 'text-success'
-                                            : status === 'ChangeRequested' ? 'text-warning'
-                                                : 'text-muted-foreground',
+                                            : discipline && reviewStatusOf(discipline) === 'ChangeRequested' ? 'text-warning'
+                                                : isCurrentAnalyzing ? 'text-info font-medium'
+                                                    : 'text-muted-foreground',
                                     )}
                                 >
-                                    {STATUS_TEXT[status]}
+                                    {statusText}
                                 </span>
                             </span>
                         </button>

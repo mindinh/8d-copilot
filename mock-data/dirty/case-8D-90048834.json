@@ -86,21 +86,27 @@
       "partnerName": "Sara Klein",
       "functionTitle": "Supplier Quality Eng.",
       "partnerRole": "  ",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "sara.klein@proresolve-demo.com",
+      "phone": "+49 89 2018 1031"
     },
     {
       "partnerId": "BP-100014",
       "partnerName": "Thien Tu",
       "functionTitle": "Quality Eng.",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "thien.tu@proresolve-demo.com",
+      "phone": "+49 89 2018 1014"
     },
     {
       "partnerId": "BP-100133",
       "partnerName": "Ola Nyberg",
       "functionTitle": "Press Shop Eng.",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "ola.nyberg@proresolve-demo.com",
+      "phone": "+46 8 555 1133"
     }
   ],
   "fmeaLink": null,

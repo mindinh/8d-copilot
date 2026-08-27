@@ -42,6 +42,8 @@ import {
     reviewDiscipline,
     saveAssignedTeam,
     saveDisciplineFieldValue,
+    savePartialDiscipline,
+    saveReportContext,
     saveResult,
     sweepStuckAnalyzing,
     type AssignedTeamRow,
@@ -87,7 +89,45 @@ function runInBackground(reportID: string, payload: string): void {
     // tức. `cds.spawn` dựng một root transaction tách rời cho mỗi lượt chạy.
     cds.spawn({}, async () => {
         try {
-            const outcome = await analyze(payload);
+            let savedContext = false;
+            const outcome = await analyze(payload, async (stepOutcome) => {
+                // ── Vì sao mỗi bước phải có transaction RIÊNG ──
+                // `cds.spawn` dựng ĐÚNG MỘT transaction cho cả job và chỉ gọi
+                // `tx.commit` sau khi callback của nó trả về (xem
+                // `@sap/cds/lib/req/cds-context.js`). Ghi thẳng ở đây thì cả tám
+                // lượt nằm trong một transaction chưa commit suốt ~50 giây, và
+                // connection khác — tức mọi request OData của trình duyệt —
+                // không đọc được dữ liệu chưa commit. Kết quả: log báo "đã lưu"
+                // sau từng bước, còn UI đứng im tới lúc job kết thúc rồi tám bước
+                // hiện ra cùng lúc. Đúng thứ mà chế độ sinh từng bước sinh ra để
+                // tránh.
+                //
+                // `cds.tx(fn)` không có context sẵn sẽ tạo RootContext mới, tức
+                // một transaction độc lập, và commit ngay khi `fn` xong. Đây là
+                // tầng service nên vẫn giữ đúng luật của `eightDRepository`: hàm
+                // repository dùng transaction sẵn có, chỉ là transaction đó giờ
+                // ngắn.
+                //
+                // An toàn vì DB là HANA (có connection pool). Cảnh báo về
+                // `cds.tx` ở đầu `eightDRepository.ts` nói về driver SQLite chỉ
+                // giữ một connection — SQLite đã bị gỡ khỏi dự án.
+                await cds.tx(async () => {
+                    if (!savedContext) {
+                        await saveReportContext(
+                            reportID,
+                            stepOutcome.context,
+                            stepOutcome.independent,
+                            stepOutcome.precedents,
+                        );
+                        savedContext = true;
+                    }
+                    await savePartialDiscipline(reportID, {
+                        discipline: stepOutcome.discipline,
+                        runtime: stepOutcome.runtimeInfo,
+                    });
+                });
+                LOG.info(`Report ${reportID}: step ${stepOutcome.discipline.code} đã commit.`);
+            });
             await saveResult(reportID, outcome);
 
             LOG.info(

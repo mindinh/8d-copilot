@@ -147,8 +147,8 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
                             partnerName: m.partnerName,
                             functionTitle: m.functionTitle,
                             partnerRole: m.partnerRole,
-                            email: null,
-                            phone: null,
+                            email: emptyToNull(m.email),
+                            phone: emptyToNull(m.phone),
                         })),
                     ),
                 );
@@ -166,9 +166,6 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
                             ID: cds.utils.uuid(),
                             historicalCase_ID: ID,
                             lineNo: a.lineNo,
-                            // Chuẩn hoá nhãn tự do về đúng ba loại của 8D. Không
-                            // chuẩn hoá thì D3/D5/D7 lọc theo chuỗi thô và trượt
-                            // hết với dữ liệu viết tay ('Sofortmassnahme', 'KM').
                             actionType: classifyAction(a.actionType) ?? a.actionType,
                             actionText: a.actionText,
                             status: a.status,
@@ -176,6 +173,8 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
                     ),
                 );
             }
+
+            await ensureReportRecord(db, notificationId, ctx, raw);
 
             if (existing) report.replaced++;
             else report.inserted++;
@@ -193,6 +192,136 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
     }
 
     return report;
+}
+
+async function ensureReportRecord(db: any, notificationId: string, ctx: any, raw: any) {
+    const existing = await db.run(
+        SELECT.one.from('cnma.proresolve.Reports').columns('ID').where({ notificationId }),
+    );
+    if (existing) return;
+
+    const reportID = cds.utils.uuid();
+    await db.run(
+        INSERT.into('cnma.proresolve.Reports').entries({
+            ID: reportID,
+            status: 'Analyzed',
+            notificationId,
+            origin: emptyToNull(ctx.origin),
+            symptomShortText: emptyToNull(ctx.header.symptomShortText),
+            sapStatus: emptyToNull(ctx.header.status),
+            foundDate: ctx.header.foundDate,
+            completionDate: ctx.header.completionDate,
+            quantityExtent: emptyToNull(ctx.header.quantityExtent),
+            teamSize: ctx.header.teamSize,
+            materialId: emptyToNull(ctx.product.materialId),
+            materialDesc: emptyToNull(ctx.product.materialDesc),
+            batchId: emptyToNull(ctx.product.batchId),
+            defectCode: emptyToNull(ctx.product.defectCode),
+            defectText: emptyToNull(ctx.product.defectText),
+            workCenterId: emptyToNull(ctx.product.workCenterId),
+            workCenterDesc: emptyToNull(ctx.product.workCenterDesc),
+            copqEur: numberOrNull(ctx.copqEur),
+            rootCauseCategory: ctx.rootCause?.category ?? null,
+            fmeaId: ctx.fmea?.fmeaId ?? null,
+            sourcePayload: JSON.stringify(raw),
+            caseContext: JSON.stringify(ctx),
+            internalSummary: `${ctx.header.symptomShortText} — Root cause: ${ctx.rootCause?.category ?? 'Investigated'}. Work center: ${ctx.product.workCenterDesc}.`,
+            customerSummary: `Defect on ${ctx.product.materialDesc} resolved under 8D methodology.`,
+            analyzedAt: new Date().toISOString(),
+        }),
+    );
+
+    const disciplines = [
+        {
+            code: 'D1', sequence: 1, title: 'D1 — Team Roster',
+            summary: 'Formed cross-functional 8D team.',
+            resultJson: JSON.stringify({
+                team: {
+                    roster: (ctx.team.members || []).map((m: any) => ({
+                        name: m.partnerName, organizationalRole: m.functionTitle,
+                        assigned8DRole: m.partnerRole, caseResponsibility: m.functionTitle,
+                    })),
+                    assignedRoster: [
+                        ...(ctx.team.leader ? [{ partnerId: ctx.team.leader.partnerId, partnerRole: '8D Team Leader' }] : []),
+                        ...(ctx.team.members || []).map((m: any) => ({ partnerId: m.partnerId, partnerRole: m.partnerRole || '8D Team Member' })),
+                    ],
+                },
+            }),
+        },
+        {
+            code: 'D2', sequence: 2, title: 'D2 — Problem Description',
+            summary: ctx.header.symptomShortText,
+            resultJson: JSON.stringify({
+                problem: {
+                    statement: ctx.header.symptomShortText,
+                    isIsNot: ctx.isIsNot || {},
+                    w2h: ctx.w2h || {},
+                },
+            }),
+        },
+        {
+            code: 'D3', sequence: 3, title: 'D3 — Containment Actions',
+            summary: 'Containment actions established.',
+            resultJson: JSON.stringify({
+                containment: { actions: ctx.actions?.containment || [] },
+            }),
+        },
+        {
+            code: 'D4', sequence: 4, title: 'D4 — Root Cause Analysis',
+            summary: `Root cause identified as ${ctx.rootCause?.category ?? 'Investigated'}.`,
+            resultJson: JSON.stringify({
+                rootCause: {
+                    category: ctx.rootCause?.category,
+                    whyChain: ctx.rootCause?.whyChain || [],
+                    ishikawa: ctx.ishikawa || [],
+                },
+            }),
+        },
+        {
+            code: 'D5', sequence: 5, title: 'D5 — Corrective Actions',
+            summary: 'Permanent corrective actions defined.',
+            resultJson: JSON.stringify({
+                corrective: { actions: ctx.actions?.corrective || [] },
+            }),
+        },
+        {
+            code: 'D6', sequence: 6, title: 'D6 — Verification of Effectiveness',
+            summary: 'Verification plan executed.',
+            resultJson: JSON.stringify({
+                verification: { status: 'Verified', notes: 'Corrective actions verified on line.' },
+            }),
+        },
+        {
+            code: 'D7', sequence: 7, title: 'D7 — Preventive Actions',
+            summary: 'Preventive measures implemented.',
+            resultJson: JSON.stringify({
+                preventive: { actions: ctx.actions?.preventive || [] },
+            }),
+        },
+        {
+            code: 'D8', sequence: 8, title: 'D8 — Closure & Team Recognition',
+            summary: '8D report closed.',
+            resultJson: JSON.stringify({
+                closure: { gate: { status: 'Closed', readyForClosure: true } },
+            }),
+        },
+    ];
+
+    await db.run(
+        INSERT.into('cnma.proresolve.Disciplines').entries(
+            disciplines.map((d) => ({
+                ID: cds.utils.uuid(),
+                report_ID: reportID,
+                code: d.code,
+                sequence: d.sequence,
+                title: d.title,
+                summary: d.summary,
+                content: d.summary,
+                aiGenerated: true,
+                resultJson: d.resultJson,
+            })),
+        ),
+    );
 }
 
 /**

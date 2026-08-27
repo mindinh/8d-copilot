@@ -90,53 +90,108 @@ export async function createReport(
     return ID;
 }
 
+export interface PartialDisciplineItem {
+    discipline: import('./types').DisciplineDraft;
+    runtime?: {
+        resultJson?: string;
+        formSchemaJson?: string;
+        validationJson?: string;
+        configVersion?: string;
+    };
+}
+
+/** Ghi/Cập nhật một discipline riêng lẻ vào DB cho báo cáo. */
+export async function savePartialDiscipline(
+    reportID: string,
+    item: PartialDisciplineItem,
+): Promise<void> {
+    const d = item.discipline;
+    await DELETE.from(DISCIPLINES).where({ report_ID: reportID, code: d.code });
+    await INSERT.into(DISCIPLINES).entries({
+        ID: cds.utils.uuid(),
+        report_ID: reportID,
+        code: d.code,
+        sequence: d.sequence,
+        title: d.title,
+        summary: d.summary,
+        content: d.content,
+        actionItems: JSON.stringify(d.actionItems ?? []),
+        sources: JSON.stringify(d.sources ?? []),
+        confidence: d.confidence,
+        dataBacked: d.dataBacked,
+        resultJson: item.runtime?.resultJson ?? JSON.stringify(d.data ?? {}),
+        formSchemaJson: item.runtime?.formSchemaJson ?? null,
+        validationJson: item.runtime?.validationJson ?? null,
+        configVersion: item.runtime?.configVersion ?? null,
+        aiGenerated: true,
+    });
+}
+
+/** Ghi context, chẩn đoán mù và tiền lệ sớm cho report để UI đọc được ngay. */
+export async function saveReportContext(
+    reportID: string,
+    context: CaseContext,
+    independent?: unknown,
+    precedents?: unknown,
+): Promise<void> {
+    const ind = independent as
+        | { finding?: { confidence?: number }; verdict?: { aiCategory?: string; agrees?: boolean } }
+        | undefined;
+    await UPDATE(REPORTS).set({
+        caseContext: JSON.stringify(context),
+        precedentsJson: precedents ? JSON.stringify(precedents) : null,
+        aiFinding: ind ? JSON.stringify(ind) : null,
+        aiRootCause: ind?.verdict?.aiCategory ?? null,
+        aiAgreesWithRecord: ind?.verdict?.agrees ?? null,
+        aiConfidence: numberOrNull(ind?.finding?.confidence),
+    }).where({ ID: reportID });
+}
+
+/** Hoàn tất phân tích report: ghi hai bản tóm tắt, cập nhật status Analyzed và số đo. */
+export async function finalizeReport(
+    reportID: string,
+    summaryInfo: {
+        internalSummary?: string | null;
+        customerSummary?: string | null;
+        models: { parse: string; analyze: string };
+        tokensUsed: number;
+        durationMs: number;
+    },
+): Promise<void> {
+    await UPDATE(REPORTS).set({
+        status: 'Analyzed',
+        internalSummary: summaryInfo.internalSummary ?? null,
+        customerSummary: summaryInfo.customerSummary ?? null,
+        aiModelParse: summaryInfo.models.parse,
+        aiModelAnalyze: summaryInfo.models.analyze,
+        analyzedAt: new Date().toISOString(),
+        tokensUsed: summaryInfo.tokensUsed,
+        durationMs: summaryInfo.durationMs,
+        errorMessage: null,
+    }).where({ ID: reportID });
+}
+
 /** Ghi kết quả và chuyển sang `Analyzed`. Xoá disciplines cũ trước — xem `reanalyze`. */
 export async function saveResult(reportID: string, outcome: AnalyzeOutcome): Promise<void> {
     const { result, context, models, tokensUsed, durationMs } = outcome;
-    const independent = outcome.independent as
-        | { finding?: { confidence?: number }; verdict?: { aiCategory?: string; agrees?: boolean } }
-        | undefined;
 
     await DELETE.from(DISCIPLINES).where({ report_ID: reportID });
+    for (const d of result.disciplines) {
+        await savePartialDiscipline(reportID, {
+            discipline: d,
+            runtime: outcome.runtime?.[d.code],
+        });
+    }
 
-    await INSERT.into(DISCIPLINES).entries(
-        result.disciplines.map((d) => ({
-            ID: cds.utils.uuid(),
-            report_ID: reportID,
-            code: d.code,
-            sequence: d.sequence,
-            title: d.title,
-            summary: d.summary,
-            content: d.content,
-            actionItems: JSON.stringify(d.actionItems),
-            sources: JSON.stringify(d.sources),
-            confidence: d.confidence,
-            dataBacked: d.dataBacked,
-            resultJson: outcome.runtime?.[d.code]?.resultJson ?? JSON.stringify(d.data ?? {}),
-            formSchemaJson: outcome.runtime?.[d.code]?.formSchemaJson ?? null,
-            validationJson: outcome.runtime?.[d.code]?.validationJson ?? null,
-            configVersion: outcome.runtime?.[d.code]?.configVersion ?? null,
-            aiGenerated: true,
-        })),
-    );
+    await saveReportContext(reportID, context, outcome.independent, outcome.precedents);
 
-    await UPDATE(REPORTS).set({
-        status: 'Analyzed',
+    await finalizeReport(reportID, {
         internalSummary: result.internalSummary,
         customerSummary: result.customerSummary,
-        caseContext: JSON.stringify(context),
-        aiModelParse: models.parse,
-        aiModelAnalyze: models.analyze,
-        analyzedAt: new Date().toISOString(),
+        models,
         tokensUsed,
         durationMs,
-        errorMessage: null,
-
-        aiFinding: independent ? JSON.stringify(independent) : null,
-        aiRootCause: independent?.verdict?.aiCategory ?? null,
-        aiAgreesWithRecord: independent?.verdict?.agrees ?? null,
-        aiConfidence: numberOrNull(independent?.finding?.confidence),
-    }).where({ ID: reportID });
+    });
 }
 
 /**
@@ -261,6 +316,12 @@ export async function saveAssignedTeam(
 const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
     D1: new Set(['team.assignedRoster']),
     D2: new Set(['problem.statementOverride']),
+    D3: new Set(['containment.actions', 'containment.actionsOverride', 'actionItems', 'actions']),
+    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa']),
+    D5: new Set(['corrective.actions', 'actionItems', 'actions']),
+    D6: new Set(['implementation.actions', 'actionItems', 'actions']),
+    D7: new Set(['prevention.actions', 'actionItems', 'actions']),
+    D8: new Set(['closure.notes']),
 });
 
 /**

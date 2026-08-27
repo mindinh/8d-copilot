@@ -12,7 +12,7 @@
  * tự do đều phải mô hình hoá thành mảng cặp khoá-giá trị.
  */
 
-import { DISCIPLINE_CODES, ISHIKAWA_CATEGORIES } from './types';
+import { DISCIPLINE_CODES } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bước 1 — làm giàu ngữ cảnh (KHÔNG phải sinh lại CaseContext)
@@ -62,8 +62,62 @@ export const ENRICHMENT_SCHEMA = {
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bước 2 — báo cáo 8D
+// Bước 2 — báo cáo 8D (gộp hoặc từng discipline)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ── Vì sao mọi mảng và mọi chuỗi dài ở đây đều phải có trần ──
+ *
+ * Đây là cái VỎ của discipline, dùng cho cả lượt gọi gộp lẫn lượt gọi từng bước.
+ * `buildStepDataSchema` chỉ chặn các mảng bên trong `data`; nếu vỏ để hở thì
+ * ràng buộc kia vô nghĩa — model chỉ cần lặp ở `sources` hoặc `actionItems` là
+ * chạy tới hết ngân sách.
+ *
+ * Đã xảy ra thật: một lượt gọi `max_tokens=32000` sinh ra đúng 32.000 token rồi
+ * chết vì `finishReason=length`. Dùng sạch trần không phải là thiếu chỗ — đó là
+ * sinh loạn, và nâng trần lên 64k chỉ đổi lấy 64.000 token rác.
+ *
+ * `minItems`/`maxItems` đã được `scripts/probe-ai.ts` xác nhận là AI Core tôn
+ * trọng, nên đó là chốt chặn đáng tin. `maxLength` thì CHƯA được probe kiểm —
+ * để đó vì vô hại nếu bị bỏ qua, nhưng đừng coi nó là hàng rào duy nhất; giới
+ * hạn độ dài văn xuôi vẫn phải nói trong prompt (xem mục STYLE).
+ */
+export const DISCIPLINE_ITEM_PROPERTIES = {
+    code: { type: 'string', enum: [...DISCIPLINE_CODES] },
+    sequence: { type: 'integer' },
+    title: { type: 'string', maxLength: 120 },
+    summary: {
+        type: 'string',
+        maxLength: 320,
+        description: 'ONE sentence: the single thing a reader learns from this step.',
+    },
+    // Trần ở đây là LƯỚI AN TOÀN chống sinh loạn, không phải mục tiêu độ dài.
+    // Đặt nó quá sát là ép cắt giữa câu; đặt quá rộng là mời model viết cho đầy
+    // (đã xảy ra ở mốc 6.000). Đủ rộng để một câu trả lời viết tốt không bao giờ
+    // chạm tới — còn việc nói đúng trọng tâm là do mục STYLE lo.
+    content: {
+        type: 'string',
+        maxLength: 1_600,
+        description: 'Markdown bullets. Only what the reader needs to act — see the STYLE rules.',
+    },
+    actionItems: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 220 } },
+    sources: {
+        type: 'array',
+        maxItems: 15,
+        items: { type: 'string', maxLength: 120 },
+        description:
+            "CaseContext paths this discipline rests on, e.g. 'actions.containment#1', " +
+            "'ishikawa.Machine', 'fiveWhy#2', 'inspections#1'",
+    },
+    confidence: { type: 'number' },
+    dataBacked: { type: 'boolean' },
+    data: { type: 'object' },
+} as const;
+
+export const DISCIPLINE_REQUIRED_FIELDS = [
+    'code', 'sequence', 'title', 'summary', 'content',
+    'actionItems', 'sources', 'confidence', 'dataBacked',
+] as const;
 
 export const EIGHT_D_SCHEMA = {
     type: 'object',
@@ -81,77 +135,79 @@ export const EIGHT_D_SCHEMA = {
         },
         disciplines: {
             type: 'array',
-            // Probe D1 xác nhận ràng buộc này có hiệu lực — model trả đúng 8 mục
-            // đúng thứ tự. Vẫn giữ postProcess làm lưới thứ hai.
             minItems: 8,
             maxItems: 8,
             items: {
                 type: 'object',
-                properties: {
-                    code: { type: 'string', enum: [...DISCIPLINE_CODES] },
-                    sequence: { type: 'integer' },
-                    title: { type: 'string' },
-                    summary: {
-                        type: 'string',
-                        description: 'One or two sentences, plain text, at most 500 characters',
-                    },
-                    content: { type: 'string', description: 'Markdown body' },
-                    actionItems: { type: 'array', items: { type: 'string' } },
-                    sources: {
-                        type: 'array',
-                        items: { type: 'string' },
-                        description:
-                            "CaseContext paths this discipline rests on, e.g. 'actions.containment#1', " +
-                            "'ishikawa.Machine', 'fiveWhy#2', 'inspections#1'",
-                    },
-                    confidence: { type: 'number' },
-                    dataBacked: { type: 'boolean' },
-                },
-                required: [
-                    'code', 'sequence', 'title', 'summary', 'content',
-                    'actionItems', 'sources', 'confidence', 'dataBacked',
-                ],
+                properties: DISCIPLINE_ITEM_PROPERTIES,
+                required: DISCIPLINE_REQUIRED_FIELDS,
             },
         },
     },
     required: ['internalSummary', 'customerSummary', 'disciplines'],
 } as const;
 
+export const SINGLE_DISCIPLINE_SCHEMA = {
+    type: 'object',
+    properties: DISCIPLINE_ITEM_PROPERTIES,
+    required: DISCIPLINE_REQUIRED_FIELDS,
+} as const;
+
+/**
+ * Schema cho một discipline khi sinh riêng từng bước.
+ *
+ * Truyền `dataSchema` (dựng từ Form Editor bằng `buildStepDataSchema`) thì
+ * `data` vừa thành BẮT BUỘC vừa được mô tả đầy đủ — enum, minItems, kiểu của
+ * từng phần tử mảng. Đây là khác biệt lớn nhất với model nhỏ: prompt chỉ khuyên,
+ * còn response schema ràng buộc lúc sinh token.
+ *
+ * Bắt buộc `data` cũng cắt luôn một vòng gọi: `data` trống sẽ kéo theo một lượt
+ * `analyzeDefectStructuredFields` để điền bù, nhân với tám bước là tám lượt phụ.
+ *
+ * Bỏ trống `dataSchema` thì quay về envelope phẳng như cũ.
+ */
+export function buildSingleDisciplineSchema(dataSchema?: Record<string, unknown>): Record<string, unknown> {
+    if (!dataSchema) {
+        return {
+            type: 'object',
+            properties: DISCIPLINE_ITEM_PROPERTIES,
+            required: [...DISCIPLINE_REQUIRED_FIELDS],
+        };
+    }
+    return {
+        type: 'object',
+        properties: { ...DISCIPLINE_ITEM_PROPERTIES, data: dataSchema },
+        required: [...DISCIPLINE_REQUIRED_FIELDS, 'data'],
+    };
+}
+
+export const SUMMARIES_SCHEMA = {
+    type: 'object',
+    properties: {
+        internalSummary: {
+            type: 'string',
+            description:
+                'Candid summary for the plant. Equipment, batch and people may be named.',
+        },
+        customerSummary: {
+            type: 'string',
+            nullable: true,
+            description:
+                'Outward-facing summary. Only for Q1 customer complaints; null for Q3 internal defects.',
+        },
+    },
+    required: ['internalSummary', 'customerSummary'],
+} as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Ngân sách token
-//
-// Suy ra từ ma trận probe. `gemini-2.5-pro` đốt completion token cho phần suy
-// nghĩ nội bộ TRƯỚC khi sinh chữ nào, và `max_tokens` đếm cả hai. Budget chật
-// thì output bị cắt giữa chừng và `finishReason` trả 'length' — đây là kiểu hỏng
-// hay gặp nhất, không phải sai cú pháp.
-//
-// Probe cho thấy `thinkingBudget: 512` giảm 43% completion token và 34% thời
-// gian mà vẫn đúng kết quả với việc bóc dữ liệu. Nhưng đó là việc cơ học; D4
-// mới là chỗ cần suy luận thật, nên bước phân tích để ngân sách rộng hơn nhiều.
-//
-// `thinkingBudget: 0` bị AI Core từ chối — gemini-2.5-pro không cho tắt hẳn.
-//
-// Admin ghi đè được ở trang AI Settings qua `<activity>ThinkingBudget`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BUDGET = {
-    parse: { maxTokens: 8_000, thinkingBudget: 512 },
-    /**
-     * Chẩn đoán mù là bước SUY LUẬN thuần: model phải cân nhắc 6 nhánh, dựng
-     * chuỗi nhân quả và loại trừ 5 nhánh còn lại mà không có đáp án nào để bám.
-     * Đây là chỗ đáng chi thinking budget nhất trong cả pipeline — rộng tay hơn
-     * cả bước viết báo cáo, vì viết thì chỉ diễn đạt lại thứ đã kết luận.
-     */
-    diagnose: { maxTokens: 16_000, thinkingBudget: 8_192 },
-    analyze: { maxTokens: 32_000, thinkingBudget: 4_096 },
-    /**
-     * Điền form: ánh xạ narrative ĐÃ VIẾT XONG vào các ô đã cấu hình. Không suy
-     * luận, không sinh nội dung mới, output chỉ là một mảng {code, path,
-     * valueJson} — nên 8K là dư và thinking budget là tiền vứt đi.
-     *
-     * Trước đây bước này dùng chung `analyze` (32K + 4096 thinking) vì chỗ gọi
-     * khai nhầm `activity: ACTIVITY_ANALYZE`. Đo được: ~90s cho một thao tác
-     * đáng lẽ vài giây.
-     */
-    structure: { maxTokens: 8_000, thinkingBudget: 0 },
+    parse: { maxTokens: 16_000, thinkingBudget: 256 },
+    diagnose: { maxTokens: 32_000, thinkingBudget: 256 },
+    analyze: { maxTokens: 100_000, thinkingBudget: 0 },
+    stepAnalyze: { maxTokens: 32_000, thinkingBudget: 0 },
+    summaries: { maxTokens: 16_000, thinkingBudget: 256 },
+    structure: { maxTokens: 16_000, thinkingBudget: 0 },
 } as const;

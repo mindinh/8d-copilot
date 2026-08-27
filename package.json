@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "export:prompts": "node --import ./node_modules/tsx/dist/loader.mjs scripts/export-step-prompts.mjs",
+    "push:prompts": "node scripts/push-step-config.mjs",
     "bundle:library": "node scripts/bundle-library.mjs",
     "compile:srv": "node scripts/compile-srv.mjs",
     "predeploy": "node scripts/check-approuter-route.mjs && npm run build:cf",

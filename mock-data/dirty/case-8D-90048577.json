@@ -98,21 +98,27 @@
       "partnerName": "Heli Weber",
       "functionTitle": "Quality Eng.",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "heli.weber@proresolve-demo.com",
+      "phone": "+49 89 2018 1001"
     },
     {
       "partnerId": "BP-100023",
       "partnerName": "Luis Moreno",
       "functionTitle": "Foundry Process Eng.",
       "partnerRole": "",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "luis.moreno@proresolve-demo.com",
+      "phone": "+34 91 555 1023"
     },
     {
       "partnerId": "BP-100031",
       "partnerName": "Sara Klein",
       "functionTitle": "Supplier Quality Eng.",
       "partnerRole": "-",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "sara.klein@proresolve-demo.com",
+      "phone": "+49 89 2018 1031"
     }
   ],
   "fmeaLink": null,

@@ -92,28 +92,36 @@
       "partnerName": "Heli Weber",
       "functionTitle": "Quality Eng.",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "heli.weber@proresolve-demo.com",
+      "phone": "+49 89 2018 1001"
     },
     {
       "partnerId": "BP-100067",
       "partnerName": "Marek Nowak",
       "functionTitle": "Surface Treatment Specialist",
       "partnerRole": "  ",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "marek.nowak@proresolve-demo.com",
+      "phone": "+48 22 123 1067"
     },
     {
       "partnerId": "BP-100147",
       "partnerName": "Lena Hoffmann",
       "functionTitle": "Metrology Specialist",
       "partnerRole": "-",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "lena.hoffmann@proresolve-demo.com",
+      "phone": "+49 89 2018 1147"
     },
     {
       "partnerId": "BP-100011",
       "partnerName": "Quyen La",
       "functionTitle": "Quality Technician",
       "partnerRole": "k.A.",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "quyen.la@proresolve-demo.com",
+      "phone": "+49 89 2018 1011"
     }
   ],
   "fmeaLink": null,

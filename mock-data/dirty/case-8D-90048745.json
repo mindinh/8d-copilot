@@ -99,28 +99,36 @@
       "partnerName": "Heli Weber",
       "functionTitle": "Quality Eng.",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "heli.weber@proresolve-demo.com",
+      "phone": "+49 89 2018 1001"
     },
     {
       "partnerId": "BP-100102",
       "partnerName": "Dario Conti",
       "functionTitle": "Bonding Process Eng.",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "dario.conti@proresolve-demo.com",
+      "phone": "+39 02 555 1102"
     },
     {
       "partnerId": "BP-100115",
       "partnerName": "Eva Lindqvist",
       "functionTitle": "Facilities Eng.",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "eva.lindqvist@proresolve-demo.com",
+      "phone": "+46 8 555 1115"
     },
     {
       "partnerId": "BP-100012",
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Eng.",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "minh.dinh@proresolve-demo.com",
+      "phone": "+49 89 2018 1012"
     }
   ],
   "fmeaLink": {

@@ -126,21 +126,27 @@
       "partnerName": "Thien Tu",
       "functionTitle": "Quality Engineer",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "thien.tu@proresolve-demo.com",
+      "phone": "+49 89 2018 1014"
     },
     {
       "partnerId": "BP-100147",
       "partnerName": "Lena Hoffmann",
       "functionTitle": "Metrology Specialist",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "lena.hoffmann@proresolve-demo.com",
+      "phone": "+49 89 2018 1147"
     },
     {
       "partnerId": "BP-100045",
       "partnerName": "Ingo Braun",
       "functionTitle": "Manufacturing Engineer",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "ingo.braun@proresolve-demo.com",
+      "phone": "+49 89 2018 1045"
     }
   ],
   "fmeaLink": null,

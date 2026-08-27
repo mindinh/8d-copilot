@@ -1,5 +1,18 @@
-import { Badge, cn } from '@cnma/react-ui';
+import { useState } from 'react';
+import { Button, cn } from '@cnma/react-ui';
 import { Star } from 'lucide-react';
+import { toast } from 'sonner';
+import { saveDisciplineField } from '@/services/eightd-service';
+import { TaskTable } from './action-table';
+import {
+    actionLabel,
+    assignedFieldFor,
+    isAccepted,
+    mergeTasks,
+    normalizeTasks,
+    taskFromAction,
+    type ActionTask,
+} from '../../../../../shared/action-task';
 
 /**
  * Widget cua D3 va D4, dung lai dung hinh thuc cua ban mockup flagship.
@@ -53,49 +66,139 @@ function isRootStep(row: WhyStep, index: number, total: number): boolean {
     return index === total - 1;
 }
 
-export function WhyChainWidget({ value }: { value: unknown }) {
-    const rows: WhyStep[] = Array.isArray(value) ? (value as WhyStep[]) : [];
+export function WhyChainWidget({ value, disciplineID, fieldKey }: {
+    value: unknown;
+    disciplineID?: string;
+    fieldKey?: string;
+}) {
+    const initialRows: WhyStep[] = Array.isArray(value) ? (value as WhyStep[]) : [];
+    const [steps, setSteps] = useState<WhyStep[]>(initialRows);
+    const [isAdding, setIsAdding] = useState(false);
+    const [newQuestion, setNewQuestion] = useState('');
+    const [newAnswer, setNewAnswer] = useState('');
 
-    if (rows.length === 0) {
-        return (
-            <p className="text-sm italic text-muted-foreground">
-                No 5-Why chain recorded for this case yet.
-            </p>
-        );
-    }
+    const initialRootIndex = steps.findIndex((row, idx) => isRootStep(row, idx, steps.length));
+    const [selectedRootIndex, setSelectedRootIndex] = useState<number | null>(
+        initialRootIndex >= 0 ? initialRootIndex : (steps.length ? steps.length - 1 : null),
+    );
+
+    const handleAddStep = () => {
+        if (!newQuestion.trim()) return;
+        const newStep: WhyStep = {
+            stepNo: steps.length + 1,
+            question: newQuestion.trim(),
+            answer: newAnswer.trim() || 'Pending verification',
+        };
+        const nextSteps = [...steps, newStep];
+        setSteps(nextSteps);
+        setNewQuestion('');
+        setNewAnswer('');
+        setIsAdding(false);
+
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, fieldKey || 'whyChain', nextSteps)
+                .then(() => toast.success('Why-step saved to server.'))
+                .catch((err) => toast.error(`Failed to save step: ${err.message}`));
+        }
+    };
 
     return (
-        <div className="divide-y">
-            {rows.map((row, index) => {
-                const root = isRootStep(row, index, rows.length);
-                const cite = row.evidence ?? row.evidenceCitation;
-                return (
-                    <div key={index} className="flex gap-3 py-2.5">
-                        <span
-                            className={cn(
-                                'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                                root ? 'bg-destructive text-destructive-foreground' : 'bg-foreground text-background',
-                            )}
-                        >
-                            {stepNumber(row, index)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                            <p className="break-words text-sm font-semibold">{row.question ?? row.why ?? '—'}</p>
-                            <p className="mt-0.5 break-words text-[13px]">{row.answer ?? '—'}</p>
-                            {cite && (
-                                <p className="mt-1 break-words text-xs italic text-muted-foreground">
-                                    Cited: {cite}
-                                </p>
-                            )}
-                            {root && (
-                                <span className="mt-1.5 inline-block text-[10px] font-bold uppercase tracking-wide text-destructive">
-                                    ★ Root cause
-                                </span>
-                            )}
-                        </div>
+        <div className="space-y-3">
+            {steps.length === 0 ? (
+                <p className="text-sm italic text-muted-foreground">
+                    No 5-Why chain recorded for this case yet.
+                </p>
+            ) : (
+                <div className="space-y-2.5">
+                    {steps.map((row, index) => {
+                        const isRoot = selectedRootIndex === index;
+                        return (
+                            <div
+                                key={index}
+                                className={cn(
+                                    'group relative flex min-w-0 items-start justify-between gap-3 rounded-lg border p-3.5 transition-colors',
+                                    isRoot
+                                        ? 'border-destructive/40 bg-destructive/[0.03] shadow-xs'
+                                        : 'border-border bg-card hover:border-border/80',
+                                )}
+                            >
+                                <div className="flex gap-3 min-w-0 flex-1">
+                                    <span
+                                        className={cn(
+                                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors',
+                                            isRoot
+                                                ? 'bg-destructive text-destructive-foreground ring-2 ring-destructive/20'
+                                                : 'bg-muted text-muted-foreground group-hover:bg-foreground group-hover:text-background',
+                                        )}
+                                    >
+                                        {stepNumber(row, index)}
+                                    </span>
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="break-words text-sm font-semibold text-foreground">
+                                                {row.question ?? row.why ?? '—'}
+                                            </p>
+                                            {isRoot && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive border border-destructive/20">
+                                                    <Star className="h-3 w-3 fill-current" />
+                                                    Root cause
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="break-words text-[13px] text-muted-foreground leading-relaxed">
+                                            {row.answer ?? '—'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!isRoot && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedRootIndex(index)}
+                                        className="shrink-0 text-[11px] font-medium text-muted-foreground opacity-0 group-hover:opacity-100 transition-all hover:text-destructive hover:bg-destructive/10 rounded-md px-2.5 py-1 border border-transparent hover:border-destructive/20 cursor-pointer flex items-center gap-1.5"
+                                        title="Mark this step as root cause"
+                                    >
+                                        <Star className="h-3 w-3" />
+                                        Set root cause
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {isAdding ? (
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                    <p className="text-xs font-semibold">Add 5-Why Step</p>
+                    <input
+                        type="text"
+                        placeholder="Why did this happen? (Question)"
+                        value={newQuestion}
+                        onChange={(e) => setNewQuestion(e.target.value)}
+                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <input
+                        type="text"
+                        placeholder="Answer / Finding..."
+                        value={newAnswer}
+                        onChange={(e) => setNewAnswer(e.target.value)}
+                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <div className="flex items-center gap-2 pt-1">
+                        <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()}>
+                            Add step
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
+                            Cancel
+                        </Button>
                     </div>
-                );
-            })}
+                </div>
+            ) : (
+                <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
+                    + Add why-step
+                </Button>
+            )}
         </div>
     );
 }
@@ -114,6 +217,7 @@ interface CauseRow {
     metricValue?: string;
     metric?: string;
     isRootCause?: boolean | string;
+    source?: string;
 }
 
 function truthy(value: unknown): boolean {
@@ -123,67 +227,168 @@ function truthy(value: unknown): boolean {
 /**
  * Sau nhanh Ishikawa, nhanh duoc chon to do.
  *
- * Doc tu `caseContext.ishikawa` chu khong tu `resultJson`: day la du lieu SAP da
- * ghi, khong phai ket luan AI viet ra. Bat AI chep lai sau dong nay vao output
- * chi tao them mot ban sao co the lech voi ban goc.
+ * Ban ghi cua SAP (`caseContext.ishikawa`) LUON thang: no la danh gia da chot,
+ * khong phai ket luan AI viet ra. Bat AI chep lai mot ban ghi da co chi tao
+ * them mot ban sao co the lech voi ban goc.
+ *
+ * Nhung rat nhieu case den day voi `ishikawa: []` — khong he co danh gia 6M nao.
+ * Truoc day luoi khi do trong vinh vien va nguoi dung khong co gi de lam. Nen
+ * khi va CHI KHI khong co ban ghi nao, luoi doc de xuat cua AI tu
+ * `data.rootCause.ishikawaBoard`, va noi ro do la de xuat. Dung dung mot khuon
+ * voi D1 (de xuat doi ngu tu tien le) va D3 (de xuat hanh dong chan tam).
  *
  * Nhanh KHONG co du lieu van ve o, ghi "Not assessed" — sau o luon day du thi
  * nguoi doc thay ngay dieu tra con thung cho nao. An o trong di la giau mat.
  */
-export function IshikawaGridWidget({ context }: { context: unknown }) {
+export function IshikawaGridWidget({ context, proposed, disciplineID }: { context: unknown; proposed?: unknown; disciplineID?: string }) {
     const root = context && typeof context === 'object' ? (context as Record<string, unknown>) : null;
-    const raw = root?.ishikawa;
-    const rows: CauseRow[] = Array.isArray(raw) ? (raw as CauseRow[]) : [];
+    const recorded: CauseRow[] = Array.isArray(root?.ishikawa) ? (root.ishikawa as CauseRow[]) : [];
+    const suggested: CauseRow[] = Array.isArray(proposed)
+        ? (proposed as CauseRow[]).filter((r) => String(r?.finding ?? r?.description ?? '').trim())
+        : [];
 
-    if (rows.length === 0) {
-        return (
-            <p className="text-sm italic text-muted-foreground">
-                No Ishikawa assessment recorded for this case.
-            </p>
-        );
-    }
+    const usingProposal = recorded.length === 0 && suggested.length > 0;
+    const rows: CauseRow[] = recorded.length ? recorded : suggested;
 
     const byCategory = new Map(
         rows.map((r) => [String(r.category ?? '').trim().toLowerCase(), r]),
     );
 
+    const initialRoot = SIX_M.find((cat) => {
+        const row = byCategory.get(cat.toLowerCase());
+        return row ? truthy(row.isRootCause) : false;
+    });
+
+    const [selectedRootCategory, setSelectedRootCategory] = useState<string | null>(initialRoot ?? null);
+    const [customFindings, setCustomFindings] = useState<Record<string, string>>({});
+    const [editingCategory, setEditingCategory] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState('');
+
+    const startEditing = (cat: string, currentText: string) => {
+        setEditingCategory(cat);
+        setEditValue(currentText === 'Not assessed' ? '' : currentText);
+    };
+
+    const saveEditing = (cat: string) => {
+        if (editValue.trim()) {
+            const nextFindings = { ...customFindings, [cat]: editValue.trim() };
+            setCustomFindings(nextFindings);
+            if (disciplineID) {
+                saveDisciplineField(disciplineID, 'ishikawaCustomFindings', nextFindings)
+                    .then(() => toast.success(`Saved finding for ${cat}`))
+                    .catch((err) => toast.error(`Failed to save: ${err.message}`));
+            }
+        }
+        setEditingCategory(null);
+    };
+
+    const handleSelectRoot = (cat: string) => {
+        setSelectedRootCategory(cat);
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, 'selectedRootCategory', cat)
+                .then(() => toast.success(`Marked ${cat} as root cause`))
+                .catch((err) => toast.error(`Failed to save: ${err.message}`));
+        }
+    };
+
     return (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
+            {usingProposal && (
+                <p className="rounded-md border border-warning/40 bg-warning/[0.07] px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-warning-foreground">Proposed by AI.</span>{' '}
+                    This case has no recorded 6M assessment in SAP. The findings below are
+                    the AI reading the evidence, not a confirmed assessment — review each
+                    one before relying on it.
+                </p>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {SIX_M.map((category) => {
                 const row = byCategory.get(category.toLowerCase());
-                const isRoot = row ? truthy(row.isRootCause) : false;
-                const text = row?.description ?? row?.finding;
+                const isRoot = selectedRootCategory
+                    ? selectedRootCategory.toLowerCase() === category.toLowerCase()
+                    : (row ? truthy(row.isRootCause) : false);
+                const originalText = row?.description ?? row?.finding ?? '';
+                const text = customFindings[category] ?? originalText;
                 const metric = row?.metricValue ?? row?.metric;
+                const isEditingThis = editingCategory === category;
 
                 return (
                     <div
                         key={category}
                         className={cn(
-                            'min-w-0 rounded-lg border p-3',
+                            'min-w-0 rounded-lg border p-3 flex flex-col justify-between',
                             isRoot ? 'border-destructive bg-destructive/[0.05]' : 'border-border bg-card',
                         )}
                     >
-                        <h4 className="text-sm font-semibold">{category}</h4>
-                        <p className={cn(
-                            'mt-1 break-words text-[12.5px]',
-                            text ? 'text-foreground' : 'italic text-muted-foreground',
-                        )}>
-                            {text || 'Not assessed'}
-                        </p>
-                        {metric && (
-                            <span className="mt-2 inline-block rounded-full border bg-muted px-2 py-0.5 text-[11px]">
-                                {metric}
-                            </span>
-                        )}
-                        {isRoot && (
-                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-destructive">
-                                <Star className="h-3 w-3 fill-current" />
-                                Root cause
+                        <div>
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold">{category}</h4>
+                                {!isEditingThis && (
+                                    <button
+                                        type="button"
+                                        onClick={() => startEditing(category, text || 'Not assessed')}
+                                        className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+                                    >
+                                        Edit
+                                    </button>
+                                )}
                             </div>
-                        )}
+
+                            {isEditingThis ? (
+                                <div className="mt-1.5 space-y-1.5">
+                                    <input
+                                        type="text"
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        placeholder="Enter finding for this category..."
+                                        className="w-full rounded border px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                        autoFocus
+                                    />
+                                    <div className="flex items-center gap-1.5">
+                                        <Button size="sm" className="h-6 text-[11px] px-2 py-0" onClick={() => saveEditing(category)}>
+                                            Save
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 py-0" onClick={() => setEditingCategory(null)}>
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className={cn(
+                                    'mt-1 break-words text-[12.5px]',
+                                    text ? 'text-foreground' : 'italic text-muted-foreground',
+                                )}>
+                                    {text || 'Not assessed'}
+                                </p>
+                            )}
+
+                            {metric && !isEditingThis && (
+                                <span className="mt-2 inline-block rounded-full border bg-muted px-2 py-0.5 text-[11px]">
+                                    {metric}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between">
+                            {isRoot ? (
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-destructive">
+                                    <Star className="h-3 w-3 fill-current" />
+                                    Root cause
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectRoot(category)}
+                                    className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                                >
+                                    Set as root cause
+                                </button>
+                            )}
+                        </div>
                     </div>
                 );
             })}
+            </div>
         </div>
     );
 }
@@ -201,62 +406,212 @@ interface ActionRow {
     origin?: string;
 }
 
-/**
- * Trang thai nao la da xong that.
- *
- * `Verified` khac `Done`: lam xong khong dong nghia da chung minh la hieu qua.
- * Ca D6 ton tai de giu dung khac biet do, nen mau sac o day khong duoc xoa no.
- */
-function statusTone(status: string): string {
-    const s = status.trim().toLowerCase();
-    if (s === 'verified') return 'bg-success/10 text-success border-success/30';
-    if (s === 'done' || s === 'complete' || s === 'completed') return 'bg-primary/10 text-primary border-primary/30';
-    if (s === 'in process' || s === 'in progress') return 'bg-warning/10 text-warning border-warning/30';
-    return 'bg-muted text-muted-foreground border-border';
+function cleanActionText(rawText?: string): string {
+    let text = String(rawText ?? '').trim();
+    if (!text) return '—';
+    text = text.replace(/^(Proposed|Recorded)\s+containment\s+action(\s+based\s+on\s+precedent\s+[A-Z0-9-]+)?:?\s*/i, '');
+    text = text.replace(/^(Proposed|Recorded)\s+action:?\s*/i, '');
+    text = text.replace(/^(Precedent\s+proposed\s+action|Precedent\s+action):?\s*/i, '');
+    return text.trim() || '—';
 }
 
-export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.' }: {
+export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.', disciplineID, fieldKey, acceptedValue }: {
     value: unknown;
     emptyLabel?: string;
+    disciplineID?: string;
+    fieldKey?: string;
+    /** Task đã nhận, đọc từ `<prefix>.assignedActions` của chính discipline này. */
+    acceptedValue?: unknown;
 }) {
-    const rows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
+    const initialRows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
+    const [actions, setActions] = useState<ActionRow[]>(initialRows);
+    const [isAdding, setIsAdding] = useState(false);
+    const [newActionText, setNewActionText] = useState('');
+    const [newOwner, setNewOwner] = useState('');
+    const [newStatus, setNewStatus] = useState('In Process');
 
-    if (rows.length === 0) {
-        return <p className="text-sm italic text-muted-foreground">{emptyLabel}</p>;
+    // Bảng task là bản ghi RIÊNG, không phải danh sách đề xuất tô màu khác. Giữ
+    // bản sao ở đây để nút đổi ngay sang "Added" mà không phải chờ poll một vòng.
+    const [tasks, setTasks] = useState<ActionTask[]>(() => normalizeTasks(acceptedValue));
+    const assignedField = assignedFieldFor(fieldKey || 'containment.actions');
+
+    const accept = (rows: ActionRow[]) => {
+        const incoming = rows
+            .filter((row) => actionLabel(row))
+            .map((row, i) => taskFromAction(row, `${Date.now().toString(36)}-${i}`));
+        const next = mergeTasks(tasks, incoming);
+        if (next === tasks) {
+            toast.info('Already in the task list.');
+            return;
+        }
+        persistTasks(next, incoming.length > 1 ? `${next.length - tasks.length} tasks added.` : 'Task added.');
+    };
+
+    const persistTasks = (next: ActionTask[], message = 'Task list saved.') => {
+        setTasks(next);
+        if (!disciplineID) return;
+        saveDisciplineField(disciplineID, assignedField, next)
+            .then(() => toast.success(message))
+            .catch((err) => toast.error(`Could not save: ${err.message}`));
+    };
+
+    const pending = actions.filter((row) => actionLabel(row) && !isAccepted(row, tasks));
+
+    const handleAddAction = () => {
+        if (!newActionText.trim()) return;
+        const newRow: ActionRow = {
+            action: newActionText.trim(),
+            owner: newOwner.trim() || 'Quality Engineer',
+            status: newStatus,
+            origin: 'User Added',
+        };
+        const nextActions = [...actions, newRow];
+        setActions(nextActions);
+        setNewActionText('');
+        setNewOwner('');
+        setIsAdding(false);
+
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
+                .then(() => toast.success('Action saved to server.'))
+                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            {actions.length === 0 ? (
+                <p className="text-sm italic text-muted-foreground">{emptyLabel}</p>
+            ) : (
+                <div className="space-y-2.5">
+                    {actions.map((row, index) => {
+                        const rawText = row.action ?? row.actionText ?? '';
+                        const text = cleanActionText(rawText);
+                        return (
+                            <div
+                                key={index}
+                                className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
+                            >
+                                <p className="break-words text-[13px] font-medium">{text}</p>
+                                {isAccepted(row, tasks) ? (
+                                    <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-success">
+                                        ✓ Added
+                                    </span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => accept([row])}
+                                        className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                                    >
+                                        + Add
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {pending.length > 1 && (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={() => accept(pending)}
+                >
+                    ✓ Accept all suggested ({pending.length})
+                </Button>
+            )}
+
+            {/*
+              Bảng nằm NGAY TRONG widget này chứ không phải một field riêng trong
+              Form Editor. Bản đầu tôi khai nó thành field — hậu quả: nút Add hiện
+              ngay (vì nằm trong code) còn bảng thì chỉ xuất hiện sau khi đẩy cấu
+              hình xuống DB rồi phân tích lại. Người dùng bấm Add và không thấy gì.
+              Nút và chỗ nó ghi vào phải xuất hiện cùng nhau, nếu không thì cái nút
+              là một lời hứa suông.
+            */}
+            <TaskTable tasks={tasks} onChange={persistTasks} />
+
+            {isAdding ? (
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                    <p className="text-xs font-semibold">Add Action</p>
+                    <input
+                        type="text"
+                        placeholder="Action description..."
+                        value={newActionText}
+                        onChange={(e) => setNewActionText(e.target.value)}
+                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                        <input
+                            type="text"
+                            placeholder="Owner (e.g. Quality Engineer)"
+                            value={newOwner}
+                            onChange={(e) => setNewOwner(e.target.value)}
+                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <select
+                            value={newStatus}
+                            onChange={(e) => setNewStatus(e.target.value)}
+                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="Planned">Planned</option>
+                            <option value="In Process">In Process</option>
+                            <option value="Done">Done</option>
+                            <option value="Verified">Verified</option>
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                        <Button size="sm" onClick={handleAddAction} disabled={!newActionText.trim()}>
+                            Add action
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
+                    + Add action
+                </Button>
+            )}
+        </div>
+    );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Khoi ban nhap cua AI
+   ───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Ket luan do AI soan, danh dau ro la BAN NHAP.
+ *
+ * -- Vi sao khong dung `callout` -
+ * `callout` la mot khoi thong tin trung tinh: no noi "day la thong tin quan
+ * trong". Cai can noi o day khac han - "day la MAY viet, chua ai duyet". Nhan
+ * "AI DRAFT" nam de len vien khoi lam dieu do trong mot cai liec, va no la quy
+ * uoc xuyen suot ban mockup.
+ *
+ * Mau canh bao nhat chu khong phai mau thanh cong: ban nhap chua duoc duyet thi
+ * khong duoc trong nhu mot ket luan da chot.
+ */
+export function AiDraftWidget({ value }: { value: unknown }) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) {
+        return (
+            <p className="text-sm italic text-muted-foreground">
+                The AI produced no conclusion for this step.
+            </p>
+        );
     }
 
     return (
-        <div className="space-y-2.5">
-            {rows.map((row, index) => {
-                const status = String(row.status ?? '').trim();
-                const text = row.action ?? row.actionText ?? '—';
-                return (
-                    <div
-                        key={index}
-                        className="flex min-w-0 items-start justify-between gap-3 rounded-lg border bg-card p-3"
-                    >
-                        <div className="min-w-0">
-                            {/* `origin` phan biet action DA GHI voi de xuat dua tren tien le —
-                                khac biet quan trong nhat cua D3, khong duoc chim vao than bai. */}
-                            {row.origin && (
-                                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                                    {row.origin}
-                                </div>
-                            )}
-                            <p className="break-words text-[13px]">{text}</p>
-                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                                {row.owner && <span>Owner: {row.owner}</span>}
-                                {row.protection && <span>Protects: {row.protection}</span>}
-                            </div>
-                        </div>
-                        {status && (
-                            <Badge variant="outline" className={cn('shrink-0 whitespace-nowrap', statusTone(status))}>
-                                {status}
-                            </Badge>
-                        )}
-                    </div>
-                );
-            })}
+        <div className="relative mt-2 rounded-lg border border-destructive/25 bg-destructive/[0.04] px-4 py-4">
+            <span className="absolute -top-2.5 left-3.5 rounded-full bg-destructive px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                AI draft
+            </span>
+            <p className="break-words text-[13px] leading-relaxed">{text}</p>
         </div>
     );
 }

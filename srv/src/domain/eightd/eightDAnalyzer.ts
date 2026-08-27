@@ -22,6 +22,8 @@ import {
     BUDGET,
     EIGHT_D_SCHEMA,
     ENRICHMENT_SCHEMA,
+    SUMMARIES_SCHEMA,
+    buildSingleDisciplineSchema,
     type ContextEnrichment,
 } from './schemas';
 import {
@@ -29,6 +31,9 @@ import {
     buildEightDPrompt,
     buildEightDSystemPrompt,
     buildEnrichmentPrompt,
+    buildSingleStepPrompt,
+    buildSingleStepSystemPrompt,
+    buildSummariesPrompt,
     type StepRanking,
 } from './prompts';
 import { getDisciplineGuide, getStepPromptRuntimeConfig } from './precedent/configRepository';
@@ -38,11 +43,13 @@ import {
     type PerStepPrecedents,
 } from './precedent/findPrecedents';
 import { STEP_CODES } from './precedent/profileRepository';
-import { callAndParse } from './jsonExtract';
+import { planStepWaves } from './stepGraph';
+import { callAndParse, isTruncated } from './jsonExtract';
 import { postProcess } from './postProcess';
 import {
     buildFlexibleResponseSchema,
     buildRuntimeSources,
+    buildStepDataSchema,
     normalizeStepConfig,
     setPath,
     syncLegacyFields,
@@ -60,11 +67,28 @@ import {
     type IndependentFinding,
 } from './independentAnalysis';
 import {
+    DISCIPLINE_TITLES,
     PipelineError,
     type AnalyzeOutcome,
     type CaseContext,
+    type DisciplineDraft,
     type EightDResult,
 } from './types';
+
+export interface StepCompleteOutcome {
+    discipline: DisciplineDraft;
+    runtimeInfo?: {
+        resultJson?: string;
+        formSchemaJson?: string;
+        validationJson?: string;
+        configVersion?: string;
+    };
+    context: CaseContext;
+    independent: IndependentAnalysis;
+    precedents: PerStepPrecedents;
+}
+
+export type StepCompleteCallback = (outcome: StepCompleteOutcome) => Promise<void>;
 
 const LOG = cds.log('eightd');
 
@@ -208,6 +232,7 @@ async function generateReport(
     configs: Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
     inputs: Partial<Record<import('./types').DisciplineCode, Record<string, unknown>>>;
     diagnostics: Partial<Record<import('./types').DisciplineCode, unknown[]>>;
+    repairs: string[];
 }> {
     let tokens = 0;
 
@@ -389,6 +414,451 @@ async function generateReport(
         configs: normalizedConfigs,
         inputs: Object.fromEntries(Object.entries(resolved).map(([code, item]) => [code, item.input])),
         diagnostics: Object.fromEntries(Object.entries(resolved).map(([code, item]) => [code, item.diagnostics])),
+        repairs: [],
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Progressive Step Generator — sinh & emit từng step D1..D8
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateReportProgressive(
+    context: CaseContext,
+    enrichment: ContextEnrichment,
+    independent: IndependentAnalysis,
+    perStep: PerStepPrecedents,
+    onStepComplete?: StepCompleteCallback,
+): Promise<{
+    result: EightDResult;
+    tokens: number;
+    configs: Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
+    inputs: Partial<Record<import('./types').DisciplineCode, Record<string, unknown>>>;
+    diagnostics: Partial<Record<import('./types').DisciplineCode, unknown[]>>;
+    repairs: string[];
+}> {
+    let tokens = 0;
+    const repairs: string[] = [];
+
+    // Cả tám bước, không phải D1–D4.
+    //
+    // Danh sách này từng bị viết cứng thành ['D1','D2','D3','D4'] từ hồi chỉ bốn
+    // bước đầu có Form Editor. Giờ StepPrompts trong DB có form cho cả tám (D5:5
+    // trường, D6:5, D7:6, D8:7), nhưng chúng chưa bao giờ được nạp — nên D5–D8
+    // không có contract trong prompt, không có validation, và `resultJson` của
+    // chúng luôn là `{}`. Lấy thẳng `STEP_CODES` để không còn hai danh sách phải
+    // nhớ đồng bộ.
+    const configurableCodes = STEP_CODES;
+    const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
+    const effectiveConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
+        const config = configs[code];
+        if (!config) return [];
+        try {
+            normalizeStepConfig(code, config);
+            return [[code, config]];
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (!message.startsWith('Data Schema and Form Editor fields must match.')) throw error;
+            return [[code, { ...config, inputSchemaJson: '' }]];
+        }
+    })) as typeof configs;
+
+    const normalizedConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
+        const config = effectiveConfigs[code];
+        return config ? [[code, normalizeStepConfig(code, config)]] : [];
+    })) as Partial<Record<import('./types').DisciplineCode, RuntimeStepConfig>>;
+
+    const stepSources = Object.fromEntries(
+        STEP_CODES.map((code) => [
+            code,
+            buildRuntimeSources(context, enrichment, independent, perStep.byStep[code].precedents),
+        ]),
+    ) as Record<string, Record<string, unknown>>;
+    const unionSources = buildRuntimeSources(context, enrichment, independent, perStep.union);
+    const resolved = Object.fromEntries(Object.keys(normalizedConfigs).map((code) => [code, { input: stepSources[code] ?? unionSources, diagnostics: [] }]));
+    const stepRankings = toStepRankings(perStep);
+
+    const disciplineGuides = await getDisciplineGuide();
+    /** Bước đã sinh xong, tra theo mã — thứ tự D1..D8 dựng lại ở cuối. */
+    const completed = new Map<string, DisciplineDraft>();
+
+    /**
+     * Xếp hàng các lượt ghi DB.
+     *
+     * `onStepComplete` ghi trên transaction dùng chung của job nền, mà một
+     * transaction chỉ giữ một connection. Các bước trong cùng một đợt chạy song
+     * song, nên gọi thẳng là hai lệnh ghi chồng lên nhau trên đúng connection
+     * đó — đúng loại lỗi mà phần đầu `eightDRepository.ts` cảnh báo.
+     *
+     * Xếp hàng lại thì phần đắt (gọi model) vẫn song song, chỉ vài chục
+     * mili-giây ghi là tuần tự. Đây cũng là thứ khiến cờ `savedContext` bên
+     * `eightDService` an toàn: không có hai callback nào chạy chồng nhau.
+     */
+    let writeQueue: Promise<unknown> = Promise.resolve();
+    const emitStep = (outcome: StepCompleteOutcome): Promise<void> => {
+        const write = writeQueue.then(() => onStepComplete?.(outcome));
+        // Nuốt lỗi ở BẢN SAO dùng để nối hàng đợi, không phải ở `write`: bước
+        // gọi vẫn nhận lỗi và làm hỏng cả lượt phân tích như mong muốn, nhưng
+        // hàng đợi không chết theo.
+        writeQueue = write.catch(() => undefined);
+        return write.then(() => undefined);
+    };
+
+    /**
+     * Sinh đúng một bước.
+     *
+     * `precedingDisciplines` được chụp tại thời điểm bắt đầu đợt chứ không đọc
+     * `completed` trực tiếp: các bước trong cùng một đợt chạy song song, đọc
+     * trực tiếp sẽ khiến prompt phụ thuộc vào bước nào về đích trước — cùng một
+     * input có thể ra hai báo cáo khác nhau.
+     */
+    const runStep = async (
+        code: (typeof STEP_CODES)[number],
+        precedingDisciplines: DisciplineDraft[],
+    ): Promise<DisciplineDraft> => {
+        const stepGuide = disciplineGuides[code];
+        const stepConstraintJson = effectiveConfigs[code as keyof typeof effectiveConfigs]?.constraintsJson;
+        let stepConstraintText = '';
+        if (stepConstraintJson) {
+            try {
+                if ((JSON.parse(stepConstraintJson) as { enabled?: boolean }).enabled !== false) {
+                    stepConstraintText = stepConstraintJson;
+                }
+            } catch { }
+        }
+
+        const systemPrompt = buildSingleStepSystemPrompt(code, stepGuide, stepConstraintText);
+        const inputSchemaJson = effectiveConfigs[code as keyof typeof effectiveConfigs]?.inputSchemaJson;
+        const formSchemaJson = effectiveConfigs[code as keyof typeof effectiveConfigs]?.formSchemaJson;
+
+        const renderPrompt = () => buildSingleStepPrompt(
+            code,
+            context,
+            enrichment,
+            independent,
+            perStep.union,
+            stepRankings[code],
+            precedingDisciplines,
+            inputSchemaJson,
+            formSchemaJson,
+        );
+
+        const stepConfig = normalizedConfigs[code as keyof typeof normalizedConfigs];
+        // Ràng buộc `data` theo đúng Form Editor: enum, minItems, kiểu phần tử
+        // mảng. Model nhỏ đọc prompt rồi vẫn trả sai enum; schema thì không cãi
+        // được. Cũng nhờ vậy lượt `ACTIVITY_STRUCTURE` bên dưới hầu như không
+        // phải chạy.
+        const dataSchema = buildStepDataSchema(stepConfig);
+
+        // Đường lui: nếu AI Core từ chối schema lồng nhau thì gọi lại bằng
+        // envelope phẳng thay vì để cả báo cáo chết. Chỉ thử lại đúng một lần và
+        // chỉ khi lượt đầu dùng schema chặt — lỗi thật vẫn nổi lên bình thường.
+        let strictSchemaRejected = false;
+
+        // Nhãn kèm mã bước: `analyzeDefect` là tên activity dùng chung cho cả tám
+        // bước lẫn lượt viết tóm tắt, nên lỗi chỉ ghi activity thì không biết
+        // bước nào hỏng.
+        const { value: rawStepValue } = await callAndParse<any>(`${code}/${ACTIVITY_ANALYZE}`, async (repairHint) => {
+            const callWith = async (
+                schema: Record<string, unknown> | undefined,
+                temperature = 0.2,
+                extraHint?: string,
+            ) => complete(
+                [
+                    { role: 'system', content: systemPrompt },
+                    {
+                        role: 'user',
+                        content: [
+                            renderPrompt(),
+                            repairHint ? `\n\n## CORRECTION\n${repairHint}` : '',
+                            extraHint ? `\n\n## CORRECTION\n${extraHint}` : '',
+                        ].join(''),
+                    },
+                ],
+                {
+                    activity: ACTIVITY_ANALYZE,
+                    temperature,
+                    max_tokens: BUDGET.stepAnalyze.maxTokens,
+                    thinkingBudget: BUDGET.stepAnalyze.thinkingBudget,
+                    responseMimeType: 'application/json',
+                    responseSchema: buildSingleDisciplineSchema(schema),
+                },
+            );
+
+            const useStrict = Boolean(dataSchema) && !strictSchemaRejected;
+            let res;
+            try {
+                res = await callWith(useStrict ? dataSchema : undefined);
+            } catch (error: any) {
+                if (!useStrict) throw error;
+                strictSchemaRejected = true;
+                LOG.warn(
+                    `${code}: AI Core từ chối schema dựng từ Form Editor, gọi lại bằng envelope phẳng. ` +
+                    `Các ràng buộc enum/minItems của bước này sẽ chỉ còn được kiểm ở backend. ` +
+                    `Nguyên nhân: ${error?.message ?? error}`,
+                );
+                res = await callWith(undefined);
+            }
+
+            // ── Thoát vòng lặp thoái hoá ──
+            // Gemini 2.5 (nhất là flash) khi bị ép schema ở temperature thấp có
+            // thể rơi vào vòng lặp: sinh đi sinh lại cùng một cụm cho tới khi
+            // dùng SẠCH max_tokens (`finishReason=length`, produced == trần).
+            // Google khuyến nghị chạy dòng 2.5 ở temperature mặc định 1.0 —
+            // phân phối hẹp của 0.2 khiến model kẹt trong vòng lặp không thoát
+            // nổi. Claude/Haiku không dính vì không dùng constrained decoding
+            // serving-side kiểu đó — khớp đúng quan sát "Haiku trở lên thì
+            // không sao, riêng flash là bị".
+            //
+            // Gọi lại NGUYÊN VẸN một lần với temperature 1.0: lấy mẫu khác đi
+            // thường đủ để thoát. Vẫn cắt thì `assertNotTruncated` ném lỗi như
+            // thường — không giấu vấn đề bằng retry vô hạn.
+            if (isTruncated(res.finishReason)) {
+                tokens += res.usage?.totalTokens ?? 0;
+                LOG.warn(
+                    `${code}: model dùng sạch ${BUDGET.stepAnalyze.maxTokens} token ở temperature 0.2 ` +
+                    `(dấu hiệu vòng lặp thoái hoá của Gemini khi ép schema). ` +
+                    `Gọi lại một lần ở temperature 0.7 kèm chỉ dẫn chống lặp.`,
+                );
+                // 0.7 chứ không phải 1.0: phá vòng lặp chỉ cần phân phối rộng
+                // hơn hẳn 0.2, không cần ngẫu nhiên tối đa. 1.0 cũng thoát được
+                // nhưng đổi lấy văn phong lan man — tức chữa lỗi này bằng cách
+                // tạo ra lỗi khác.
+                //
+                // Chỉ dẫn kèm theo mới là phần nhắm đúng bệnh: nói thẳng rằng
+                // lần trước đã lặp và bị cắt. Nhiệt độ chỉ mở đường thoát; câu
+                // này mới cho model biết phải thoát đi đâu.
+                res = await callWith(
+                    useStrict && !strictSchemaRejected ? dataSchema : undefined,
+                    0.7,
+                    'Your previous attempt repeated the same phrases until it ran out of budget and was cut off. '
+                    + 'Write each field ONCE, briefly. Do not restate anything you have already written. '
+                    + 'A short complete answer is required; a long one will be rejected.',
+                );
+            }
+
+            tokens += res.usage?.totalTokens ?? 0;
+            return {
+                content: res.content,
+                finishReason: res.finishReason,
+                limits: {
+                    maxTokens: BUDGET.stepAnalyze.maxTokens,
+                    thinkingBudget: BUDGET.stepAnalyze.thinkingBudget,
+                    model: (res as any).model,
+                    produced: (res.usage as any)?.completionTokens ?? res.usage?.totalTokens,
+                },
+            };
+        });
+
+        let discipline: DisciplineDraft = rawStepValue.disciplines ? rawStepValue.disciplines[0] : rawStepValue;
+        if (!discipline || discipline.code !== code) {
+            discipline = {
+                code,
+                sequence: STEP_CODES.indexOf(code) + 1,
+                title: DISCIPLINE_TITLES[code],
+                summary: rawStepValue.summary ?? 'Generated discipline.',
+                content: rawStepValue.content ?? '',
+                actionItems: Array.isArray(rawStepValue.actionItems) ? rawStepValue.actionItems : [],
+                sources: Array.isArray(rawStepValue.sources) ? rawStepValue.sources : [],
+                confidence: typeof rawStepValue.confidence === 'number' ? rawStepValue.confidence : 0.8,
+                dataBacked: typeof rawStepValue.dataBacked === 'boolean' ? rawStepValue.dataBacked : true,
+                data: rawStepValue.data ?? {},
+            };
+        }
+
+        // Form field contract extraction if configured & not already populated by step prompt
+        const stepFormSchema = effectiveConfigs[code as keyof typeof effectiveConfigs]?.formSchemaJson;
+        const hasPopulatedData = discipline.data && typeof discipline.data === 'object' && Object.keys(discipline.data).length > 0;
+        if (stepFormSchema && !hasPopulatedData) {
+            try {
+                const schema = JSON.parse(stepFormSchema);
+                const configuredFields = (schema.fields ?? []).map((f: any) => ({
+                    code,
+                    path: f.binding?.trim() || f.key,
+                    type: f.dataType,
+                    label: f.label,
+                    required: Boolean(f.constraints?.required),
+                    items: f.items,
+                    properties: f.properties,
+                })).filter((f: any) => f.path);
+
+                if (configuredFields.length) {
+                    const structuredSchema = {
+                        type: 'object',
+                        properties: {
+                            fields: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        code: { type: 'string', enum: [code] },
+                                        path: { type: 'string' },
+                                        valueJson: { type: 'string' },
+                                    },
+                                    required: ['code', 'path', 'valueJson'],
+                                },
+                            },
+                        },
+                        required: ['fields'],
+                    };
+
+                    const structured = await callAndParse<{ fields: Array<{ code: string; path: string; valueJson: string }> }>(ACTIVITY_STRUCTURE, async (repairHint) => {
+                        const res = await complete([
+                            {
+                                role: 'system',
+                                content: 'Convert a grounded 8D narrative into configured form fields. Return one entry for every contract field. valueJson must be a JSON-encoded value of the requested type. Use only the supplied verified context and narrative. When evidence is incomplete, write an explicit recommendation or gap; never invent a person, measurement, date, identifier, or completed action.',
+                            },
+                            {
+                                role: 'user',
+                                content: JSON.stringify({
+                                    contracts: configuredFields,
+                                    verifiedContext: stepSources[code] ?? unionSources,
+                                    report: [discipline],
+                                    correction: repairHint || undefined,
+                                }),
+                            },
+                        ], {
+                            activity: ACTIVITY_STRUCTURE,
+                            temperature: 0,
+                            max_tokens: BUDGET.structure.maxTokens,
+                            thinkingBudget: BUDGET.structure.thinkingBudget,
+                            responseMimeType: 'application/json',
+                            responseSchema: structuredSchema,
+                        });
+                        tokens += res.usage?.totalTokens ?? 0;
+                        return { content: res.content, finishReason: res.finishReason };
+                    });
+
+                    const allowedPaths = new Map(configuredFields.map((f: any) => [f.path, f]));
+                    for (const field of structured.value.fields ?? []) {
+                        if (!allowedPaths.has(field.path)) continue;
+                        try {
+                            setPath(discipline.data ??= {}, field.path, JSON.parse(field.valueJson));
+                        } catch {
+                            LOG.warn(`Structured AI field ${code}.${field.path} returned invalid valueJson.`);
+                        }
+                    }
+                }
+            } catch { }
+        }
+
+        syncLegacyFields(discipline);
+
+        // Run postProcess for this discipline
+        const singlePost = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [discipline] },
+            context,
+            enrichment,
+            independent,
+            perStep.union,
+            stepConstraintText ? { [code]: stepConstraintText } : {},
+            // Giới hạn đúng bước này. Thiếu tham số đây là `postProcess` trả về
+            // cả tám ô và `[0]` luôn là D1 — mọi bước D2..D8 sẽ ghi đè lên D1
+            // bằng placeholder, và báo cáo cuối cùng chỉ còn một dòng.
+            [code],
+        );
+        discipline = singlePost.result.disciplines.find((d) => d.code === code) ?? discipline;
+        if (singlePost.repairs.length) repairs.push(...singlePost.repairs);
+
+        let stepRuntimeInfo;
+        if (stepConfig?.formSchema) {
+            const violations = validateFlexibleResult(discipline, stepConfig, resolved[code]?.input ?? {});
+            stepRuntimeInfo = {
+                resultJson: JSON.stringify(discipline.data ?? {}),
+                formSchemaJson: JSON.stringify(stepConfig.formSchema),
+                validationJson: JSON.stringify({ version: 1, violations, inputDiagnostics: resolved[code]?.diagnostics ?? [], repairs: singlePost.repairs }),
+                configVersion: stepConfig.configVersion,
+            };
+        }
+
+        // Bất biến rẻ tiền, giá trị cao: `savePartialDiscipline` ghi theo
+        // `discipline.code`, nên một bước trả về sai mã sẽ lặng lẽ ghi đè lên
+        // bước khác — báo cáo mất dòng mà không có lỗi nào. Đúng lỗi đã xảy ra.
+        if (discipline.code !== code) {
+            throw new PipelineError(
+                `Bước ${code} dựng ra discipline mang mã ${discipline.code}.`,
+                502,
+            );
+        }
+
+        completed.set(code, discipline);
+
+        // Ghi xuống DB ngay khi bước xong — đây là toàn bộ mục đích của chế độ
+        // progressive: người dùng mở được D1 trong lúc D5 còn đang chạy.
+        await emitStep({
+            discipline,
+            runtimeInfo: stepRuntimeInfo,
+            context,
+            independent,
+            precedents: perStep,
+        });
+
+        return discipline;
+    };
+
+    // Chạy theo đợt: bước trong cùng đợt không phụ thuộc nhau nên gọi song song.
+    // Đây là chỗ đổi 8 lượt gọi nối đuôi thành 5 đợt — xem `stepGraph.ts`.
+    const orderedCompleted = (): DisciplineDraft[] =>
+        STEP_CODES.flatMap((code) => {
+            const discipline = completed.get(code);
+            return discipline ? [discipline] : [];
+        });
+
+    const waves = planStepWaves(STEP_CODES);
+    for (const [index, wave] of waves.entries()) {
+        const preceding = orderedCompleted();
+        const startedAt = Date.now();
+        const settled = await Promise.allSettled(wave.map((code) => runStep(code, preceding)));
+        LOG.info(
+            `Đợt ${index + 1}/${waves.length} [${wave.join(', ')}] xong sau ` +
+            `${Math.round((Date.now() - startedAt) / 1000)}s`,
+        );
+
+        // Một bước hỏng không được kéo theo bảy bước kia: bảy bước còn lại đã
+        // nằm trong DB và dùng được. Nhưng cũng không im lặng nuốt lỗi — tầng
+        // service cần biết để đặt status `Failed` kèm nguyên nhân thật.
+        const failure = settled.find((outcome) => outcome.status === 'rejected');
+        if (failure) throw (failure as PromiseRejectedResult).reason;
+    }
+
+    const previousDisciplines = orderedCompleted();
+
+    // Generate plant & customer summaries
+    const summariesPrompt = buildSummariesPrompt(context, enrichment, previousDisciplines);
+    const { value: summaries } = await callAndParse<{ internalSummary: string; customerSummary: string | null }>(`summaries/${ACTIVITY_ANALYZE}`, async (repairHint) => {
+        const res = await complete(
+            [
+                { role: 'system', content: 'You write the internal plant summary and outward customer summary for an 8D report.' },
+                {
+                    role: 'user',
+                    content: repairHint ? `${summariesPrompt}\n\n## CORRECTION\n${repairHint}` : summariesPrompt,
+                },
+            ],
+            {
+                activity: ACTIVITY_ANALYZE,
+                temperature: 0.2,
+                max_tokens: BUDGET.summaries.maxTokens,
+                thinkingBudget: BUDGET.summaries.thinkingBudget,
+                responseMimeType: 'application/json',
+                responseSchema: SUMMARIES_SCHEMA,
+            },
+        );
+        tokens += res.usage?.totalTokens ?? 0;
+        return { content: res.content, finishReason: res.finishReason };
+    });
+
+    const result: EightDResult = {
+        internalSummary: summaries.internalSummary ?? '',
+        customerSummary: context.isCustomerFacing ? summaries.customerSummary : null,
+        disciplines: previousDisciplines,
+    };
+
+    return {
+        result,
+        tokens,
+        configs: normalizedConfigs,
+        inputs: Object.fromEntries(Object.entries(resolved).map(([c, item]) => [c, item.input])),
+        diagnostics: Object.fromEntries(Object.entries(resolved).map(([c, item]) => [c, item.diagnostics])),
+        repairs,
     };
 }
 
@@ -399,7 +869,10 @@ async function generateReport(
  *
  * @throws {PipelineError} 400 khi payload hỏng, 502 khi model trả về thứ không dùng được
  */
-export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
+export async function analyze(
+    rawJson: string,
+    onStepComplete?: StepCompleteCallback,
+): Promise<AnalyzeOutcome> {
     const started = Date.now();
 
     let raw: unknown;
@@ -419,9 +892,6 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
             blocking.map((i) => `[${i.constraintId}] ${i.message}`),
         );
     }
-    // Cảnh báo chất lượng KHÔNG chặn. Chúng chảy vào `gaps` và được gửi thẳng
-    // cho model — biết dữ liệu mỏng ở đâu thì nó hạ độ tự tin cho đúng chỗ,
-    // thay vì viết một báo cáo tự tin trên nền dữ liệu khuyết.
     const warnings = qualityIssues(issues);
     if (warnings.length) {
         LOG.info(`Dataset có ${warnings.length} vấn đề chất lượng — chuyển cho model làm ngữ cảnh.`);
@@ -437,39 +907,18 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
     );
 
     // ── AI ──
-    // Đo từng pha: cả lượt chạy tốn 1.5-4 phút, và không có mốc thời gian thì
-    // không thể biết pha nào ăn thời gian khi cần chỉnh model hay budget.
     const phase = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
         const t = Date.now();
         try { return await fn(); } finally { LOG.info(`[phase] ${name}: ${Date.now() - t}ms`); }
     };
 
-    // Ba bước này ĐỘC LẬP nhau — làm giàu ngữ cảnh chỉ cần `raw`+`context`, chẩn
-    // đoán mù chỉ cần `context`, tìm tiền lệ chỉ cần `context`+`raw`. Chỉ bước
-    // viết báo cáo phía dưới mới cần cả ba, nên chạy chúng cùng lúc.
-    //
-    // Đo được khi còn chạy nối tiếp: parse 15.0s + diagnose 15.7s + precedents
-    // 16.9s = 47.6s; song song thì chỉ tốn bằng bước lâu nhất. Giới hạn đồng thời
-    // của CDK (`AICORE_MAX_CONCURRENT`) mặc định là 3 — vừa đủ cho đúng ba bước
-    // này, nên không bước nào phải xếp hàng.
-    //
-    // Tiền lệ hỏng thì đi tiếp với danh sách rỗng — mất phần gợi ý theo tiền lệ
-    // vẫn còn cả báo cáo, đổi cả lượt phân tích lấy một sự cố truy vấn là quá đắt.
-    // Bắt lỗi NGAY TRONG nhánh của nó, không để `Promise.all` kéo đổ hai bước kia.
     const [
         { enrichment, tokens: parseTokens },
         { analysis: independent, tokens: diagnoseTokens },
         perStep,
     ] = await Promise.all([
         phase('parse', () => enrichContext(raw, context)),
-        // Chẩn đoán mù chạy trên bộ input đã bị cắt đáp án. Kết luận của nó được
-        // đưa vào bước sau để D4 nêu được cả hai góc nhìn.
         phase('diagnose', () => diagnoseIndependently(context)),
-        // Truyền `raw`: tiêu chí trỏ vào một đường dẫn payload SAP chỉ so được khi
-        // case đang mở cũng có payload đã làm phẳng.
-        //
-        // Mỗi bước D chạy profile của riêng nó, nên một bước có thể có tiền lệ
-        // trong khi bước khác không — BÌNH THƯỜNG, không phải lỗi.
         phase('precedents', () => findPrecedentsByStep(context, raw)).catch((e: any) => {
             LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
             return emptyPerStepPrecedents();
@@ -478,28 +927,15 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
     const precedents = perStep.union;
 
     const {
-        result: rawResult,
+        result,
         tokens: analyzeTokens,
         configs: runtimeConfigs,
         inputs: runtimeInputs,
         diagnostics: inputDiagnostics,
-    } =
-        await phase('analyze', () => generateReport(context, enrichment, independent, perStep));
-
-    // ── Lưới an toàn ──
-    const constraintConfigs = Object.fromEntries((await Promise.all(['D1', 'D2', 'D3', 'D4'].map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {
-        if (!config?.constraintsJson) return [];
-        try { return (JSON.parse(config.constraintsJson) as { enabled?: boolean }).enabled === false ? [] : [[code, config.constraintsJson]]; } catch { return []; }
-    }));
-    const { result, repairs } = postProcess(
-        rawResult,
-        context,
-        enrichment,
-        independent,
-        precedents,
-        constraintConfigs,
-    );
-    if (repairs.length) LOG.warn(`postProcess phải chữa ${repairs.length} chỗ:`, repairs);
+        repairs,
+    } = onStepComplete
+        ? await phase('analyze', () => generateReportProgressive(context, enrichment, independent, perStep, onStepComplete))
+        : await phase('analyze', () => generateReport(context, enrichment, independent, perStep));
 
     const [parseModel, analyzeModel] = await Promise.all([
         resolveModel(ACTIVITY_PARSE),
@@ -523,6 +959,7 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         result,
         independent,
         models: { parse: parseModel, analyze: analyzeModel },
+        precedents: perStep,
         tokensUsed: parseTokens + diagnoseTokens + analyzeTokens,
         durationMs: Date.now() - started,
         repairs,

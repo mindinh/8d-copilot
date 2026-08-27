@@ -34,20 +34,40 @@ const lines = [
     'Nguồn: `srv/src/domain/eightd/prompts.ts` (`DEFAULT_DISCIPLINE_GUIDE`) và',
     '`srv/src/domain/eightd/precedent/defaults.ts` (`STRUCTURED_CONFIG_OVERRIDES`).',
     '',
-    '## Dán vào ô nào',
+    '## Cách nhanh: không cần dán tay',
+    '',
+    'Bật backend rồi chạy:',
+    '',
+    '```bash',
+    'npm run push:prompts          # cả 8 bước',
+    'npm run push:prompts -- D4    # riêng D4',
+    '```',
+    '',
+    'Lệnh này xoá và seed lại cấu hình từ code, đúng bằng nội dung file này.',
+    '⚠️ Chỉnh tay trên trang AI Settings của các bước đó sẽ mất — lệnh có hỏi lại.',
+    '',
+    '## Dán tay: mỗi bước có BA ô, không phải một',
+    '',
+    'Prompt một mình là chưa đủ. Giới hạn độ dài từng ô, danh sách giá trị hợp lệ,',
+    'hình dạng phần tử mảng và mô tả từng trường đều nằm trong hai schema JSON —',
+    'và **chính chúng mới ràng buộc model lúc sinh token**, còn prompt chỉ là lời',
+    'khuyên. Dán prompt mà bỏ schema thì phần lớn thay đổi không có tác dụng, và',
+    'không có gì báo cho bạn biết.',
     '',
     'Runtime đọc prompt bằng `combinedPrompt ?? systemPrompt`, nên **`combinedPrompt`',
-    'che hoàn toàn `systemPrompt`** chứ không bổ sung cho nó. Mỗi bước dưới đây ghi rõ',
-    'ô đích. Dán nhầm ô thì lưu vẫn thành công, UI vẫn hiện, và prompt không đổi.',
+    'che hoàn toàn `systemPrompt`** chứ không bổ sung cho nó. Dán nhầm ô thì lưu vẫn',
+    'thành công, UI vẫn hiện, và prompt không đổi.',
     '',
-    '| Bước | Ô cần dán | Số từ |',
+    '| Bước | Ô cần dán | Số từ prompt |',
     '|---|---|---|',
 ];
 
 for (const step of DEFAULT_STEP_PROMPTS) {
     const field = step.combinedPrompt ? 'combinedPrompt' : 'systemPrompt';
     const text = (step.combinedPrompt ?? step.systemPrompt ?? '').trim();
-    lines.push(`| ${step.stepCode} — ${step.label} | \`${field}\` | ${text.split(/\s+/).length} |`);
+    const boxes = [field, step.inputSchemaJson && 'inputSchemaJson', step.formSchemaJson && 'formSchemaJson']
+        .filter(Boolean).map((name) => `\`${name}\``).join(' + ');
+    lines.push(`| ${step.stepCode} — ${step.label} | ${boxes} | ${text.split(/\s+/).length} |`);
 }
 lines.push('');
 
@@ -61,13 +81,35 @@ for (const step of DEFAULT_STEP_PROMPTS) {
         '',
         `${step.description}`,
         '',
-        `**Dán vào ô \`${field}\`** của dòng \`stepCode = '${step.stepCode}'\` trong bảng \`StepPrompts\`.`,
+        `### 1. Prompt → ô \`${field}\``,
+        '',
+        `Dòng \`stepCode = '${step.stepCode}'\` trong bảng \`StepPrompts\`.`,
         '',
         '```text',
         text,
         '```',
         '',
     );
+
+    // Prompt MỘT MÌNH là chưa đủ. Giới hạn độ dài từng ô, danh sách giá trị hợp
+    // lệ, hình dạng phần tử mảng và mô tả từng trường đều nằm trong hai schema
+    // JSON dưới đây — chúng mới là thứ ràng buộc model lúc sinh token, còn prompt
+    // chỉ là lời khuyên. Dán prompt mà bỏ schema thì phần lớn thay đổi không có
+    // tác dụng, và không có gì báo.
+    for (const [label, json] of [
+        ['Data Schema', step.inputSchemaJson],
+        ['Form Editor', step.formSchemaJson],
+    ]) {
+        if (!json) continue;
+        lines.push(
+            `### ${label === 'Data Schema' ? 2 : 3}. ${label} → ô \`${label === 'Data Schema' ? 'inputSchemaJson' : 'formSchemaJson'}\``,
+            '',
+            '```json',
+            json.trim(),
+            '```',
+            '',
+        );
+    }
 }
 
 writeFileSync(out, lines.join('\n'), 'utf8');

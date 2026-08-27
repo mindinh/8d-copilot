@@ -349,6 +349,8 @@ export function extractDeepCase(raw: any): Row | null {
         partner_name: r.partnerName ?? r.partner_name,
         function_title: r.functionTitle ?? r.function_title,
         partner_role: r.partnerRole ?? r.partner_role,
+        email: r.email,
+        phone: r.phone,
     }));
 
     const fmea = getObj(obj.fmeaLink ?? obj.fmea_link ?? obj.fmea);
@@ -513,6 +515,8 @@ export function mapCase(raw: any): CaseContext {
         partnerName: String(r.partner_name ?? ''),
         functionTitle: String(r.function_title ?? ''),
         partnerRole: String(r.partner_role ?? ''),
+        email: r.email ? String(r.email) : null,
+        phone: r.phone ? String(r.phone) : null,
     }));
     // Vai trò hay bị bỏ trống. Không có ai được đánh dấu thì lấy người đầu tiên
     // làm trưởng nhóm — thứ tự dòng trong SAP thường phản ánh đúng điều đó — và
