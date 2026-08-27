@@ -26,6 +26,12 @@ export interface RuntimeFormField {
     colSpan: number;
     rowSpan: number;
     constraints: RuntimeFieldConstraints;
+    /**
+     * Ai điền trường này. `ai_enrichment` (mặc định) là AI sinh; mọi giá trị
+     * khác — `manual_input`, `sap_qm`, `vector_search` — là dữ liệu đến từ nơi
+     * khác và AI KHÔNG được ghi.
+     */
+    source?: string;
     items?: RuntimeFieldDefinition;
     properties?: Record<string, RuntimeFieldDefinition>;
 }
@@ -35,6 +41,8 @@ export interface RuntimeFieldDefinition {
     title?: string;
     description?: string;
     format?: string;
+    /** Giới hạn độ dài khai trong Data Schema, kể cả cho phần tử của mảng. */
+    maxLength?: number;
     items?: RuntimeFieldDefinition;
     properties?: Record<string, RuntimeFieldDefinition>;
     required?: string[];
@@ -116,6 +124,7 @@ function normalizeDefinition(value: unknown, path: string): RuntimeFieldDefiniti
         properties,
         required: Array.isArray(source.required) ? source.required.map(String) : undefined,
         enum: Array.isArray(source.enum) ? source.enum : undefined,
+        maxLength: typeof source.maxLength === 'number' ? source.maxLength : undefined,
     };
 }
 
@@ -170,6 +179,7 @@ export function normalizeStepConfig(stepCode: DisciplineCode, raw: { enabled?: b
             colSpan: Math.max(1, Number(field.colSpan ?? 1)),
             rowSpan: Math.max(1, Number(field.rowSpan ?? 1)),
             constraints,
+            source: typeof field.xSource === 'string' ? field.xSource : undefined,
             items: definition.items,
             properties: definition.properties,
         } satisfies RuntimeFormField;
@@ -258,16 +268,6 @@ export function resolveConfiguredInput(config: RuntimeStepConfig, sources: Recor
     return { input, diagnostics };
 }
 
-function definitionSchema(definition: RuntimeFieldDefinition): Record<string, unknown> {
-    const schema: Record<string, unknown> = { type: definition.type === 'date' ? 'string' : definition.type };
-    if (definition.format) schema.format = definition.format;
-    if (definition.enum) schema.enum = definition.enum;
-    if (definition.items) schema.items = definitionSchema(definition.items);
-    if (definition.properties) schema.properties = Object.fromEntries(Object.entries(definition.properties).map(([key, value]) => [key, definitionSchema(value)]));
-    if (definition.required?.length) schema.required = definition.required;
-    return schema;
-}
-
 export function buildFlexibleResponseSchema(configs: Partial<Record<DisciplineCode, RuntimeStepConfig>>): Record<string, unknown> {
     void configs;
     // AI Core expands nested dynamic properties into a serving state machine. Keep
@@ -299,6 +299,184 @@ export function buildFlexibleResponseSchema(configs: Partial<Record<DisciplineCo
         },
         required: ['internalSummary', 'customerSummary', 'disciplines'],
     };
+}
+
+const JSON_TYPE: Record<RuntimeScalarType, string> = {
+    string: 'string', number: 'number', integer: 'integer',
+    boolean: 'boolean', date: 'string', object: 'object', array: 'array',
+};
+
+/**
+ * Đổi một định nghĩa trường thành JSON Schema, hoặc `null` khi không mô tả nổi.
+ *
+ * `null` chứ không phải `{type:'object'}` rỗng là có chủ ý: object không có
+ * `properties` khiến structured output của model hoặc bị từ chối, hoặc sinh ra
+ * thứ tuỳ hứng. Thà bỏ trường đó khỏi schema — kết quả xấu nhất là nó không
+ * được điền, đúng bằng tình trạng hiện tại, chứ không kéo cả bước chết theo.
+ */
+function definitionSchema(def: RuntimeFieldDefinition | undefined): Record<string, unknown> | null {
+    if (!def) return null;
+    const type = JSON_TYPE[def.type] ?? 'string';
+
+    if (type === 'object') {
+        const entries = Object.entries(def.properties ?? {}).flatMap(([key, value]) => {
+            const schema = definitionSchema(value);
+            return schema ? [[key, schema] as const] : [];
+        });
+        if (!entries.length) return null;
+        const properties = Object.fromEntries(entries);
+        const required = (def.required ?? []).filter((key) => key in properties);
+        return { type: 'object', properties, ...(required.length ? { required } : {}) };
+    }
+
+    if (type === 'array') {
+        const items = definitionSchema(def.items);
+        return items ? { type: 'array', items } : null;
+    }
+
+    return {
+        type,
+        ...(def.enum?.length ? { enum: def.enum } : {}),
+        // Chuỗi BÊN TRONG phần tử mảng là chỗ nguy hiểm nhất: `maxItems` chỉ chặn
+        // SỐ phần tử, không chặn độ dài từng phần tử. Một `fiveWhy[].answer`
+        // không trần là đủ để model viết hết 32.000 token trong đúng một phần tử.
+        // Đây chính là lỗ đã làm D4 chết vì `finishReason=length`.
+        ...(type === 'string' && !def.enum?.length
+            ? { maxLength: def.maxLength ?? DEFAULT_MAX_ITEM_STRING }
+            : {}),
+        ...(def.description ? { description: def.description } : {}),
+    };
+}
+
+/**
+ * Trần mặc định cho mảng không tự khai `maxItems`.
+ *
+ * Mảng không có trần là lời mời lặp: model nhỏ được cấp hạn mức token rộng sẽ
+ * viết tiếp cho đến khi hết chỗ. Đo thực tế: `rootCause.evidenceGaps` trả về 10
+ * phần tử trên một case không có dữ liệu điều tra nào.
+ *
+ * Đây là chốt chặn chạy loạn, không phải luật nghiệp vụ — đặt rộng để không cắt
+ * mất output hợp lệ. Bước nào cần chặt hơn thì khai `maxItems` trong Form Editor.
+ */
+const DEFAULT_MAX_ITEMS = 10;
+
+/**
+ * Trần độ dài mặc định cho chuỗi nằm TRONG phần tử mảng.
+ *
+ * Chặt hơn trần của trường đơn lẻ vì nó nhân với `maxItems`: 10 × 240 ký tự đã
+ * là ~2.400 ký tự cho một mảng. Các trường ở đây là câu why/answer/evidence/gap —
+ * 600 ký tự là rộng rãi. Cần dài hơn thì khai `maxLength` trong Data Schema,
+ * giá trị khai luôn thắng.
+ */
+const DEFAULT_MAX_ITEM_STRING = 240;
+
+/**
+ * Trần độ dài mặc định cho trường chuỗi đơn lẻ.
+ *
+ * Rộng hơn vì nó không bị nhân lên, nhưng vẫn phải có: một chuỗi không trần là
+ * đường chạy loạn bất kể nó nằm ở đâu.
+ */
+const DEFAULT_MAX_FIELD_STRING = 700;
+
+function fieldSchema(field: RuntimeFormField): Record<string, unknown> | null {
+    const type = JSON_TYPE[field.type] ?? 'string';
+
+    if (type === 'array') {
+        const items = definitionSchema(field.items);
+        if (!items) return null;
+        return {
+            type: 'array',
+            items,
+            ...(field.constraints.minItems ? { minItems: field.constraints.minItems } : {}),
+            maxItems: field.constraints.maxItems ?? DEFAULT_MAX_ITEMS,
+        };
+    }
+
+    if (type === 'object') {
+        return definitionSchema({ type: 'object', properties: field.properties });
+    }
+
+    return {
+        type,
+        ...(field.constraints.enum?.length ? { enum: field.constraints.enum } : {}),
+        // Giới hạn độ dài CÓ trong cấu hình nhưng trước đây bị bỏ khi dựng schema,
+        // nên `rootCause.statement` khai maxLength 800 mà model không hề bị chặn.
+        ...(field.constraints.minLength ? { minLength: field.constraints.minLength } : {}),
+        ...(field.constraints.enum?.length
+            ? {}
+            : { maxLength: field.constraints.maxLength ?? DEFAULT_MAX_FIELD_STRING }),
+        ...(field.label ? { description: field.label } : {}),
+    };
+}
+
+interface SchemaNode {
+    children: Map<string, SchemaNode>;
+    leaf?: Record<string, unknown>;
+    required: boolean;
+}
+
+const emptyNode = (): SchemaNode => ({ children: new Map(), required: false });
+
+function nodeToSchema(node: SchemaNode): Record<string, unknown> | null {
+    if (node.leaf) return node.leaf;
+
+    const properties: Record<string, unknown> = {};
+    const required: string[] = [];
+    for (const [key, child] of node.children) {
+        const schema = nodeToSchema(child);
+        if (!schema) continue;
+        properties[key] = schema;
+        // Object cha bắt buộc khi có ít nhất một con bắt buộc — nếu không, model
+        // được phép bỏ cả nhánh và ràng buộc của con thành vô nghĩa.
+        if (child.required || (!child.leaf && [...child.children.values()].some((c) => c.required))) {
+            required.push(key);
+        }
+    }
+    if (!Object.keys(properties).length) return null;
+    return { type: 'object', properties, ...(required.length ? { required } : {}) };
+}
+
+/**
+ * Dựng JSON Schema cho `discipline.data` từ Form Editor của bước.
+ *
+ * Vì sao cần: prompt CÓ liệt kê `constraints.enum` và `minItems`, nhưng prompt
+ * chỉ là lời khuyên. Response schema mới là thứ model bị ràng buộc khi sinh
+ * token. Đo trên gemini-2.5-flash với `data: {type:'object'}` rỗng:
+ * `team.selectionMethod` trả về chuỗi ngoài danh sách cho phép, và
+ * `rootCause.fiveWhy` (bắt buộc, minItems 1) bị bỏ trắng. Cả hai đều là thứ
+ * constrained decoding chặn được tuyệt đối.
+ *
+ * Trả `undefined` khi bước không có form hoặc không trường nào mô tả được —
+ * bên gọi khi đó dùng lại envelope phẳng như cũ.
+ */
+export function buildStepDataSchema(config: RuntimeStepConfig | undefined): Record<string, unknown> | undefined {
+    const fields = config?.formSchema?.fields;
+    if (!fields?.length) return undefined;
+
+    const root = emptyNode();
+    for (const field of fields) {
+        // Trường do người hoặc hệ thống khác điền thì KHÔNG đưa vào response
+        // schema. Prompt đã dặn "never output team.assignedRoster", nhưng dặn
+        // chỉ là dặn — bỏ hẳn khỏi schema thì model không có chỗ để ghi.
+        if (field.source && field.source !== 'ai_enrichment') continue;
+
+        const schema = fieldSchema(field);
+        if (!schema) continue;
+
+        const parts = field.key.split('.');
+        let node = root;
+        for (const part of parts.slice(0, -1)) {
+            if (!node.children.has(part)) node.children.set(part, emptyNode());
+            node = node.children.get(part)!;
+        }
+        const last = parts[parts.length - 1];
+        const child = node.children.get(last) ?? emptyNode();
+        child.leaf = schema;
+        child.required = Boolean(field.constraints.required);
+        node.children.set(last, child);
+    }
+
+    return nodeToSchema(root) ?? undefined;
 }
 
 export function validateFlexibleResult(discipline: DisciplineDraft, config: RuntimeStepConfig, effectiveInput: Record<string, unknown>): ValidationViolation[] {

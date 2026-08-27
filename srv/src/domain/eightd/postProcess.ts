@@ -46,6 +46,15 @@ export function postProcess(
     /** Tiền lệ đã tìm được — để `precedents#N` trong `sources` giải được. */
     precedents?: unknown,
     constraintsJson?: string | Partial<Record<DisciplineCode, string>>,
+    /**
+     * Chỉ dựng lại đúng những bước này. Bỏ trống = cả tám, tức hành vi cũ.
+     *
+     * Cần cho chế độ sinh từng bước: gọi hàm này với đúng một discipline mà
+     * không giới hạn phạm vi thì bảy bước còn lại bị coi là "model bỏ sót" và
+     * được thay bằng placeholder — kết quả trả về là mảng D1..D8 đầy đủ, nên
+     * bên gọi lấy `disciplines[0]` sẽ luôn nhận ô D1 thay vì bước vừa sinh.
+     */
+    only?: readonly DisciplineCode[],
 ): { result: EightDResult; repairs: string[] } {
     const repairs: string[] = [];
     const incoming = Array.isArray(result?.disciplines) ? result.disciplines : [];
@@ -66,7 +75,14 @@ export function postProcess(
     );
     if (unknown.length) repairs.push(`Model trả mã lạ, đã bỏ: ${unknown.join(', ')}.`);
 
-    const disciplines = DISCIPLINE_CODES.map((code, i) => {
+    // Lọc từ `DISCIPLINE_CODES` chứ không dùng thẳng `only`: thứ tự và `sequence`
+    // phải là thứ tự chuẩn D1..D8, không phải thứ tự bên gọi truyền vào.
+    const targetCodes = only?.length
+        ? DISCIPLINE_CODES.filter((code) => only.includes(code))
+        : DISCIPLINE_CODES;
+
+    const disciplines = targetCodes.map((code) => {
+        const i = DISCIPLINE_CODES.indexOf(code);
         const found = byCode.get(code);
         if (!found) {
             repairs.push(`Thiếu ${code}; chèn placeholder.`);

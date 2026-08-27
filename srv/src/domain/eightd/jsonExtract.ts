@@ -39,15 +39,44 @@ export function stripFence(raw: string): string {
  * JSON có thể vẫn parse được nếu chỗ cắt rơi đúng ranh giới — nhưng nội dung
  * thì thiếu. Nên coi đây là lỗi bất kể parse có thành công hay không.
  */
-export function assertNotTruncated(finishReason: string | undefined, step: string): void {
+export interface CallLimits {
+    maxTokens?: number;
+    thinkingBudget?: number;
+    model?: string;
+    /** Số token model thực sự sinh ra, lấy từ `usage` của lời gọi. */
+    produced?: number;
+}
+
+/** `finishReason` có nghĩa là model bị cắt giữa chừng vì hết ngân sách token. */
+export function isTruncated(finishReason: string | undefined): boolean {
     const reason = String(finishReason ?? '').toLowerCase();
-    if (reason === 'length' || reason === 'max_tokens') {
-        throw new PipelineError(
-            `Bước "${step}": model bị cắt vì hết token (finishReason=${finishReason}). ` +
-            'Tăng max_tokens hoặc giảm thinkingBudget trong srv/src/domain/eightd/schemas.ts.',
-            502,
-        );
-    }
+    return reason === 'length' || reason === 'max_tokens';
+}
+
+export function assertNotTruncated(
+    finishReason: string | undefined,
+    step: string,
+    limits?: CallLimits,
+): void {
+    if (!isTruncated(finishReason)) return;
+
+    // Kèm số thật vào thông báo. Bản cũ chỉ bảo "tăng max_tokens trong
+    // schemas.ts" — đọc xong vẫn không biết lượt gọi vừa rồi được cấp bao nhiêu,
+    // nên không phân biệt nổi hai trường hợp hoàn toàn khác nhau: trần đang thấp,
+    // hay backend còn chạy code cũ nên trần mới chưa có hiệu lực.
+    const facts = [
+        limits?.model && `model=${limits.model}`,
+        limits?.maxTokens !== undefined && `max_tokens=${limits.maxTokens}`,
+        limits?.thinkingBudget !== undefined && `thinkingBudget=${limits.thinkingBudget}`,
+        limits?.produced !== undefined && `đã sinh ${limits.produced} token`,
+    ].filter(Boolean).join(', ');
+
+    throw new PipelineError(
+        `Bước "${step}": model bị cắt vì hết token (finishReason=${finishReason}).` +
+        (facts ? ` Lượt gọi này dùng ${facts}.` : '') +
+        ' Ngân sách đặt trong srv/src/domain/eightd/schemas.ts (BUDGET).',
+        502,
+    );
 }
 
 /**
@@ -90,11 +119,11 @@ export function extractJson<T>(raw: string, step: string): T {
  */
 export async function callAndParse<T>(
     step: string,
-    call: (repairHint?: string) => Promise<{ content: string; finishReason?: string }>,
+    call: (repairHint?: string) => Promise<{ content: string; finishReason?: string; limits?: CallLimits }>,
 ): Promise<{ value: T; raw: string }> {
     const attempt = async (repairHint?: string) => {
         const res = await call(repairHint);
-        assertNotTruncated(res.finishReason, step);
+        assertNotTruncated(res.finishReason, step, res.limits);
         return { value: extractJson<T>(res.content, step), raw: res.content };
     };
 

@@ -89,6 +89,21 @@ entity Reports : cuid, managed {
     sourcePayload     : LargeString;
     /** CaseContext sau caseMapper + bước AI parseData. Dùng để debug và truy vết. */
     caseContext       : LargeString;
+    /**
+     * Tiền lệ đã chấm điểm lúc phân tích — JSON `{ union, byStep, profileByStep }`.
+     *
+     * ── Vì sao phải lưu thay vì tính lại khi mở màn hình ──
+     * Pipeline đã chấm toàn kho để dựng báo cáo (đo được 17-21 giây). Vứt kết quả
+     * đó đi rồi cho UI gọi `findPrecedents` chấm lại là làm hai lần cùng một việc.
+     *
+     * Nhưng lý do chính không phải tốc độ mà là TÍNH NHẤT QUÁN: trọng số chấm điểm
+     * sửa được trên trang cấu hình. Chấm lại lúc xem nghĩa là panel có thể hiện một
+     * bộ tiền lệ khác hẳn bộ mà báo cáo đã trích dẫn — hai con số cùng nằm trên một
+     * màn hình mà không khớp nhau, và không ai biết cái nào đúng.
+     *
+     * Bản chụp này bất biến như `resultJson`: nó ghi lại điều AI ĐÃ THẤY lúc kết luận.
+     */
+    precedentsJson    : LargeString;
     aiModelParse      : String(100);
     aiModelAnalyze    : String(100);
     analyzedAt        : DateTime;

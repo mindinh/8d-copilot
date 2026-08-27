@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Textarea, cn } from '@cnma/react-ui';
-import { Check, Lock, LockOpen, RotateCcw, Undo2 } from 'lucide-react';
+import { Check, Lock, LockOpen, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     reviewDiscipline,
@@ -160,16 +160,7 @@ export function DisciplineReviewBox({ discipline }: { discipline: Discipline8D }
                                 onClick={() => submit.mutate({ decision: 'approve' })}
                             >
                                 <Check className="h-4 w-4" />
-                                Approve
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={busy}
-                                onClick={() => setNoteOpen((v) => !v)}
-                            >
-                                <RotateCcw className="h-4 w-4" />
-                                Request change
+                                Complete
                             </Button>
                         </>
                     )}

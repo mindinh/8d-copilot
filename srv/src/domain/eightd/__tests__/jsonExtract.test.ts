@@ -46,13 +46,36 @@ describe('assertNotTruncated', () => {
     });
 
     it('thông báo lỗi chỉ ra chỗ cần sửa', () => {
+        // `try/catch` trần sẽ IM LẶNG PASS nếu hàm không ném — đúng cái nó phải
+        // bắt. Bọc bằng `toThrow` để không ném là đỏ.
+        expect(() => assertNotTruncated('length', 'analyzeDefect')).toThrow(/analyzeDefect/);
+        expect(() => assertNotTruncated('length', 'analyzeDefect')).toThrow(/BUDGET/);
+    });
+
+    it('kèm số thật của lượt gọi khi được truyền vào', () => {
+        // Thiếu số này thì đọc lỗi xong vẫn không phân biệt được "trần đang thấp"
+        // với "backend còn chạy code cũ nên trần mới chưa có hiệu lực".
         try {
-            assertNotTruncated('length', 'analyzeDefect');
+            assertNotTruncated('length', 'analyzeDefect', {
+                model: 'gemini-2.5-flash',
+                maxTokens: 16_000,
+                thinkingBudget: 0,
+                produced: 15_998,
+            });
+            throw new Error('đáng lẽ phải ném');
         } catch (e: any) {
             expect(e.code).toBe(502);
-            expect(e.message).toContain('analyzeDefect');
-            expect(e.message).toContain('max_tokens');
+            expect(e.message).toContain('gemini-2.5-flash');
+            expect(e.message).toContain('max_tokens=16000');
+            expect(e.message).toContain('thinkingBudget=0');
+            expect(e.message).toContain('15998');
         }
+    });
+
+    it('thinkingBudget = 0 vẫn được in ra, không bị coi là vắng mặt', () => {
+        // `0` là giá trị có ý nghĩa ở đây; lọc bằng falsy sẽ giấu mất nó.
+        expect(() => assertNotTruncated('length', 'x', { thinkingBudget: 0 }))
+            .toThrow(/thinkingBudget=0/);
     });
 
     it.each(['stop', 'STOP', undefined])('cho qua khi finishReason = %s', (reason) => {

@@ -93,14 +93,18 @@
       "partnerName": "Thien Tu",
       "functionTitle": "Quality Eng.",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "thien.tu@proresolve-demo.com",
+      "phone": "+49 89 2018 1014"
     },
     {
       "partnerId": "BP-100067",
       "partnerName": "Marek Nowak",
       "functionTitle": "Surface Treatment Specialist",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "marek.nowak@proresolve-demo.com",
+      "phone": "+48 22 123 1067"
     }
   ],
   "fmeaLink": null,

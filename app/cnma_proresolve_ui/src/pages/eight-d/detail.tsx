@@ -24,14 +24,12 @@ import { toast } from 'sonner';
 import {
     eightDService,
     isCustomerComplaint,
-    parseFinding,
     type Report8D,
 } from '@/services/eightd-service';
 import { DisciplineCard } from './discipline-card';
 import { SchemaDisciplineCard } from './schema-discipline-card';
 import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { ReportStatusBadge } from './status-badge';
-import { ReasoningPanel } from './reasoning-panel';
 import { PrecedentPanel } from './precedent-panel';
 import { DisciplineReviewBox } from './review-controls';
 import { ActionChecklist, parseCaseActions } from './action-checklist';
@@ -48,7 +46,16 @@ type SideTab = 'audit' | 'similar';
  * đây là cách duy nhất để biết đã xong hay chưa.
  */
 
-const POLL_INTERVAL_MS = 4_000;
+/**
+ * Nhịp poll phải dài hơn thời gian một response, nếu không request chồng lên
+ * nhau và hàng đợi tự làm chậm chính nó. Đo trên HANA Cloud: mỗi lượt
+ * `Reports(id)?$expand=disciplines` mất 2,7–5,6 giây vì kéo về cả `sourcePayload`,
+ * `caseContext` và `resultJson` của từng bước. Đặt 1,5 giây là gửi lượt mới khi
+ * lượt trước còn chưa về.
+ *
+ * 3 giây vẫn đủ "trực tiếp": một đợt bước mất 6–16 giây mới xong.
+ */
+const POLL_INTERVAL_MS = 3_000;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -145,7 +152,6 @@ export function EightDDetailPage() {
     const customerFacing = isCustomerComplaint(report.origin);
     const inferredCount = disciplines.filter((d) => !d.dataBacked).length;
     const running = report.status === 'Analyzing';
-    const independent = parseFinding(report.aiFinding);
     const caseActions = parseCaseActions(report.caseContext);
 
     return (
@@ -215,70 +221,65 @@ export function EightDDetailPage() {
                     </TabsTrigger>
                 </TabsList>
 
-                {/* ── Tab 1: 8D Disciplines (Clean Detail View) ── */}
                 <TabsContent value="disciplines" className="mt-0 outline-none">
-                    {disciplines.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-muted-foreground">
-                            No 8D disciplines available.
-                        </div>
-                    ) : (
-                        /*
-                          Ba cot, dung theo ban mockup flagship:
-                            trai   dieu huong  - di den dau roi, con bao nhieu buoc
-                            giua   noi dung    - buoc dang mo
-                            phai   tham chieu  - vet duyet va case tuong tu
+                    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
 
-                          Truoc day ba thu nay xep chong len nhau theo chieu doc, nen
-                          phai cuon qua het panel tien le va chan doan mu moi toi duoc
-                          noi dung buoc. Tach cot thi ca ba nhin duoc cung luc, va do
-                          moi la cach mot ky su that su lam viec: doc buoc hien tai
-                          trong khi liec sang case cu.
-                        */
-                        <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
+                        {/* ── Cot trai: tien do + dieu huong ── */}
+                        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+                            <Card className="overflow-hidden py-3">
+                                <CaseStepper
+                                    disciplines={disciplines}
+                                    active={activeDiscipline}
+                                    onSelect={setActiveDiscipline}
+                                    isAnalyzing={running}
+                                />
+                            </Card>
+                        </aside>
 
-                            {/* ── Cot trai: tien do + dieu huong ── */}
-                            <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-                                <Card className="overflow-hidden py-3">
-                                    <CaseStepper
-                                        disciplines={disciplines}
-                                        active={activeDiscipline}
-                                        onSelect={setActiveDiscipline}
-                                    />
-                                </Card>
-                            </aside>
+                        {/* ── Cot giua: buoc dang mo ── */}
+                        <section className="min-w-0 space-y-4">
+                            {inferredCount > 0 && (
+                                <p className="flex items-center gap-1.5 text-xs text-warning">
+                                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                                    {inferredCount} of {disciplines.length} disciplines have no source data in the dataset
+                                </p>
+                            )}
 
-                            {/* ── Cot giua: buoc dang mo ── */}
-                            <section className="min-w-0 space-y-4">
-                                {inferredCount > 0 && (
-                                    <p className="flex items-center gap-1.5 text-xs text-warning">
-                                        <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                                        {inferredCount} of {disciplines.length} disciplines have no source data in the dataset
-                                    </p>
-                                )}
+                            {(() => {
+                                const selected = disciplines.find((d) => d.code === activeDiscipline);
+                                if (selected) {
+                                    return (
+                                        <div key={selected.ID} className="min-w-0 space-y-4">
+                                            <DisciplineReviewBox discipline={selected} />
 
-                                {disciplines
-                                    .filter((discipline) => discipline.code === activeDiscipline)
-                                    .map((discipline) => (
-                                        <div key={discipline.ID} className="min-w-0 space-y-4">
-                                            {/* Nut duyet len TREN noi dung, dung nhu mockup: quyet dinh la
-                                                viec chinh cua man hinh nay, khong phai phan phu o cuoi trang. */}
-                                            <DisciplineReviewBox discipline={discipline} />
+                                            {selected.code === 'D6' && <ActionChecklist actions={caseActions} />}
 
-                                            {discipline.code === 'D6' && <ActionChecklist actions={caseActions} />}
-
-                                            {discipline.formSchemaJson && discipline.resultJson
-                                                ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[discipline.code]?.formSchemaJson ?? null} siblings={disciplines} />
-                                                : <DisciplineCard discipline={discipline} caseContext={report.caseContext} />}
-
-                                            {/* Chan doan mu chi thuoc ve D4 — do la buoc no doi chieu. Truoc
-                                                day no nam dau trang va xuat hien o moi buoc, ke ca nhung buoc
-                                                khong lien quan gi den nguyen nhan goc. */}
-                                            {discipline.code === 'D4' && independent && (
-                                                <ReasoningPanel analysis={independent} />
-                                            )}
+                                            {selected.formSchemaJson && selected.resultJson
+                                                ? <SchemaDisciplineCard discipline={selected} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null} siblings={disciplines} />
+                                                : <DisciplineCard discipline={selected} caseContext={report.caseContext} />}
                                         </div>
-                                    ))}
-                            </section>
+                                    );
+                                }
+                                if (running) {
+                                    return (
+                                        <Card className="p-12 flex flex-col items-center justify-center text-center space-y-3 bg-muted/20 border-dashed">
+                                            <Spinner className="w-6 h-6 text-primary" />
+                                            <div>
+                                                <h3 className="font-semibold text-sm">AI is drafting {activeDiscipline}...</h3>
+                                                <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                                                    Extracting facts and running analysis for {activeDiscipline}. This page updates automatically in real-time.
+                                                </p>
+                                            </div>
+                                        </Card>
+                                    );
+                                }
+                                return (
+                                    <div className="py-12 text-center text-sm text-muted-foreground">
+                                        Discipline {activeDiscipline} is not available for this report.
+                                    </div>
+                                );
+                            })()}
+                        </section>
 
                             {/* ── Cot phai: tham chieu ── */}
                             <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
@@ -295,13 +296,12 @@ export function EightDDetailPage() {
                                     </TabsContent>
 
                                     <TabsContent value="similar" className="mt-3">
-                                        <PrecedentPanel reportID={report.ID} />
+                                        <PrecedentPanel reportID={report.ID} precedentsJson={report.precedentsJson} />
                                     </TabsContent>
                                 </Tabs>
                             </aside>
                         </div>
-                    )}
-                </TabsContent>
+                    </TabsContent>
                 {/* ── Tab 2: Case Overview & AI Insights ── */}
                 <TabsContent value="summary" className="mt-0 space-y-6 outline-none">
                     {/* ── Thông tin case ── */}
@@ -362,11 +362,8 @@ export function EightDDetailPage() {
                         </Tabs>
                     )}
 
-                    {/* ── Chẩn đoán độc lập ── */}
-                    {independent && <ReasoningPanel analysis={independent} />}
-
                     {/* ── Case tiền lệ ── */}
-                    <PrecedentPanel reportID={report.ID} />
+                    <PrecedentPanel reportID={report.ID} precedentsJson={report.precedentsJson} />
 
                     {/* ── Vết chạy & Model AI ── */}
                     {report.analyzedAt && (

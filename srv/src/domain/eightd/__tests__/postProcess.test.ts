@@ -307,3 +307,68 @@ describe('postProcess — ràng buộc Q1-ONLY-CUSTOMER-FIELDS', () => {
         expect(result.customerSummary).toBeNull();
     });
 });
+
+/**
+ * Chế độ sinh từng bước gọi `postProcess` với ĐÚNG MỘT discipline.
+ *
+ * Không giới hạn phạm vi thì bảy bước kia bị coi là model bỏ sót và bị thay
+ * bằng placeholder, nên kết quả vẫn là mảng D1..D8 — bên gọi lấy `[0]` sẽ nhận
+ * ô D1 thay vì bước vừa sinh. Hệ quả thật đã xảy ra: mọi bước D2..D8 ghi đè lên
+ * hàng D1 và báo cáo cuối cùng chỉ còn một dòng, không kèm lỗi nào.
+ */
+describe('postProcess — phạm vi từng bước', () => {
+    it('trả về đúng bước được yêu cầu, không phải ô D1', () => {
+        const { result } = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [draft('D4')] },
+            ctxQ3, undefined, undefined, undefined, undefined, ['D4'],
+        );
+
+        expect(result.disciplines).toHaveLength(1);
+        expect(result.disciplines[0].code).toBe('D4');
+        expect(result.disciplines[0].summary).toBe('Summary D4');
+    });
+
+    it('giữ nguyên sequence chuẩn của bước, không phải vị trí trong tập con', () => {
+        const { result } = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [draft('D7')] },
+            ctxQ3, undefined, undefined, undefined, undefined, ['D7'],
+        );
+        expect(result.disciplines[0].sequence).toBe(7);
+    });
+
+    it('không báo "thiếu" cho những bước nằm ngoài phạm vi', () => {
+        const { repairs } = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [draft('D2')] },
+            ctxQ3, undefined, undefined, undefined, undefined, ['D2'],
+        );
+        expect(repairs.filter((r) => r.includes('Thiếu'))).toEqual([]);
+    });
+
+    it('vẫn chèn placeholder khi chính bước trong phạm vi bị thiếu', () => {
+        const { result, repairs } = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [] },
+            ctxQ3, undefined, undefined, undefined, undefined, ['D5'],
+        );
+        expect(result.disciplines).toHaveLength(1);
+        expect(result.disciplines[0].code).toBe('D5');
+        expect(repairs.some((r) => r.includes('Thiếu D5'))).toBe(true);
+    });
+
+    it('vẫn áp luật riêng của bước trong phạm vi — D6 không bao giờ dataBacked', () => {
+        const { result } = postProcess(
+            { internalSummary: '', customerSummary: null, disciplines: [draft('D6', { dataBacked: true })] },
+            ctxQ3, undefined, undefined, undefined, undefined, ['D6'],
+        );
+        expect(result.disciplines[0].dataBacked).toBe(false);
+    });
+
+    it('bỏ trống phạm vi thì giữ nguyên hành vi cũ: đủ tám bước', () => {
+        const { result } = postProcess(fullResult(), ctxQ3);
+        expect(result.disciplines.map((d) => d.code)).toEqual([...DISCIPLINE_CODES]);
+    });
+
+    it('phạm vi rỗng cũng là hành vi cũ, không phải kết quả rỗng', () => {
+        const { result } = postProcess(fullResult(), ctxQ3, undefined, undefined, undefined, undefined, []);
+        expect(result.disciplines).toHaveLength(DISCIPLINE_CODES.length);
+    });
+});

@@ -80,14 +80,18 @@
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Eng.",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "minh.dinh@proresolve-demo.com",
+      "phone": "+49 89 2018 1012"
     },
     {
       "partnerId": "BP-100091",
       "partnerName": "Karl Wagner",
       "functionTitle": "Maintenance Planner",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record"
+      "source": "Backfilled from case record",
+      "email": "karl.wagner@proresolve-demo.com",
+      "phone": "+49 89 2018 1091"
     }
   ],
   "fmeaLink": null,

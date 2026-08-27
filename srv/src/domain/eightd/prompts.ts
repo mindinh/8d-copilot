@@ -176,23 +176,16 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     comparable records this dataset does not carry.`,
 
     D3: `Containment protects the customer and the line WHILE the cause is still
-    unknown. Judge every action against that, not against whether it fixes
-    anything.
+    unknown. Keep every containment action description simple, direct and concise
+    (e.g., "Quarantine remaining stock from batch B-49172 and 100% burr check before packing").
 
     Work in this order:
-      1. If this case already records containment actions, report them - the
-         action, the owner, the status, and what each one protects. You are
-         confirming what the team did, not proposing something new.
+      1. If this case already records containment actions, report them cleanly -
+         stating the action description and its status.
       2. Only when nothing is recorded, propose the containment action from the
-         highest-scoring precedent. Quote what that case actually did, name the
-         case and its score, and adapt the batch and quantity to this case.
+         highest-scoring precedent cleanly and adapt the batch and quantity.
 
-    Label every row so recorded and proposed are told apart at a glance.
-
-    State the residual exposure left after the actions listed: stock already
-    shipped, other batches from the same run, the same part on other lines. For a
-    customer complaint, say explicitly what happens to material already at the
-    customer.`,
+    Do not write long verbose paragraphs inside the action text.`,
 
     D4: `The discipline the whole report is judged on.
 
@@ -222,6 +215,43 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
         the independent reasoning better, say so.
       - Note its confidence and any evidence gap it flagged.
     Cite "independent" in this discipline's sources.
+
+    WHEN THIS CASE HAS NO INVESTIGATION AT ALL - fiveWhy empty AND ishikawa
+    empty AND no root cause recorded - everything above describes data you do not
+    have. Do not improvise a different shape for that situation; follow this one,
+    and follow it the same way every time:
+
+      - Open rootCause.statement by saying in one sentence that no root cause is
+        recorded and no investigation was performed. Then say, in the SAME
+        statement, that what follows is a starting hypothesis to be tested, not a
+        finding. Never end on the bare denial: a reader who stops at the first
+        sentence must still know the rest of the discipline is a proposal.
+
+      - The 5-Why chain is about THE DEFECT, always. Never write a chain about
+        why the investigation was not done, why records are missing, or how the
+        process failed - that is a different problem from the one this 8D is
+        raised for, and it makes the report useless to the engineer who has to
+        fix the part. Start from the observed symptom and walk down the plausible
+        technical causes. Where a step cannot be answered from evidence, put the
+        candidate causes in the answer and name, in evidence, the specific record
+        or measurement that would settle it.
+
+      - Each Ishikawa branch gets a VERDICT, not an investigation plan. Say what
+        that branch tells you and stop: "shift-independent", "gauge R&R 8%",
+        "fixture #2 clamp worn 0.2 mm", "no PM log". A reader scans six cells to
+        see which one stands out - six cells each listing the evidence you would
+        need to collect tells them nothing and hides the one that matters.
+        Where a branch is ruled out, say what ruled it out. Where nothing is
+        known, "not assessed" is the whole answer.
+        The evidence still to be gathered goes ONCE in rootCause.evidenceGaps,
+        never repeated per branch. Mark at most one branch as the root cause, and
+        only when the evidence you DO have points there. When nothing points
+        anywhere, mark none.
+
+      - Keep all three consistent. The statement, the chain and the board must
+        describe the same hypothesis in the same register. A confident board next
+        to a statement that says nothing was determined reads as two different
+        reports stapled together.
 
     You never confirm a root cause. The engineer sets that flag.`,
 
@@ -345,16 +375,7 @@ job is to write the 8D narrative. It is not to discover new facts.
    material you have when THIS case has no investigation of its own yet.
 
    Use them, and use them explicitly:
-     - D1  When no team is recorded, propose the people who actually served on
-           the precedent teams, by name and function. Say how many of the
-           precedent cases each person worked. Never invent a name that is not
-           in a precedent team.
-     - D3  When no containment action is recorded, propose what the precedent
-           contained, and say which case it came from.
-     - D5  Same for corrective actions, D7 for preventive actions and FMEA.
-     - D4  A precedent's confirmed root cause is a HYPOTHESIS for this case, not
-           a finding. Say plainly that it is a lead to check, and name what
-           evidence would confirm or kill it.
+{{PRECEDENT_STEPS}}
 
    Cite them as precedents#1, precedents#2 — numbered as given, best first.
    A precedent is evidence about ANOTHER case. Borrowing its conclusion without
@@ -368,15 +389,87 @@ job is to write the 8D narrative. It is not to discover new facts.
 
 {{DISCIPLINE_GUIDE}}
 
-## STYLE
+## STYLE — SAY WHAT THE READER MUST KNOW, NOTHING ELSE
 
-- Professional quality-engineering register. American English throughout.
-- content is markdown: short paragraphs and bullet lists. Do NOT use headings —
-  the interface already renders the discipline title above the content.
-- summary is one or two sentences of plain text, at most 500 characters.
+The output is read on a dashboard by an engineer who has to act. The test for
+every sentence is not "is it true" — it is "does the reader need this to decide
+what to do next". Cut everything that fails that test, however true.
+
+- ONE FIELD, ONE ANSWER. Each field answers the single question its label asks.
+  Answer it, then stop. Do not explain how you reached it, do not restate the
+  question, do not preview what another field will say.
+
+- GIVE THE VERDICT, NOT THE INVESTIGATION PLAN. "Machine: spindle runout 4µm vs
+  10µm limit" tells the reader something. "Requires assessment of machine
+  maintenance records and tool condition" tells them nothing they did not
+  already know, and it costs them the time to read it.
+
+- EVIDENCE STILL MISSING IS LISTED ONCE. Every step has one place for gaps -
+  the gaps or evidence field. Naming the same missing record inside three other
+  fields does not make it more missing; it buries the fields that do carry an
+  answer.
+
+- LEAD WITH THE FACT. Number, identifier or verdict first; qualification after,
+  if it is needed at all.
+
+    write   "Hole position ⌀0.18 vs ⌀0.20 tol"
+    not     "The measured hole position was 0.18 mm against a tolerance of 0.20 mm."
+
+    write   "OP 40 · fixture #2"
+    not     "The defect occurred at operation 40 on fixture number 2."
+
+  Use " · " to join facts inside one field rather than writing linking prose.
+
+- BANNED OPENERS. Every one of these is a sentence that has not started yet:
+  "It should be noted that", "Based on the available evidence",
+  "This indicates that", "Requires assessment of", "Further investigation is
+  needed to determine". If a record is missing, name it and stop: "no PM log",
+  "no CMM data".
+
+- LENGTH FOLLOWS FROM THE ABOVE, it is not a target of its own. A step with real
+  measurements to report may run long and be right; a step with nothing to
+  report must be a line or two. Never pad a thin step to look thorough, and
+  never cut a fact the reader needs in order to look concise.
+
+- content is markdown: short bullets, no headings — the interface renders the
+  discipline title already.
+- summary is one sentence: the single thing a reader learns from this step.
 - Write for a reader who knows manufacturing but not this case.
 
-## SUMMARIES
+{{SUMMARIES}}
+
+Output valid JSON matching the schema. No prose outside the JSON.
+`.trim();
+
+/**
+ * Hướng dẫn dùng tiền lệ, tách theo bước.
+ *
+ * Lượt gọi sinh MỘT bước không nên phải đọc hướng dẫn của bảy bước còn lại.
+ * Với model nhỏ, phần thừa không chỉ vô ích — nó cạnh tranh sự chú ý với đúng
+ * dòng cần đọc.
+ */
+const PRECEDENT_STEP_GUIDANCE: Partial<Record<DisciplineCode, string>> = {
+    D1: `     - D1  When no team is recorded, propose the people who actually served on
+           the precedent teams, by name and function. Say how many of the
+           precedent cases each person worked. Never invent a name that is not
+           in a precedent team.`,
+    D3: `     - D3  When no containment action is recorded, propose what the precedent
+           contained, and say which case it came from.`,
+    D4: `     - D4  A precedent's confirmed root cause is a HYPOTHESIS for this case, not
+           a finding. Say plainly that it is a lead to check, and name what
+           evidence would confirm or kill it.`,
+    D5: `     - D5  When no corrective action is recorded, propose what the precedent
+           corrected, and say which case it came from.`,
+    D7: `     - D7  Same for preventive actions and FMEA updates: propose what the
+           precedent put in place, and name the case it came from.`,
+};
+
+/**
+ * Hai bản tóm tắt KHÔNG thuộc lượt gọi từng bước — một lượt riêng viết chúng.
+ * Để nguyên khối này trong prompt một bước là bảo model sinh ra hai trường không
+ * hề có trong schema của lượt đó.
+ */
+const SUMMARIES_SECTION = `## SUMMARIES
 
 - internalSummary: candid, for the plant. Name equipment, batches and people.
   Include the cost of poor quality and the current status.
@@ -385,10 +478,28 @@ job is to write the 8D narrative. It is not to discover new facts.
   facing: no internal blame, no employee names, no equipment or batch IDs, no
   cost figures. State what was found, what has been contained, what is being
   corrected, and by when. Professional and accountable, not defensive.
-  When origin is "Q3 - Internal Defect", set this to null.
+  When origin is "Q3 - Internal Defect", set this to null.`;
 
-Output valid JSON matching the schema. No prose outside the JSON.
-`.trim();
+/**
+ * Lắp `EIGHT_D_RULES` cho đúng tập bước mà lượt gọi này phải sinh.
+ *
+ * Gọi với đủ tám mã thì kết quả giống hệt bản viết tay trước đây — đó là điều
+ * `disciplineGuide.test.ts` khoá lại.
+ */
+function renderRules(steps: readonly DisciplineCode[], guide: string): string {
+    const precedentSteps = steps
+        .map((code) => PRECEDENT_STEP_GUIDANCE[code])
+        .filter(Boolean)
+        .join('\n');
+
+    return EIGHT_D_RULES
+        .replace('{{DISCIPLINE_GUIDE}}', guide)
+        .replace('{{PRECEDENT_STEPS}}', precedentSteps)
+        // Chỉ lượt gọi gộp mới sinh hai bản tóm tắt.
+        .replace('{{SUMMARIES}}', steps.length === DISCIPLINE_CODES.length ? SUMMARIES_SECTION : '')
+        // Bỏ khối rỗng để lại sau khi cắt, tránh ba dòng trắng liên tiếp.
+        .replace(/\n{3,}/g, '\n\n');
+}
 
 /**
  * Ghép prompt hệ thống cho bước sinh báo cáo.
@@ -413,7 +524,7 @@ export function buildEightDSystemPrompt(
         const value = constraints?.[code]?.trim();
         return value ? [`${code} configured constraints:`, value] : [];
     }).join('\n');
-    const base = EIGHT_D_RULES.replace('{{DISCIPLINE_GUIDE}}', guide);
+    const base = renderRules(DISCIPLINE_CODES, guide);
     return configuredConstraints ? `${base}\n\nCONFIGURED STEP CONSTRAINTS\n${configuredConstraints}` : base;
 }
 
@@ -603,4 +714,177 @@ export function buildEightDPrompt(
         ...configuredDataSchemas,
         ...configuredOutputs,
     ].filter(Boolean).join('\n');
+}
+
+export function buildSingleStepSystemPrompt(
+    code: DisciplineCode,
+    overrideGuide?: string,
+    constraint?: string,
+): string {
+    const body = (overrideGuide ?? '').trim() || DEFAULT_DISCIPLINE_GUIDE[code];
+    const indented = body.split('\n').map((l) => (l.trim() ? `    ${l.trim()}` : '')).join('\n');
+    const guide = `${code}  ${DISCIPLINE_TITLES[code]}\n${indented}`;
+
+    // Đặt phạm vi lên ĐẦU, trước mọi luật. Phần luật bên dưới nói "every
+    // discipline"; không chốt phạm vi ở đây thì model nhỏ dễ trả về nhiều bước
+    // hoặc bọc kết quả trong một mảng `disciplines`.
+    const scope = [
+        '## THIS CALL',
+        `Produce EXACTLY ONE discipline object: ${code} — ${DISCIPLINE_TITLES[code]}.`,
+        'Return that single object. Do not wrap it in an array or in a "disciplines" field.',
+        'Do not write any other discipline. A separate call writes the summaries.',
+        `Set code to "${code}". Anything else is discarded.`,
+        '',
+    ].join('\n');
+
+    const configuredConstraints = constraint?.trim() ? `${code} configured constraints:\n${constraint.trim()}` : '';
+    const base = `${scope}\n${renderRules([code], guide)}`;
+    return configuredConstraints ? `${base}\n\nCONFIGURED STEP CONSTRAINTS\n${configuredConstraints}` : base;
+}
+
+export function buildSingleStepPrompt(
+    code: DisciplineCode,
+    context: CaseContext,
+    enrichment: ContextEnrichment,
+    independent: IndependentAnalysis,
+    precedents: PromptPrecedent[] = [],
+    stepRanking?: StepRanking,
+    previousDisciplines: import('./types').DisciplineDraft[] = [],
+    inputSchemaJson?: string,
+    formSchemaJson?: string,
+): string {
+    const gapNotice = context.gaps.length
+        ? [
+            '## KNOWN GAPS — these disciplines have no source data',
+            ...context.gaps.map((g) => `- ${g}`),
+            '',
+            'Set dataBacked = false for every discipline affected by the above.',
+            '',
+        ].join('\n')
+        : '';
+
+    const originNotice = context.isCustomerFacing
+        ? 'This is a CUSTOMER COMPLAINT (Q1).'
+        : 'This is an INTERNAL DEFECT (Q3).';
+
+    const configuredDataSchemas: string[] = [];
+    const configuredOutputs: string[] = [];
+
+    if (inputSchemaJson) {
+        try {
+            const configured = JSON.parse(inputSchemaJson);
+            configuredDataSchemas.push(`## ${code} DATA SCHEMA (output data contract)\n\`\`\`json\n${JSON.stringify(configured)}\n\`\`\``);
+        } catch { }
+    }
+
+    if (formSchemaJson) {
+        try {
+            const schema = JSON.parse(formSchemaJson) as { fields?: Array<{ key?: string; binding?: string; label?: string; widget?: string; dataType?: string; items?: unknown; properties?: unknown; constraints?: unknown }> };
+            const fields = (schema.fields ?? []).map((field) => ({ path: field.binding?.trim() || field.key, label: field.label, type: field.dataType, widget: field.widget, items: field.items, properties: field.properties, constraints: field.constraints })).filter((field) => field.path);
+
+            // Nêu lại các ràng buộc khắt khe bằng câu chữ, ngoài khối JSON.
+            // Đo trên gemini-2.5-flash: chôn `enum` trong một blob JSON thì nó
+            // trả `team.selectionMethod` là chuỗi tự do, và bỏ trắng
+            // `rootCause.fiveWhy` dù có `minItems`. Response schema mới là thứ
+            // chặn được tuyệt đối, nhưng nói rõ ở đây thì model không phải suy
+            // ra ràng buộc từ một cấu trúc lồng nhau.
+            const spelledOut = (schema.fields ?? []).flatMap((field) => {
+                const path = field.binding?.trim() || field.key;
+                const c = (field.constraints ?? {}) as { required?: boolean; enum?: unknown[]; minItems?: number };
+                if (!path) return [];
+                const notes: string[] = [];
+                if (Array.isArray(c.enum) && c.enum.length) {
+                    notes.push(`must be exactly one of: ${c.enum.map((v) => `"${String(v)}"`).join(' | ')}`);
+                }
+                if (c.minItems) notes.push(`at least ${c.minItems} item${c.minItems > 1 ? 's' : ''}`);
+                if (c.required && !notes.length) notes.push('required — never leave absent or empty');
+                return notes.length ? [`- data.${path}: ${notes.join('; ')}`] : [];
+            });
+
+            configuredOutputs.push([
+                `## ${code} AI-GENERATED FORM OUTPUT CONTRACT`,
+                `You must generate every listed field inside the ${code} discipline data object. Use nested objects for dotted paths. Do not leave a required field absent.`,
+                // Quan sát thật trên gemini-2.5-flash: nó nhồi why + answer +
+                // evidence vào riêng ô `why`, kèm hậu tố tự bịa "(Independent
+                // Diagnosis Step 1 of 3.)", lặp lại bốn lần, rồi để `answer`
+                // trống. Vòng lặp đó chạy tới khi hết ngân sách token.
+                'ONE VALUE PER FIELD. Each field holds only what its name and description say.',
+                '  - Never put two fields\' content into one field. If a row has why/answer/evidence,',
+                '    the question goes ONLY in why, the answer ONLY in answer, the proof ONLY in evidence.',
+                '  - Never repeat a field\'s own content inside itself, and never restate the question',
+                '    inside the answer.',
+                '  - Field values are plain text. No markdown, no "**Evidence:**" style labels,',
+                '    no headings, no bullet markers.',
+                '  - Do not append citations to a field value. Citations belong in the sources array.',
+                '  - Every row of an array must be DISTINCT. If you have nothing new to add, stop the',
+                '    array; a short correct list beats a padded one.',
+                '```json',
+                JSON.stringify(fields),
+                '```',
+                ...(spelledOut.length ? ['', `${code} fields with strict constraints — these are checked and rejected:`, ...spelledOut] : []),
+            ].join('\n'));
+        } catch { }
+    }
+
+    const prevNotice = previousDisciplines.length
+        ? [
+            '## PREVIOUSLY GENERATED STEPS IN THIS REPORT',
+            'Use these already established facts and decisions for consistency:',
+            '```json',
+            JSON.stringify(previousDisciplines.map((d) => ({ code: d.code, title: d.title, summary: d.summary, data: d.data }))),
+            '```',
+            '',
+        ].join('\n')
+        : '';
+
+    const rankings: Record<string, StepRanking> = stepRanking ? { [code]: stepRanking } : {};
+
+    return [
+        `## TARGET DISCIPLINE: ${code} (${DISCIPLINE_TITLES[code]})`,
+        `## ORIGIN\n${originNotice}`,
+        '',
+        gapNotice,
+        prevNotice,
+        '## CASE CONTEXT',
+        '```json',
+        JSON.stringify(context),
+        '```',
+        '',
+        '## ENRICHMENT',
+        '```json',
+        JSON.stringify(enrichment),
+        '```',
+        '',
+        '## INDEPENDENT DIAGNOSIS',
+        '```json',
+        JSON.stringify(independent.finding),
+        '```',
+        '',
+        '## PRECEDENT CASES',
+        renderPrecedents(precedents),
+        renderStepRanking(precedents, rankings),
+        ...configuredDataSchemas,
+        ...configuredOutputs,
+    ].filter(Boolean).join('\n');
+}
+
+export function buildSummariesPrompt(
+    context: CaseContext,
+    enrichment: ContextEnrichment,
+    disciplines: import('./types').DisciplineDraft[],
+): string {
+    const originNotice = context.isCustomerFacing
+        ? 'This is a CUSTOMER COMPLAINT (Q1). Produce both internalSummary and customerSummary.'
+        : 'This is an INTERNAL DEFECT (Q3). Produce internalSummary, set customerSummary to null.';
+
+    return [
+        `## ORIGIN\n${originNotice}`,
+        '',
+        '## COMPLETE 8D DISCIPLINE REPORT',
+        '```json',
+        JSON.stringify(disciplines.map((d) => ({ code: d.code, title: d.title, summary: d.summary, content: d.content }))),
+        '```',
+        '',
+        'Generate internalSummary and customerSummary based on the above report.',
+    ].join('\n');
 }

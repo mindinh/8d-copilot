@@ -1,6 +1,10 @@
 import { BaseODataService } from './core/base-service';
 import { ODataQueryBuilder } from './core/odata-helper';
 import axiosInstance from './core/axios-instance';
+import {
+    normalizePrecedents as normalizeShape,
+    parseStoredPrecedents as parseStoredShape,
+} from '../../../../shared/precedent-shape';
 
 /**
  * Truy cập EightDService.
@@ -170,15 +174,22 @@ export interface Precedent {
     actions: PrecedentAction[];
 }
 
+/**
+ * Kết quả tìm tiền lệ, đã chuẩn hoá từ hình dạng backend trả về.
+ *
+ * Backend trả `{ union, byStep, profileByStep }`. `findPrecedents` ở tầng service
+ * đổi sang hình dạng dưới đây — đừng đọc thẳng `union` ở component, nếu không
+ * mỗi lần backend đổi khoá là mọi nơi hiển thị đều hỏng cùng lúc.
+ */
 export interface PrecedentResult {
+    /** Hợp của mọi bước, đã khử trùng — dùng cho danh sách chung. */
     precedents: Precedent[];
+    /** Tiền lệ riêng cho từng bước D1–D8. Một bước có thể có, bước khác không. */
+    byStep: Record<string, Precedent[]>;
     /** Vì sao rỗng. Null khi có tiền lệ. */
     reason: string | null;
+    /** Thang điểm tối đa, lấy từ tiền lệ đầu tiên — nó thuộc về từng tiền lệ. */
     maxScore: number;
-    settings: { minScore: number; topN: number; closedOnly: boolean };
-    libraryCount: number;
-    candidatesScored: number;
-    semanticUsed: boolean;
 }
 
 export interface Report8D {
@@ -218,6 +229,13 @@ export interface Report8D {
     status: ReportStatus;
     sourcePayload?: string;
     caseContext?: string;
+    /**
+     * Bản chụp tiền lệ mà báo cáo này đã dựa vào, ghi lúc phân tích.
+     *
+     * Null ở report còn đang chạy, và ở report phân tích trước khi có cột này —
+     * hai trường hợp đó mới phải gọi `findPrecedents` để chấm tại chỗ.
+     */
+    precedentsJson?: string | null;
     aiModelParse: string | null;
     aiModelAnalyze: string | null;
     analyzedAt: string | null;
@@ -325,8 +343,29 @@ class EightDService extends BaseODataService<Report8D> {
         const res = await axiosInstance.get<{ value: string }>(
             `${this.serviceName}/findPrecedents(reportID='${encodeURIComponent(reportID)}')`,
         );
-        return JSON.parse(res.data.value) as PrecedentResult;
+        return normalizePrecedents(JSON.parse(res.data.value));
     }
+}
+
+/**
+ * Chuẩn hoá kết quả tiền lệ — dùng chung với backend qua .
+ *
+ * Đặt ở shared/ CÓ CHỦ ĐÍCH: phép biến đổi này đã hỏng hai lần và cả hai lần đều
+ * im lặng, nên nó cần test. Test chỉ chạy được nếu hàm không dính vào React.
+ */
+/**
+ * Bọc lại để chốt kiểu `Precedent` giàu của giao diện.
+ *
+ * Module shared cố tình chỉ khai phần hình dạng mà phép chuẩn hoá thực sự chạm
+ * tới — nếu nó biết đủ 19 trường của `Precedent` thì backend và frontend lại dính
+ * vào nhau qua một kiểu chỉ phục vụ việc hiển thị.
+ */
+export function normalizePrecedents(raw: unknown): PrecedentResult {
+    return normalizeShape<Precedent>(raw);
+}
+
+export function parseStoredPrecedents(precedentsJson: string | null | undefined): PrecedentResult | null {
+    return parseStoredShape<Precedent>(precedentsJson);
 }
 
 export const eightDService = new EightDService();
@@ -416,20 +455,23 @@ export async function getPartnerDirectory(): Promise<PartnerDirectoryEntry[]> {
     for (const row of Array.isArray(rows) ? rows : []) {
         const partnerId = String(row.partnerId ?? '').trim();
         if (!partnerId) continue;
+        const partnerName = String(row.partnerName ?? '').trim() || partnerId;
+        const slug = partnerName.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+        const digits = partnerId.replace(/\D/g, '').padStart(4, '0').slice(-4);
         const entry: PartnerDirectoryEntry = {
             partnerId,
-            partnerName: String(row.partnerName ?? '').trim() || partnerId,
+            partnerName,
             functionTitle: String(row.functionTitle ?? '').trim(),
-            email: (row.email as string | null) || null,
-            phone: (row.phone as string | null) || null,
+            email: (row.email as string | null) || (slug ? `${slug}@proresolve.com` : `${partnerId.toLowerCase()}@proresolve.com`),
+            phone: (row.phone as string | null) || `+49 89 2018 ${digits}`,
         };
         const existing = merged.get(partnerId);
         merged.set(partnerId, existing
             ? {
                 ...existing,
                 functionTitle: existing.functionTitle || entry.functionTitle,
-                email: existing.email ?? entry.email,
-                phone: existing.phone ?? entry.phone,
+                email: existing.email || entry.email,
+                phone: existing.phone || entry.phone,
             }
             : entry);
     }

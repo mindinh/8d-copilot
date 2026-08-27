@@ -42,6 +42,8 @@ export interface TeamRow {
     partnerName: string;
     functionTitle: string;
     partnerRole: string;
+    email?: string | null;
+    phone?: string | null;
 }
 
 export interface InspectionRow {
@@ -223,6 +225,14 @@ export interface AnalyzeOutcome {
      */
     independent: unknown;
     models: { parse: string; analyze: string };
+    /**
+     * Tiền lệ đã chấm điểm trong lượt chạy này — `{ union, byStep, profileByStep }`.
+     *
+     * Kiểu để lỏng vì `findPrecedents.ts` import ngược lại file này. Nó được lưu
+     * nguyên văn vào `Reports.precedentsJson` để màn hình đọc lại đúng bộ tiền lệ
+     * mà báo cáo đã dựa vào, thay vì chấm lại và có thể ra kết quả khác.
+     */
+    precedents?: unknown;
     tokensUsed: number;
     durationMs: number;
     /** Ghi chú của postProcess: chỗ nào phải chữa sau khi model trả về. */
