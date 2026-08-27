@@ -58,6 +58,26 @@ export interface InspectionRow {
     outOfSpec: boolean | null;
 }
 
+/**
+ * Một lô kiểm (GD 17 — QALS/QAMR). Khác `InspectionRow` ở chỗ đây là DÂN SỐ:
+ * nhiều lô cho cùng một Material + Characteristic, tách theo thiết bị.
+ *
+ * ── Vì sao cần bản ghi từng lô, không dùng bản tổng hợp GD 16 ──
+ * GD 16 cho biết LUẬT (target, spec, action/warning limit). Nó không cho biết
+ * đồ gá nào đang hỏng. Câu hỏi của Is/Is-Not là "khác nhau ở đâu", và câu đó chỉ
+ * trả lời được khi có nhiều nhóm để so — tức là cần từng bản ghi.
+ */
+export interface InspectionLotRow {
+    lotId: string;
+    materialId: string;
+    characteristic: string;
+    /** Đồ gá / thiết bị (trường Equipment của QALS). Chiều để tách nhóm. */
+    equipment: string;
+    measuredValue: string;
+    /** `null` khi dataset không kết luận — không tự đoán, xem InspectionRow. */
+    conforming: boolean | null;
+}
+
 export interface IshikawaRow {
     category: string;
     description: string;
@@ -115,7 +135,38 @@ export interface CaseContext {
 
     inspections: InspectionRow[];
 
-    isIsNot: { is: string; isNot: string; notes: string | null } | null;
+    /**
+     * Dân số lô kiểm lịch sử (GD 17) cho Is/Is-Not của D2. Rỗng khi dataset
+     * không có — khi đó `isIsNot.applicable` phải là false, không phải là một
+     * so sánh bịa.
+     */
+    historicalInspectionLots: InspectionLotRow[];
+
+    /**
+     * So sánh Is / Is-Not của D2.
+     *
+     * `applicable = false` nghĩa là KHÔNG so được (không có đặc tính đo được,
+     * dưới hai nhóm thiết bị, hoặc độ chênh quá thấp) — khác hẳn với "chưa ai
+     * ghi". Giá trị được TÍNH ở `isIsNot.ts`; dòng có sẵn trong dataset chỉ là
+     * override.
+     */
+    isIsNot: {
+        /**
+         * `null` khi không so được — KHÔNG dùng chuỗi rỗng.
+         *
+         * Một ô trống sẽ được renderer in ra như một vế Is thật sự nhưng rỗng
+         * nghĩa, và `dirtyData.test.ts` bắt đúng lỗi đó: mọi trường văn bản
+         * trong CaseContext phải là null hoặc có nội dung, không có ở giữa.
+         */
+        is: string | null;
+        isNot: string | null;
+        notes: string | null;
+        applicable: boolean;
+        /** Mã lô đã dùng cho cả hai vế — bằng chứng để người đọc tự kiểm lại. */
+        citedLotIds: string[];
+        /** Vì sao không so được. Chỉ có giá trị khi `applicable = false`. */
+        reason: string | null;
+    } | null;
 
     /** Dòng Ishikawa có `is_root_cause = 'Y'`. Dataset đảm bảo đúng một dòng. */
     rootCause: {
@@ -172,6 +223,30 @@ export interface CaseContext {
 
 export const DISCIPLINE_CODES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] as const;
 export type DisciplineCode = (typeof DISCIPLINE_CODES)[number];
+
+/**
+ * Các bước có editor cấu hình (Data Schema / Prompt Guide / Form Mapping /
+ * Constraints).
+ *
+ * ── Vì sao là một hằng số riêng, không dùng thẳng DISCIPLINE_CODES ──
+ * Trước đây danh sách này bị viết cứng thành `['D1','D2','D3','D4']` ở SÁU chỗ
+ * (hai regex `/^D[1-4]$/` trong aiAdminService, hai mảng trong eightDAnalyzer,
+ * một bộ lọc khi seed, và hai bản sao ENRICHED_STEPS bên UI). Sáu nơi cùng khai
+ * một sự thật là sáu cơ hội để chúng lệch nhau — và chúng đã lệch: service từ
+ * chối `previewStepConfiguration` cho D5–D8 trong khi UI vẫn cho vào tab
+ * Similarity của đúng những bước đó.
+ *
+ * Giữ tên riêng thay vì thay thẳng bằng DISCIPLINE_CODES để chỗ nào hỏi "bước
+ * này cấu hình được không" vẫn đọc ra đúng câu hỏi đó, kể cả khi mai này có
+ * bước bị rút khỏi diện cấu hình.
+ */
+export const CONFIGURABLE_STEP_CODES = DISCIPLINE_CODES;
+export type ConfigurableStepCode = (typeof CONFIGURABLE_STEP_CODES)[number];
+
+/** `true` khi `code` là một bước có editor cấu hình. Dùng thay cho /^D[1-4]$/. */
+export function isConfigurableStepCode(code: string): code is ConfigurableStepCode {
+    return (CONFIGURABLE_STEP_CODES as readonly string[]).includes(code);
+}
 
 export const DISCIPLINE_TITLES: Record<DisciplineCode, string> = {
     D1: 'Establish the Team',

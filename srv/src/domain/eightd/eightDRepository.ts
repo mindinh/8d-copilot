@@ -90,6 +90,13 @@ export async function saveResult(reportID: string, outcome: AnalyzeOutcome): Pro
         | { finding?: { confidence?: number }; verdict?: { aiCategory?: string; agrees?: boolean } }
         | undefined;
 
+    // Xoá rồi ghi lại nghĩa là `stepStatus`/`approvedBy` của lần chạy trước BỊ
+    // MẤT — và điều đó là CỐ Ý. Một chữ ký duyệt là chữ ký cho nội dung cụ thể
+    // mà người đó đã đọc; giữ nó lại trên bản nháp mới do model vừa viết lại là
+    // gán cho người ta lời chứng thực cho thứ họ chưa từng nhìn thấy.
+    //
+    // Vết trong SuggestionAudit KHÔNG bị xoá theo: lịch sử "ai đã duyệt gì, lúc
+    // nào" vẫn còn nguyên, chỉ có trạng thái hiện tại là quay về Draft.
     await DELETE.from(DISCIPLINES).where({ report_ID: reportID });
 
     await INSERT.into(DISCIPLINES).entries(

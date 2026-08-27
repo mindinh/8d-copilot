@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "8d-copilot-attach",
+      "url": "http://localhost:5544",
+      "port": 5544
+    },
+    {
+      "name": "8d-copilot-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5544,
+      "autoPort": false
+    }
+  ]
+}

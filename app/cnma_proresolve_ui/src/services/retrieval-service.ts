@@ -62,6 +62,20 @@ export interface StepPrompt {
     version: number;
 }
 
+/**
+ * Bước đã có cấu hình cấu trúc (Data Schema / Form Mapping / Constraints) hay
+ * chưa — tức là có mở đủ bốn tab editor hay chỉ tab Similarity.
+ *
+ * Hỏi thẳng dữ liệu thay vì so với một danh sách mã bước. Trước đây hai
+ * component mỗi cái tự khai `ENRICHED_STEPS = ['D1','D2','D3','D4']`; hai bản
+ * sao của cùng một sự thật, và cả hai đều phải sửa tay mỗi lần backend bổ sung
+ * cấu hình cho một bước. Suy từ `formSchemaJson` thì UI tự đúng ngay khi
+ * `defaults.ts` có thêm schema cho D5–D8.
+ */
+export function hasStructuredConfig(prompt: StepPrompt): boolean {
+    return Boolean(prompt.formSchemaJson?.trim());
+}
+
 export interface ScoreBreakdown {
     criterionKey: string;
     label: string;
@@ -217,6 +231,28 @@ export async function resetRetrievalConfig(
 ) {
     const res = await axiosInstance.post(`${AI}/resetRetrievalConfig`, { scope });
     return unwrapAction<unknown>(res.data);
+}
+
+export interface StepConfigValidation {
+    valid: boolean;
+    /** Đúng câu mà lúc Save sẽ báo. `null` khi hợp lệ. */
+    error: string | null;
+}
+
+/**
+ * Kiểm tra bản nháp cấu hình bước mà không lưu.
+ *
+ * Gọi server thay vì tự kiểm bên này là CỐ Ý: yêu cầu R3.2 đòi trình duyệt và
+ * service từ chối giống hệt nhau, và cách duy nhất bảo đảm điều đó là chạy đúng
+ * một bộ luật. Viết lại luật bằng TypeScript ở đây sẽ tạo ra bản sao thứ hai,
+ * và bản sao thì trôi — rồi UI cho Save đúng thứ service chặn.
+ */
+export async function validateStepConfiguration(
+    stepCode: string,
+    draft: { inputSchemaJson: string; formSchemaJson: string; constraintsJson: string },
+): Promise<StepConfigValidation> {
+    const res = await axiosInstance.post(`${AI}/validateStepConfiguration`, { stepCode, ...draft });
+    return unwrapAction<StepConfigValidation>(res.data);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

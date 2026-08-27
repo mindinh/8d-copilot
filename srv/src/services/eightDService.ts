@@ -41,8 +41,16 @@ import {
     sweepStuckAnalyzing,
 } from '../domain/eightd/eightDRepository';
 import { PipelineError, type CaseContext } from '../domain/eightd/types';
+import {
+    closeReport,
+    getDisciplineActivity,
+    recordShownSuggestions,
+    recordSuggestionOutcome,
+    setDisciplineStatus,
+} from '../domain/eightd/disciplineWorkflow';
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
+import { getWorklistItem, markEightDCreated, syncWorklist } from '../domain/eightd/worklistRepository';
 
 const LOG = cds.log('eightd-service');
 
@@ -78,6 +86,26 @@ function runInBackground(reportID: string, payload: string): void {
         try {
             const outcome = await analyze(payload);
             await saveResult(reportID, outcome);
+
+            // Vết "đã trình bày" cho từng bản nháp, ghi SAU khi lưu và trong
+            // try/catch riêng: audit hỏng thì mất vết, còn báo cáo vẫn còn —
+            // chiều ngược lại thì không chấp nhận được.
+            //
+            // Hiện mỗi discipline một dòng `draft:<code>`. Các slice sau sẽ tách
+            // nhỏ hơn (từng người ở D1, từng bài học ở D8) bằng chính hàm này,
+            // chỉ đổi `suggestionKey`.
+            try {
+                await recordShownSuggestions(
+                    reportID,
+                    outcome.result.disciplines.map((d) => ({
+                        stepCode: d.code,
+                        suggestionKey: `draft:${d.code}`,
+                        payload: { summary: d.summary, sources: d.sources, dataBacked: d.dataBacked },
+                    })),
+                );
+            } catch (auditErr: any) {
+                LOG.warn(`Không ghi được vết đề xuất cho ${reportID}:`, auditErr?.message);
+            }
 
             LOG.info(
                 `Report ${reportID} xong trong ${(outcome.durationMs / 1000).toFixed(1)}s, ` +
@@ -171,6 +199,137 @@ export function registerEightDHandlers(srv: any): void {
 
         LOG.info(`Report ${reportID} (case ${row.notificationId}) đã xếp lịch chạy lại`);
         return reportID;
+    });
+
+    // ── syncWorklist ─────────────────────────────────────────────────────────
+    srv.on('syncWorklist', async (req: any) => {
+        const payload = req.data?.payload;
+
+        // Payload là TUỲ CHỌN: rỗng nghĩa là pull từ mock-data/incoming.
+        let cases: unknown[] | undefined;
+        if (typeof payload === 'string' && payload.trim()) {
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(payload);
+            } catch (e: any) {
+                return req.error(400, `payload không phải JSON hợp lệ: ${e.message}`);
+            }
+            cases = Array.isArray(parsed) ? parsed : [parsed];
+        }
+
+        return JSON.stringify(await syncWorklist(cases));
+    });
+
+    // ── createEightDFromWorklist ─────────────────────────────────────────────
+    srv.on('createEightDFromWorklist', async (req: any) => {
+        const itemID = req.data?.itemID;
+        if (typeof itemID !== 'string' || !itemID.trim()) {
+            return req.error(400, 'itemID là bắt buộc.');
+        }
+
+        const item = await getWorklistItem(itemID);
+        if (!item) return req.error(404, `Không tìm thấy dòng worklist ${itemID}.`);
+
+        // Đã mở 8D rồi thì trả về report cũ trong thông điệp lỗi, không mở bản
+        // thứ hai — hai report cho cùng một notification chỉ gây nhầm lẫn.
+        if (item.status === 'EightDCreated' && item.report_ID) {
+            return req.error(409, `Sự vụ ${item.notificationId} đã có 8D (report ${item.report_ID}).`);
+        }
+        if (!item.sourcePayload) {
+            return req.error(422, `Dòng worklist ${itemID} không có sourcePayload để mở 8D.`);
+        }
+
+        // Từ đây giống hệt analyzeFromJson: validate → map → tạo bản ghi → chạy nền.
+        let context;
+        try {
+            const raw = JSON.parse(item.sourcePayload);
+            const blocking = blockingIssues(validateDataset(raw));
+            if (blocking.length) {
+                return req.error(
+                    400,
+                    `Payload không dùng được: ` +
+                    blocking.map((i) => `[${i.constraintId}] ${i.message}`).join(' '),
+                );
+            }
+            context = mapCase(raw);
+        } catch (e: any) {
+            const code = e instanceof PipelineError ? e.code : 400;
+            return req.error(code, describe(e));
+        }
+
+        const reportID = await createReport(item.sourcePayload, context);
+
+        // Gắn report vào dòng worklist NGAY, trước khi job nền chạy: kể cả khi
+        // phân tích thất bại, dòng vẫn trỏ đúng về bản ghi Failed để chạy lại.
+        await markEightDCreated(itemID, reportID);
+
+        await getGlobalModelConfig();
+        runInBackground(reportID, item.sourcePayload);
+
+        LOG.info(`Worklist ${item.notificationId} → report ${reportID} đã xếp lịch phân tích`);
+        return reportID;
+    });
+
+    // ── Duyệt từng bước & đóng case ──────────────────────────────────────────
+    //
+    // `actor` luôn lấy từ `req.user`, không bao giờ từ `req.data`: để client tự
+    // khai mình là ai thì `approvedBy` không còn là bằng chứng gì cả.
+
+    const actorOf = (req: any): string => String(req.user?.id ?? 'anonymous');
+
+    /** Lỗi từ tầng domain đã mang sẵn `code` HTTP — chuyển nguyên vẹn ra ngoài. */
+    const rejectWith = (req: any, e: any) => req.error(e?.code ?? 500, describe(e));
+
+    srv.on('setDisciplineStatus', async (req: any) => {
+        const { disciplineID, status } = req.data ?? {};
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID là bắt buộc.');
+        }
+        try {
+            return JSON.stringify(await setDisciplineStatus(disciplineID, String(status ?? ''), actorOf(req)));
+        } catch (e: any) {
+            return rejectWith(req, e);
+        }
+    });
+
+    srv.on('recordSuggestionOutcome', async (req: any) => {
+        const { reportID, stepCode, suggestionKey, outcome, payload } = req.data ?? {};
+        if (typeof reportID !== 'string' || !reportID.trim()) {
+            return req.error(400, 'reportID là bắt buộc.');
+        }
+        try {
+            await recordSuggestionOutcome({
+                reportID,
+                stepCode: String(stepCode ?? '').toUpperCase(),
+                suggestionKey: String(suggestionKey ?? ''),
+                outcome: String(outcome ?? ''),
+                payload: payload ?? undefined,
+                actor: actorOf(req),
+            });
+            return JSON.stringify(await getDisciplineActivity(reportID));
+        } catch (e: any) {
+            return rejectWith(req, e);
+        }
+    });
+
+    srv.on('getDisciplineActivity', async (req: any) => {
+        const reportID = req.data?.reportID;
+        if (typeof reportID !== 'string' || !reportID.trim()) {
+            return req.error(400, 'reportID là bắt buộc.');
+        }
+        return JSON.stringify(await getDisciplineActivity(reportID));
+    });
+
+    srv.on('closeReport', async (req: any) => {
+        const reportID = req.data?.reportID;
+        if (typeof reportID !== 'string' || !reportID.trim()) {
+            return req.error(400, 'reportID là bắt buộc.');
+        }
+        try {
+            return JSON.stringify(await closeReport(reportID, actorOf(req)));
+        } catch (e: any) {
+            return rejectWith(req, e);
+        }
     });
 
     // ── findPrecedents ───────────────────────────────────────────────────────

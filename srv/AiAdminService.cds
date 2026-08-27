@@ -204,9 +204,34 @@ service AiAdminService {
     @requires: ['admin', 'Admin']
     function previewScore(caseA : String, caseB : String, profileKey : String) returns String;
 
-    /** Resolve one D1-D4 configuration against a sample case without exposing credentials. */
+    /** Resolve one step's configuration against a sample case without exposing credentials. */
     @requires: ['admin', 'Admin']
     action previewStepConfiguration(stepCode : String, payload : LargeString) returns String;
+
+    /**
+     * Kiểm tra một BẢN NHÁP cấu hình bước mà không lưu. Trả
+     * `{ valid, error }` — `error` là đúng câu mà lúc Save sẽ báo.
+     *
+     * ── Vì sao là một lời gọi server, không phải hàm kiểm tra bên trình duyệt ──
+     * Yêu cầu R3.2 nói trình duyệt và service phải từ chối GIỐNG HỆT nhau. Viết
+     * lại bộ luật đó bằng TypeScript phía UI là tạo ra bản sao thứ hai của cùng
+     * một quy tắc, và bản sao thì trôi: sửa một chỗ, quên chỗ kia, rồi UI cho
+     * Save đúng thứ service chặn — đúng cái nghịch lý mà yêu cầu muốn diệt.
+     *
+     * Ở đây gọi thẳng `normalizeStepConfig`, tức là CHÍNH đoạn code chạy lúc
+     * Save. Giống nhau do cấu tạo, không do kỷ luật con người. Đổi lấy một
+     * round-trip có debounce trên một màn hình admin — rẻ.
+     *
+     * Khác `previewStepConfiguration`: hàm kia cần một case mẫu để dựng input
+     * thật; hàm này chỉ xét bản thân cấu hình, nên gõ tới đâu kiểm tới đó được.
+     */
+    @requires: ['admin', 'Admin']
+    action validateStepConfiguration(
+        stepCode        : String,
+        inputSchemaJson : LargeString,
+        formSchemaJson  : LargeString,
+        constraintsJson : LargeString
+    ) returns String;
 
     /**
      * Ghi lại mặc định cho cấu hình tìm tiền lệ.

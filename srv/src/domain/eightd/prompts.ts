@@ -165,7 +165,13 @@ export const DEFAULT_DISCIPLINE_GUIDE: Record<DisciplineCode, string> = {
     When nothing is on record, propose the precedents' corrective actions and
     tie each to the hypothesis it would fix. Cite precedents#N.`,
 
-    D6: `No data. Write the verification plan as described in rule 4.`,
+    // D6 KHÔNG dùng hướng dẫn này để tạo ra nội dung cuối cùng: toàn bộ đầu ra
+    // D6 của model bị vứt và thay bằng kết quả tính ở `d6Verification.ts`
+    // (R2.6.1). Vẫn giữ một dòng ở đây vì lượt sinh chung đòi đủ 8 discipline
+    // trong schema — nói thẳng cho model biết là để nó đừng tiêu thinking budget
+    // vào một phần sẽ bị bỏ đi.
+    D6: `Return one short placeholder line. This step's output is replaced by a
+    computed action-status checklist and is never shown to the user.`,
 
     D7: `Report the preventive actions on record and how the FMEA entry should be
     updated. Where the dataset has no preventive action or no FMEA link, say so

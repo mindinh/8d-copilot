@@ -5,5 +5,6 @@ export { AiSettingsPage } from './ai-settings';
 export { ObjectSchemaPage } from './object-schema';
 export { StepPromptEditorPage } from './ai-settings/step-prompts-tab';
 export { WorkflowPage } from './workflow';
+export { WorklistPage } from './worklist';
 export { EightDListPage } from './eight-d';
 export { EightDDetailPage } from './eight-d/detail';

@@ -243,6 +243,15 @@ entity SuggestionAudit : cuid, managed {
     stepCode : String(4);
     /** shown | accepted | rejected | edited */
     action   : String(20);
+    /**
+     * Định danh đề xuất trong phạm vi một bước, ví dụ 'person:BP-10021' hay
+     * 'lesson:8D-10047950#2'.
+     *
+     * Cần có vì một bước phát nhiều đề xuất: không có khoá này thì ba dòng
+     * `accepted` của D1 không phân biệt được đã nhận ai, và trạng thái
+     * 'In review' suy ra từ audit sẽ đúng nhưng không giải thích được.
+     */
+    suggestionKey : String(120);
     /** JSON của đề xuất tại thời điểm đó. */
     payload  : LargeString;
     /** Người thao tác. `createdBy` của `managed` giữ user kỹ thuật. */

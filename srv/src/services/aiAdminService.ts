@@ -1,6 +1,6 @@
 import cds from '@sap/cds';
 import { buildFlexibleResponseSchema, buildRuntimeSources, normalizeStepConfig } from '../domain/eightd/runtimeConfig';
-import type { DisciplineCode } from '../domain/eightd/types';
+import { CONFIGURABLE_STEP_CODES, isConfigurableStepCode, type DisciplineCode } from '../domain/eightd/types';
 import { mapCase } from '../domain/eightd/caseMapper';
 import { getStepPromptRuntimeConfig } from '../domain/eightd/precedent/configRepository';
 import { ENTITIES } from '../config/ai';
@@ -369,7 +369,7 @@ export function registerAiAdminHandlers(srv: any): void {
   });
   srv.on('previewStepConfiguration', async (req: any) => {
     const stepCode = String(req.data?.stepCode ?? req.params?.[0]?.stepCode ?? '').toUpperCase();
-    if (!/^D[1-4]$/.test(stepCode)) return req.reject(400, 'stepCode must be D1, D2, D3, or D4');
+    if (!isConfigurableStepCode(stepCode)) return req.reject(400, `stepCode must be one of ${CONFIGURABLE_STEP_CODES.join(', ')}`);
     try {
       const context = mapCase(JSON.parse(String(req.data?.payload ?? '')));
       const raw = await getStepPromptRuntimeConfig(stepCode);
@@ -381,6 +381,32 @@ export function registerAiAdminHandlers(srv: any): void {
       return req.reject(400, error instanceof Error ? error.message : 'Preview failed');
     }
   });
+  /**
+   * Kiểm tra bản nháp cấu hình mà không lưu.
+   *
+   * Cố tình KHÔNG `req.reject` khi cấu hình sai: cấu hình sai là kết quả hợp lệ
+   * của một lần kiểm tra, không phải lỗi của lời gọi. Trả 400 thì mỗi lần người
+   * dùng gõ dở một dấu ngoặc, UI lại phải bóc lỗi HTTP ra để hiện một thông báo
+   * bình thường.
+   */
+  srv.on('validateStepConfiguration', async (req: any) => {
+    const stepCode = String(req.data?.stepCode ?? '').toUpperCase();
+    if (!isConfigurableStepCode(stepCode)) {
+      return JSON.stringify({ valid: false, error: `stepCode must be one of ${CONFIGURABLE_STEP_CODES.join(', ')}` });
+    }
+    try {
+      // Chính hàm chạy lúc Save — xem ghi chú trong AiAdminService.cds.
+      normalizeStepConfig(stepCode as DisciplineCode, {
+        inputSchemaJson: String(req.data?.inputSchemaJson ?? ''),
+        formSchemaJson: String(req.data?.formSchemaJson ?? ''),
+        constraintsJson: String(req.data?.constraintsJson ?? ''),
+      });
+      return JSON.stringify({ valid: true, error: null });
+    } catch (error) {
+      return JSON.stringify({ valid: false, error: error instanceof Error ? error.message : 'Invalid step configuration' });
+    }
+  });
+
   srv.on('resetRetrievalConfig', async (req: any) => resetRetrievalConfig(req.data?.scope ?? 'all'));
 
   srv.before(['UPDATE', 'CREATE'], 'StepPrompts', (req: any) => {
@@ -397,7 +423,7 @@ export function registerAiAdminHandlers(srv: any): void {
       req.reject(400, 'combinedPrompt must not exceed 80 lines');
     }
     const stepCode = String(req.data?.stepCode ?? '').toUpperCase();
-    if (/^D[1-4]$/.test(stepCode)) {
+    if (isConfigurableStepCode(stepCode)) {
       try {
         normalizeStepConfig(stepCode as DisciplineCode, req.data);
       } catch (error) {

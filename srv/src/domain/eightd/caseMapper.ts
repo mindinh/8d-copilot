@@ -20,11 +20,13 @@ import {
     type ActionRow,
     type CaseContext,
     type FiveWhyRow,
+    type InspectionLotRow,
     type InspectionRow,
     type IshikawaRow,
     type TeamRow,
 } from './types';
 import { isDeliberateNA, isRootCauseFlag } from './datasetValidator';
+import { computeIsIsNot } from './isIsNot';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // So sánh đo đạc với dung sai
@@ -322,6 +324,20 @@ export function extractDeepCase(raw: any): Row | null {
         spec_value: r.specValue ?? r.spec_value,
     }));
 
+    // GD 17 — dân số lô kiểm lịch sử, nguồn của Is/Is-Not. Nhận nhiều tên gọi
+    // vì các bản export khác nhau đặt tên khác nhau; thiếu hẳn cũng không sao,
+    // `computeIsIsNot` sẽ trả "không áp dụng".
+    const historicalLots = getArray(
+        obj.historicalInspectionLots ?? obj.historical_inspection_lots ?? obj.inspectionLots ?? obj.inspection_lots,
+    ).map((r) => stamp({
+        lot_id: r.lotId ?? r.lot_id ?? r.inspectionLot ?? r.inspection_lot,
+        material_id: r.materialId ?? r.material_id,
+        characteristic: r.characteristic,
+        equipment: r.equipment ?? r.equipmentId ?? r.equipment_id ?? r.fixture,
+        measured_value: r.measuredValue ?? r.measured_value,
+        conforming: r.conforming ?? r.isConforming ?? r.is_conforming,
+    }));
+
     const ishikawa = getArray(obj.causesIshikawa ?? obj.causes_ishikawa ?? obj.ishikawa).map((r) => stamp({
         category: r.category,
         description: r.description,
@@ -416,6 +432,7 @@ export function extractDeepCase(raw: any): Row | null {
         cost_copq: costList,
         lessons_learned: llList,
         is_is_not: iinList,
+        historical_inspection_lots: historicalLots,
         customer_reference: crefList,
         spc_process_data: [],
     };
@@ -550,14 +567,57 @@ export function mapCase(raw: any): CaseContext {
 
     // Is/Is-Not chỉ có giá trị khi có ít nhất một vế. Cả hai trống thì bỏ hẳn —
     // đây là công cụ khoanh vùng của D2, và một bảng rỗng không khoanh được gì.
+    // ── Is / Is-Not ──
+    // Dòng có sẵn trong dataset là OVERRIDE; giá trị mặc định được TÍNH từ dân
+    // số lô kiểm (GD 17). Ngược thứ tự so với bản đầu của file này, và có lý do:
+    // kỹ thuật này chỉ có giá trị khi hai vế thực sự tương phản trên dữ liệu, mà
+    // điều đó phải đếm mới biết. Một dòng chép tay trong dataset có thể đúng,
+    // nhưng nó không mang theo mã lô nào để người đọc kiểm lại.
+    const historicalInspectionLots: InspectionLotRow[] = rows(data, 'historical_inspection_lots').map((r) => ({
+        lotId: String(r.lot_id ?? ''),
+        materialId: String(r.material_id ?? ''),
+        characteristic: String(r.characteristic ?? ''),
+        equipment: String(r.equipment ?? ''),
+        measuredValue: String(r.measured_value ?? ''),
+        conforming: r.conforming == null || r.conforming === ''
+            ? null
+            : /^(y|yes|true|1|conforming)$/i.test(String(r.conforming)),
+    }));
+
     const iinRow = one(data, 'is_is_not');
     const iinIs = text(iinRow?.is_where_when_it_happens);
     const iinIsNot = text(iinRow?.is_not_where_when_it_doesnt);
-    const isIsNot = iinIs || iinIsNot
-        ? { is: iinIs ?? '', isNot: iinIsNot ?? '', notes: text(iinRow?.notes) }
-        : null;
-    if (!isIsNot) {
-        gaps.push('No Is / Is-Not comparison recorded — the problem boundary is undefined.');
+
+    let isIsNot: CaseContext['isIsNot'];
+    if (iinIs || iinIsNot) {
+        isIsNot = {
+            is: iinIs ?? '',
+            isNot: iinIsNot ?? '',
+            notes: text(iinRow?.notes),
+            applicable: true,
+            citedLotIds: [],
+            reason: null,
+        };
+    } else {
+        const computed = computeIsIsNot(
+            historicalInspectionLots,
+            String(material.material_id ?? note.material_id ?? ''),
+            (inspections.find((row) => row.outOfSpec === true) ?? inspections[0])?.characteristic ?? '',
+        );
+        isIsNot = {
+            is: computed.is,
+            isNot: computed.isNot,
+            notes: computed.notes,
+            applicable: computed.applicable,
+            citedLotIds: computed.citedLotIds,
+            reason: computed.reason,
+        };
+        // "Không so được" là một câu trả lời, không phải một khoảng trống. Chỉ
+        // báo gap khi thiếu hẳn dữ liệu để so — nếu đã tính ra là không tương
+        // phản thì đó là kết luận, và nó đứng ở `reason`.
+        if (!computed.applicable && !historicalInspectionLots.length) {
+            gaps.push('No Is / Is-Not comparison possible — no historical inspection lots in the dataset.');
+        }
     }
 
     // ── Khách hàng ──
@@ -602,6 +662,7 @@ export function mapCase(raw: any): CaseContext {
             workCenterDesc: id(workCenter.description),
         },
         inspections,
+        historicalInspectionLots,
         isIsNot,
         rootCause: rootRow
             ? {

@@ -24,6 +24,10 @@
  *   inspections        số đo thật, đây là bằng chứng gốc
  *   ishikawa mô tả     dữ liệu điều tra từng nhánh, KHÔNG có kết luận
  *   isIsNot            công cụ khoanh vùng kinh điển của D2
+ *   historicalInspectionLots  dân số lô để tự so — CHỈ có số đo và mã thiết bị,
+ *                      không mang kết luận nào của kỹ sư, nên chẩn đoán mù được
+ *                      thấy. Cắt nó đi là bắt AI đoán trong khi bằng chứng mạnh
+ *                      nhất của D2 đang nằm ngay đó.
  *   actions.containment hành động bảo vệ, không nói gì về nguyên nhân
  *   header, product    bối cảnh
  */
@@ -37,6 +41,7 @@ export interface BlindEvidence {
     product: CaseContext['product'];
     inspections: CaseContext['inspections'];
     isIsNot: CaseContext['isIsNot'];
+    historicalInspectionLots: CaseContext['historicalInspectionLots'];
     /** Sáu nhánh Ishikawa, ĐÃ BỎ cờ `isRootCause`. */
     investigationFindings: Array<{
         category: string;
@@ -56,6 +61,7 @@ export function buildBlindEvidence(context: CaseContext): BlindEvidence {
         product: context.product,
         inspections: context.inspections,
         isIsNot: context.isIsNot,
+        historicalInspectionLots: context.historicalInspectionLots,
         investigationFindings: context.ishikawa.map((r) => ({
             category: r.category,
             finding: r.description,

@@ -36,6 +36,54 @@ export interface Discipline8D {
     validationJson: string | null;
     configVersion: string | null;
     aiGenerated: boolean;
+    /** 'Draft' | 'Complete' — do người đặt. AI không bao giờ ghi cột này. */
+    stepStatus: StoredStepStatus | null;
+    approvedBy: string | null;
+    approvedAt: string | null;
+}
+
+/** Hai giá trị được LƯU. 'InReview' không nằm ở đây — nó được suy ra. */
+export type StoredStepStatus = 'Draft' | 'Complete';
+
+/**
+ * Trạng thái HIỆN cho người dùng — ba giá trị, trong khi chỉ hai được lưu.
+ * 'InReview' do server suy ra từ vết audit accepted/edited khi bước còn Draft.
+ */
+export type DerivedStepState = 'Draft' | 'InReview' | 'Complete';
+
+export type SuggestionOutcome = 'shown' | 'accepted' | 'rejected' | 'edited';
+
+/**
+ * Quyết định mới nhất trên một đề xuất.
+ *
+ * Đây là thứ dựng nên bảng "đã chốt": nhận một gợi ý CHÍNH LÀ hành động giao
+ * việc, nên không có bảng roster/task riêng — bảng đó là các dòng `accepted`
+ * đọc lại từ vết kiểm toán.
+ */
+export interface StepDecision {
+    suggestionKey: string;
+    outcome: Exclude<SuggestionOutcome, 'shown'>;
+    payload: unknown;
+    decidedBy: string | null;
+    decidedAt: string | null;
+}
+
+export interface StepActivity {
+    code: string;
+    disciplineID: string;
+    stepStatus: StoredStepStatus;
+    state: DerivedStepState;
+    approvedBy: string | null;
+    approvedAt: string | null;
+    counts: Record<SuggestionOutcome, number>;
+    decisions: StepDecision[];
+}
+
+export interface ClosureGate {
+    passed: boolean;
+    /** Các bước còn thiếu, theo thứ tự D1→D7. Rỗng khi `passed`. */
+    incomplete: string[];
+    message: string;
 }
 
 /** Một bước trong chuỗi 5-Why do AI tự dựng khi chưa thấy đáp án. */
@@ -254,6 +302,60 @@ class EightDService extends BaseODataService<Report8D> {
         return res.data.value;
     }
 
+    // ── Duyệt từng bước & đóng case ──────────────────────────────────────────
+
+    /**
+     * Trạng thái + số liệu audit của cả 8 bước trong MỘT lời gọi.
+     *
+     * Là OData `function`, nên GET với tham số trong ngoặc — không phải POST như
+     * mấy action bên trên. Gọi nhầm cách thì server trả 405.
+     */
+    async getDisciplineActivity(reportID: string): Promise<StepActivity[]> {
+        const res = await axiosInstance.get<{ value: string }>(
+            `${this.serviceName}/getDisciplineActivity(reportID='${reportID}')`,
+        );
+        return JSON.parse(res.data.value) as StepActivity[];
+    }
+
+    /** Đặt trạng thái duyệt của một bước. Trả về dòng activity đã cập nhật. */
+    async setDisciplineStatus(
+        disciplineID: string,
+        status: StoredStepStatus,
+    ): Promise<StepActivity> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/setDisciplineStatus`,
+            { disciplineID, status },
+        );
+        return JSON.parse(res.data.value) as StepActivity;
+    }
+
+    /** Ghi vết một đề xuất. Trả về activity của cả report sau khi ghi. */
+    async recordSuggestionOutcome(input: {
+        reportID: string;
+        stepCode: string;
+        suggestionKey: string;
+        outcome: Exclude<SuggestionOutcome, 'shown'>;
+        payload?: unknown;
+    }): Promise<StepActivity[]> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/recordSuggestionOutcome`,
+            {
+                ...input,
+                payload: input.payload === undefined ? null : JSON.stringify(input.payload),
+            },
+        );
+        return JSON.parse(res.data.value) as StepActivity[];
+    }
+
+    /** Đóng case. Server tính lại cổng D1–D7 tại thời điểm bấm; chưa đủ thì 409. */
+    async closeReport(reportID: string): Promise<ClosureGate> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/closeReport`,
+            { reportID },
+        );
+        return JSON.parse(res.data.value) as ClosureGate;
+    }
+
     /**
      * Case tiền lệ của một report, kèm điểm và diễn giải từng tiêu chí.
      *
@@ -265,7 +367,27 @@ class EightDService extends BaseODataService<Report8D> {
         const res = await axiosInstance.get<{ value: string }>(
             `${this.serviceName}/findPrecedents(reportID='${encodeURIComponent(reportID)}')`,
         );
-        return JSON.parse(res.data.value) as PrecedentResult;
+        const parsed = JSON.parse(res.data.value);
+
+        // Dạng phẳng cũ — trả nguyên vẹn.
+        if (Array.isArray(parsed?.precedents)) return parsed as PrecedentResult;
+
+        // Dạng theo-từng-bước mới (`PerStepPrecedents`): `union` là danh sách hợp
+        // nhất đánh số MỘT LẦN cho cả tám bước — đúng thứ panel cần hiển thị, và
+        // đúng thứ trích dẫn `precedents#N` trong báo cáo trỏ tới. Metadata phần
+        // đầu (ngưỡng, kho, số ứng viên) lấy từ bước D4 làm đại diện: D4 là bước
+        // tra tiền lệ kinh điển và luôn có mặt trong `byStep`.
+        const rep = parsed?.byStep?.D4
+            ?? (Object.values(parsed?.byStep ?? {})[0] as PrecedentResult | undefined);
+        return {
+            precedents: parsed?.union ?? [],
+            reason: rep?.reason ?? null,
+            maxScore: rep?.maxScore ?? 0,
+            settings: rep?.settings ?? { minScore: 0, topN: 0, closedOnly: true },
+            libraryCount: rep?.libraryCount ?? 0,
+            candidatesScored: rep?.candidatesScored ?? 0,
+            semanticUsed: rep?.semanticUsed ?? false,
+        };
     }
 }
 

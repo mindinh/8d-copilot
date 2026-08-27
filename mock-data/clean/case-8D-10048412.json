@@ -170,5 +170,63 @@
     "complaintReference": "N/A - internal defect, no customer reference",
     "customerPlantContact": "N/A",
     "slaResponseDue": "N/A"
-  }
+  },
+  "historicalInspectionLots": [
+    {
+      "lotId": "INS-80411",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-002",
+      "measuredValue": "0.32mm",
+      "conforming": "N"
+    },
+    {
+      "lotId": "INS-80412",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-002",
+      "measuredValue": "0.28mm",
+      "conforming": "N"
+    },
+    {
+      "lotId": "INS-80413",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-002",
+      "measuredValue": "0.09mm",
+      "conforming": "Y"
+    },
+    {
+      "lotId": "INS-80414",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-002",
+      "measuredValue": "0.21mm",
+      "conforming": "N"
+    },
+    {
+      "lotId": "INS-80421",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-005",
+      "measuredValue": "0.06mm",
+      "conforming": "Y"
+    },
+    {
+      "lotId": "INS-80422",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-005",
+      "measuredValue": "0.08mm",
+      "conforming": "Y"
+    },
+    {
+      "lotId": "INS-80423",
+      "materialId": "MAT-10247",
+      "characteristic": "Flange burr height",
+      "equipment": "EQ-MILL07-005",
+      "measuredValue": "0.07mm",
+      "conforming": "Y"
+    }
+  ]
 }

@@ -200,7 +200,13 @@ export async function seedRetrievalConfig(): Promise<void> {
             LOG.info(`Đã seed ${missing.length} dòng prompt bước D`);
         }
 
-        for (const configuredDefault of DEFAULT_STEP_PROMPTS.filter((prompt) => ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode))) {
+        // Chỉ những default THỰC SỰ có cấu hình cấu trúc mới cần vá vào bảng.
+        // Trước đây chỗ này liệt kê cứng D1–D4 — đúng kết quả, sai lý do: D5–D8
+        // bị bỏ qua vì chúng chưa có formSchema, chứ không phải vì chúng là
+        // D5–D8. Hỏi thẳng "default này có schema không" thì khi một bước được
+        // bổ sung cấu hình trong `defaults.ts`, nó tự vào diện seed mà không ai
+        // phải nhớ sửa thêm một danh sách ở đây.
+        for (const configuredDefault of DEFAULT_STEP_PROMPTS.filter((prompt) => String(prompt.formSchemaJson ?? '').trim())) {
             const current = await db.run(SELECT.one.from(STEP_PROMPTS).where({ stepCode: configuredDefault.stepCode }));
             const patch: Record<string, string | number> = {};
             for (const field of ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'] as const) {

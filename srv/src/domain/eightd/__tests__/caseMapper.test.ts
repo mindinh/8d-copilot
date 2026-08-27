@@ -194,6 +194,42 @@ describe('mapCase — phương án dự phòng và lỗi', () => {
         expect(fromNested.actions.corrective).toHaveLength(fromData.actions.corrective.length);
     });
 
+    it('map được dân số lô kiểm GD 17', () => {
+        const ctx = mapCase(load(Q3_MACHINE));
+        expect(ctx.historicalInspectionLots).toHaveLength(7);
+        expect(ctx.historicalInspectionLots[0]).toMatchObject({
+            lotId: 'INS-80411',
+            equipment: 'EQ-MILL07-002',
+            characteristic: 'Flange burr height',
+            conforming: false,   // 'N' phải thành false, không phải truthy string
+        });
+        expect(ctx.historicalInspectionLots.filter((l) => l.conforming).length).toBe(4);
+    });
+
+    it('dòng is_is_not có sẵn trong dataset THẮNG giá trị tính', () => {
+        // File này có sẵn isIsNot chép tay. Override phải thắng, và khi thắng thì
+        // không có mã lô nào để trích — đó là lý do bản tính mới là mặc định.
+        const ctx = mapCase(load(Q3_MACHINE));
+        expect(ctx.isIsNot?.applicable).toBe(true);
+        expect(ctx.isIsNot?.is).toContain('X240 flange edge');
+        expect(ctx.isIsNot?.citedLotIds).toEqual([]);
+    });
+
+    it('không có dòng is_is_not thì TÍNH từ GD 17, kèm mã lô truy được', () => {
+        const raw = load(Q3_MACHINE);
+        delete (raw.data ?? raw).isIsNot;
+        const ctx = mapCase(raw);
+
+        expect(ctx.isIsNot?.applicable).toBe(true);
+        // EQ-MILL07-002: 3/4 hỏng (75%). EQ-MILL07-005: 0/3 (0%).
+        expect(ctx.isIsNot?.is).toContain('EQ-MILL07-002');
+        expect(ctx.isIsNot?.is).toContain('3/4');
+        expect(ctx.isIsNot?.isNot).toContain('EQ-MILL07-005');
+        expect(ctx.isIsNot?.isNot).toContain('0/3');
+        // Khác hẳn override: bản tính mang theo bằng chứng để đếm lại.
+        expect(ctx.isIsNot?.citedLotIds).toHaveLength(7);
+    });
+
     it('ném PipelineError 400 khi payload không phải Golden Dataset', () => {
         expect(() => mapCase({ hello: 'world' })).toThrow(PipelineError);
         try {

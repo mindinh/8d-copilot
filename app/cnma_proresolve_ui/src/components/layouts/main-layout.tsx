@@ -7,6 +7,7 @@ import {
     Boxes,
     Workflow,
     ClipboardList,
+    Inbox,
     Menu,
     ChevronLeft,
     ChevronRight,
@@ -44,6 +45,7 @@ function useNavTree(): NavEntry[] {
     const { t } = useTranslation();
     return [
         { type: 'leaf', to: '/', icon: LayoutDashboard, label: t('nav.home') },
+        { type: 'leaf', to: '/worklist', icon: Inbox, label: 'Defect Worklist' },
         { type: 'leaf', to: '/8d', icon: ClipboardList, label: '8D Reports' },
         { type: 'leaf', to: '/organization', icon: Building2, label: 'Organization' },
         // Lưu ý: cờ `adminOnly` có trong interface NavLeaf nhưng CHƯA được dùng

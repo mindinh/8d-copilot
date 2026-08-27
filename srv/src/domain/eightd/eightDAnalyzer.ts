@@ -59,7 +59,11 @@ import {
     type IndependentAnalysis,
     type IndependentFinding,
 } from './independentAnalysis';
+import { applyComputedD6 } from './d6Verification';
+import { applyResolvedProblemFields } from './fiveW2H';
+import { applyD8Search } from './d8Closure';
 import {
+    CONFIGURABLE_STEP_CODES,
     PipelineError,
     type AnalyzeOutcome,
     type CaseContext,
@@ -213,7 +217,7 @@ async function generateReport(
 
     // Hướng dẫn từng discipline admin chỉnh trên UI. Bảng rỗng ⇒ dùng hằng số
     // trong `prompts.ts`, tức là prompt y như cũ.
-    const configurableCodes = ['D1', 'D2', 'D3', 'D4'] as const;
+    const configurableCodes = CONFIGURABLE_STEP_CODES;
     const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
     const effectiveConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
         const config = configs[code];
@@ -290,8 +294,14 @@ async function generateReport(
         return { content: res.content, finishReason: res.finishReason };
     });
 
+    // D6 bị loại khỏi hợp đồng field GỬI CHO MODEL, không phải bị bỏ quên: nội
+    // dung của nó được tính thuần trong `computeD6` (R2.6.1). Loại ở đây là chỗ
+    // duy nhất bảo đảm điều đó — schema của D6 vẫn được khai đầy đủ để render và
+    // snapshot, nên nếu không cắt tại đây thì model vẫn được hỏi như thường.
     const configuredFieldContracts = Object.entries(normalizedConfigs).flatMap(([code, config]) =>
-        config?.formSchema?.fields.map((field) => ({ code, path: field.key, type: field.type, label: field.label, required: Boolean(field.constraints.required), items: field.items, properties: field.properties })) ?? [],
+        code === 'D6'
+            ? []
+            : config?.formSchema?.fields.map((field) => ({ code, path: field.key, type: field.type, label: field.label, required: Boolean(field.constraints.required), items: field.items, properties: field.properties })) ?? [],
     );
     if (configuredFieldContracts.length) {
         const structuredSchema = {
@@ -326,7 +336,7 @@ async function generateReport(
                         // gọi, nên nó phải thấy danh sách hợp nhất: giới hạn ở
                         // tiền lệ của một bước sẽ làm ba bước còn lại mất nguồn.
                         verifiedContext: unionSources,
-                        report: value.disciplines.filter((discipline) => configurableCodes.includes(discipline.code as typeof configurableCodes[number])),
+                        report: (value.disciplines ?? []).filter((discipline) => configurableCodes.includes(discipline.code as typeof configurableCodes[number])),
                         correction: repairHint || undefined,
                     }),
                 },
@@ -354,6 +364,12 @@ async function generateReport(
         }
     }
 
+    // ── D6: ghi đè bằng giá trị tính thuần ──
+    // Đặt SAU bước điền form và TRƯỚC validate: model vẫn viết phần tường thuật
+    // D6 trong lượt sinh báo cáo chính, nhưng phần dữ liệu có cấu trúc — cái
+    // được render và được ràng buộc kiểm — thì luôn là kết quả tính. Ghi đè chứ
+    // không merge: trộn hai nguồn ở đây sẽ cho ra một checklist mà không ai truy
+    // được dòng nào từ đâu.
     for (const discipline of value.disciplines ?? []) syncLegacyFields(discipline);
     const errors = (value.disciplines ?? []).flatMap((discipline) => {
         const config = normalizedConfigs[discipline.code];
@@ -472,7 +488,7 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         await generateReport(context, enrichment, independent, perStep);
 
     // ── Lưới an toàn ──
-    const constraintConfigs = Object.fromEntries((await Promise.all(['D1', 'D2', 'D3', 'D4'].map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {
+    const constraintConfigs = Object.fromEntries((await Promise.all(CONFIGURABLE_STEP_CODES.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const))).flatMap(([code, config]) => {
         if (!config?.constraintsJson) return [];
         try { return (JSON.parse(config.constraintsJson) as { enabled?: boolean }).enabled === false ? [] : [[code, config.constraintsJson]]; } catch { return []; }
     }));
@@ -485,6 +501,30 @@ export async function analyze(rawJson: string): Promise<AnalyzeOutcome> {
         constraintConfigs,
     );
     if (repairs.length) LOG.warn(`postProcess phải chữa ${repairs.length} chỗ:`, repairs);
+
+    // ── D6: thay bằng giá trị tính thuần (R2.6.1) ──
+    // Đặt SAU postProcess, không phải trong generateReport: postProcess là nơi
+    // bù discipline mà model bỏ sót bằng chỗ trống "Not generated". Chạy trước
+    // nó thì khi model quên D6 — chuyện có thật — bản tính của ta bị chính chỗ
+    // trống đó ghi đè, và D6 mất trắng.
+    //
+    // Ghi đè cả `data` lẫn văn xuôi. Đầu ra D6 của model bị vứt, không phải
+    // được tin: ràng buộc chỉ soi `data`, nên để nguyên `content` là chừa đúng
+    // một cửa cho câu "đã xác nhận có hiệu quả" đi qua mà không ai kiểm.
+    applyComputedD6(result, context);
+
+    // ── D2: chốt lưới 5W2H và Is/Is-Not bằng giá trị đã phân giải ──
+    // Chỉ sáu ô lưới cộng cặp Is/Is-Not, KHÔNG phải cả D2: đoạn văn vẫn của
+    // model. Chốt đúng những trường bắt buộc phải khớp với đoạn văn, để hai bên
+    // không thể nói hai con số khác nhau (R2.2.1).
+    applyResolvedProblemFields(result, context);
+
+    // ── D8: chốt phần TÌM KIẾM bằng kết quả truy hồi thật ──
+    // Bài học tiền lệ, trạng thái tìm kiếm và cờ tái diễn là kết quả của một
+    // phép tìm, không phải một lời kể. Để model tự điền thì "không có tiền lệ
+    // nào" và "có tiền lệ nhưng không ghi bài học" sẽ lẫn vào nhau đúng chỗ mà
+    // R2.8.7 bắt phải phân biệt.
+    await applyD8Search(result, context, { raw });
 
     const [parseModel, analyzeModel] = await Promise.all([
         resolveModel(ACTIVITY_PARSE),

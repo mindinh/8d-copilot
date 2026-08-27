@@ -18,7 +18,7 @@ import {
 } from '@cnma/react-ui';
 
 import {
-    AlertCircle, ArrowLeft, Braces, Cpu, RefreshCw, TriangleAlert,
+    AlertCircle, ArrowLeft, Braces, Cpu, Lock, RefreshCw, TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -32,6 +32,10 @@ import { SchemaDisciplineCard } from './schema-discipline-card';
 import { ReportStatusBadge } from './status-badge';
 import { ReasoningPanel } from './reasoning-panel';
 import { PrecedentPanel } from './precedent-panel';
+import { StepStateBadge, StepStatusBar } from './step-status-bar';
+import { StepWorkspace } from './step-workspace';
+import { STEP_CONFIRMATIONS, STEP_SUGGESTIONS } from './step-suggestion-config';
+import { StepConfirmCard } from './step-confirm-card';
 
 /**
  * Chi tiết một báo cáo 8D.
@@ -74,6 +78,42 @@ export function EightDDetailPage() {
             (query.state.data as Report8D | undefined)?.status === 'Analyzing'
                 ? POLL_INTERVAL_MS
                 : false,
+    });
+
+    /**
+     * Trạng thái duyệt của 8 bước. Truy vấn RIÊNG, không nhét vào `getWithDisciplines`:
+     * nó đổi mỗi lần người dùng bấm duyệt hay nhận một đề xuất, trong khi bản
+     * thân báo cáo thì không — gộp lại là kéo cả báo cáo về cho mỗi cú bấm.
+     */
+    const { data: activity } = useQuery({
+        queryKey: ['8d', 'activity', id],
+        queryFn: () => eightDService.getDisciplineActivity(id),
+        enabled: !!id && report?.status !== 'Analyzing',
+    });
+    const activityByCode = new Map((activity ?? []).map((row) => [row.code, row]));
+
+    /**
+     * Bản sao ĐỂ ĐỌC của cổng đóng case. Cổng thật do server tính lại lúc bấm
+     * (xem `closeReport`) — cái này chỉ để hiện còn thiếu bước nào mà không phải
+     * gọi thêm một lượt. Hai bên có thể lệch trong khoảnh khắc nếu tab khác vừa
+     * mở lại một bước; khi đó nút vẫn bấm được và server mới là bên từ chối.
+     */
+    const gate = (() => {
+        const steps = (activity ?? []).filter((row) => row.code !== 'D8');
+        const incomplete = steps.filter((row) => row.stepStatus !== 'Complete').map((row) => row.code);
+        return { steps, incomplete, passed: steps.length > 0 && incomplete.length === 0 };
+    })();
+
+    const closeCase = useMutation({
+        mutationFn: () => eightDService.closeReport(id),
+        onSuccess: (gate) => {
+            queryClient.invalidateQueries({ queryKey: ['8d'] });
+            toast.success('Case closed', { description: gate.message });
+        },
+        onError: (e: any) => {
+            // 409 mang sẵn danh sách bước còn thiếu — hiện nguyên văn.
+            toast.error(e?.response?.data?.error?.message ?? e?.message ?? 'Could not close this case');
+        },
     });
 
     const reanalyze = useMutation({
@@ -267,26 +307,138 @@ export function EightDDetailPage() {
                     <Tabs value={activeDiscipline} onValueChange={setActiveDiscipline} className="min-w-0">
                         <div className="rounded-xl border bg-card p-2 shadow-sm">
                             <TabsList className="grid h-auto w-full grid-cols-4 gap-1 bg-transparent p-0 sm:grid-cols-8">
-                                {disciplines.map((discipline) => (
-                                    <TabsTrigger
-                                        key={discipline.ID}
-                                        value={discipline.code}
-                                        className="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                                    >
-                                        {discipline.code}
-                                    </TabsTrigger>
-                                ))}
+                                {disciplines.map((discipline) => {
+                                    const state = activityByCode.get(discipline.code)?.state;
+                                    return (
+                                        <TabsTrigger
+                                            key={discipline.ID}
+                                            value={discipline.code}
+                                            className="min-w-0 gap-1.5 rounded-lg px-2 py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                        >
+                                            {discipline.code}
+                                            {/* Chấm màu chứ không phải viên chữ: tám tab phải vừa
+                                                một hàng, và ở đây chỉ cần biết bước nào xong. */}
+                                            {state && state !== 'Draft' && (
+                                                <span
+                                                    className={cn(
+                                                        'h-1.5 w-1.5 shrink-0 rounded-full',
+                                                        state === 'Complete' ? 'bg-success' : 'bg-info',
+                                                    )}
+                                                />
+                                            )}
+                                        </TabsTrigger>
+                                    );
+                                })}
                             </TabsList>
                         </div>
                         {disciplines.map((discipline) => (
-                            <TabsContent key={discipline.ID} value={discipline.code} className="mt-4 min-w-0">
+                            <TabsContent key={discipline.ID} value={discipline.code} className="mt-4 min-w-0 space-y-3">
+                                {/* Vỏ duyệt dùng chung, trên nội dung: người đọc thấy ngay
+                                    bước này đã chốt chưa trước khi đọc nó nói gì. */}
+                                <Card className="px-5 py-3">
+                                    <StepStatusBar
+                                        reportID={report.ID}
+                                        activity={activityByCode.get(discipline.code) ?? null}
+                                        readOnly={report.status === 'Closed'}
+                                    />
+                                </Card>
+                                {/* Bước kiểu gợi-ý-rồi-chốt được vùng làm việc gọn phụ
+                                    trách; toàn bộ field của schema lui xuống "Full detail".
+                                    Bước không có gợi ý (D2, D4, D6) vẫn render như cũ. */}
+                                {STEP_SUGGESTIONS[discipline.code] && discipline.resultJson && (
+                                    <StepWorkspace
+                                        discipline={discipline}
+                                        reportID={report.ID}
+                                        activity={activityByCode.get(discipline.code) ?? null}
+                                        readOnly={report.status === 'Closed'}
+                                    />
+                                )}
+
+                                {/* D2 và D4 không có danh sách để chọn, nhưng vẫn có
+                                    một phán quyết của con người — và ở D4 đó là phán
+                                    quyết nặng nhất của cả quy trình. */}
+                                {STEP_CONFIRMATIONS[discipline.code] && discipline.resultJson && (
+                                    <StepConfirmCard
+                                        discipline={discipline}
+                                        reportID={report.ID}
+                                        activity={activityByCode.get(discipline.code) ?? null}
+                                        readOnly={report.status === 'Closed'}
+                                    />
+                                )}
+
                                 {discipline.formSchemaJson && discipline.resultJson
-                                    ? <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} />
+                                    ? (
+                                        (STEP_SUGGESTIONS[discipline.code] || STEP_CONFIRMATIONS[discipline.code]) ? (
+                                            <details className="group rounded-xl border bg-card">
+                                                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+                                                    Full detail — every field the AI produced
+                                                </summary>
+                                                <div className="border-t p-4">
+                                                    <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} />
+                                                </div>
+                                            </details>
+                                        ) : (
+                                            <SchemaDisciplineCard discipline={discipline} caseContext={report.caseContext} />
+                                        )
+                                    )
                                     : <DisciplineCard discipline={discipline} />}
                             </TabsContent>
                         ))}
                     </Tabs>
                 </div>
+            )}
+
+            {/* ── Cổng đóng case ──
+                Hiện DANH SÁCH bước còn thiếu chứ không chỉ khoá nút: "không đóng
+                được" mà không nói vì sao thì người dùng phải mở lần lượt tám tab
+                để tự tìm. Cổng thật vẫn được server tính lại lúc bấm — phần này
+                chỉ là bản sao để đọc. */}
+            {activity && activity.length > 0 && report.status !== 'Analyzing' && (
+                <Card className="p-5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-semibold">Closure gate</h2>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                D1–D7 must be marked complete before this case can be closed.
+                            </p>
+                        </div>
+                        {report.status === 'Closed' ? (
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                                Case closed
+                            </Badge>
+                        ) : (
+                            <Button
+                                size="sm"
+                                disabled={closeCase.isPending || !gate.passed}
+                                onClick={() => closeCase.mutate()}
+                            >
+                                {closeCase.isPending ? <Spinner className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                                Close case
+                            </Button>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                        {gate.steps.map((row) => (
+                            <button
+                                key={row.code}
+                                type="button"
+                                onClick={() => setActiveDiscipline(row.code)}
+                                className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-muted"
+                                title={`Go to ${row.code}`}
+                            >
+                                <span className="font-mono font-semibold">{row.code}</span>
+                                <StepStateBadge state={row.state} />
+                            </button>
+                        ))}
+                    </div>
+
+                    {!gate.passed && report.status !== 'Closed' && (
+                        <p className="text-xs text-warning">
+                            Waiting on {gate.incomplete.join(', ')}.
+                        </p>
+                    )}
+                </Card>
             )}
 
             {/* ── Vết chạy & Model AI ── */}

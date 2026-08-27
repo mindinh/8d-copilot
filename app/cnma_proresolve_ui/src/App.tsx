@@ -12,6 +12,7 @@ import {
     ObjectSchemaPage,
     StepPromptEditorPage,
     WorkflowPage,
+    WorklistPage,
     EightDListPage,
     EightDDetailPage,
 } from '@/pages';
@@ -52,6 +53,7 @@ export default function App() {
                         <Route element={<MainLayout />}>
                             {/* ─── Application Routes ─── */}
                             <Route path="/" element={<HomePage />} />
+                            <Route path="/worklist" element={<WorklistPage />} />
                             <Route path="/8d" element={<EightDListPage />} />
                             <Route path="/8d/:id" element={<EightDDetailPage />} />
                             <Route path="/organization" element={<OrganizationPage />} />

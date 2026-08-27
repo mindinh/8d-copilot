@@ -57,8 +57,10 @@ describe('flexible step runtime configuration', () => {
         expect(() => normalizeStepConfig('D2', { constraintsJson: JSON.stringify({ rules: [{ type: 'magicRule' }] }) })).toThrow('unsupported rule type');
     });
 
-    it('ships structured D1-D4 defaults aligned with the renderer layout', () => {
-        for (const code of ['D1', 'D2', 'D3', 'D4'] as const) {
+    it('ships structured defaults for ALL EIGHT steps, aligned with the renderer layout', () => {
+        // Trước đây chỉ D1–D4 có cấu hình cấu trúc; D5–D8 rơi về prompt trần và
+        // không cấu hình được. Vòng lặp này là chỗ giữ cho điều đó không tái diễn.
+        for (const code of ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] as const) {
             const raw = DEFAULT_STEP_PROMPTS.find((item) => item.stepCode === code)!;
             const normalized = normalizeStepConfig(code, raw);
             expect(normalized.formSchema?.groups).toHaveLength(1);

@@ -156,11 +156,18 @@ const D1_FORM_SCHEMA = JSON.stringify({ fields: [
 
 const D2_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('problem.statement', 'Problem statement', 'callout', 'string', 12, { required: true, minLength: 30, maxLength: 600 }),
-    ...[['what', 'What'], ['where', 'Where'], ['when', 'When'], ['who', 'Who / affected party'], ['extent', 'Extent'], ['impact', 'Business / customer impact']].map(([key, label]) => structuredField(`problem.${key}`, label, 'text', 'string', 4, ['what', 'where', 'extent'].includes(key) ? { required: true } : {})),
+    // Sáu ô 5W2H: What / Where / When / Who / How / How Many (= extent).
+    // KHÔNG ô nào `required`, và đó là chủ ý: chúng được PHÂN GIẢI ở
+    // `fiveW2H.ts` sau khi hậu xử lý xong, nên bắt model điền là bắt nó làm một
+    // việc sẽ bị ghi đè — và một vòng "repair" vô ích mỗi khi nó bỏ trống.
+    ...[['what', 'What'], ['where', 'Where'], ['when', 'When'], ['who', 'Who / affected party'], ['how', 'How it was found'], ['extent', 'How many / extent'], ['impact', 'Business / customer impact']].map(([key, label]) => structuredField(`problem.${key}`, label, 'text', 'string', 4, {})),
     structuredField('problem.is', 'Is', 'positive-list', 'array', 6, {}, { items: { type: 'string' } }), structuredField('problem.isNot', 'Is not', 'negative-list', 'array', 6, {}, { items: { type: 'string' } }),
+    // Vì sao KHÔNG so được. Có trường riêng để "không áp dụng" là một câu trả
+    // lời hiện ra được, chứ không phải hai ô Is/Is-Not trống trông như bỏ quên.
+    structuredField('problem.isIsNotStatus', 'Is / Is-Not status', 'callout', 'string', 12, {}),
     structuredField('problem.measuredEvidence', 'Measured evidence', 'table', 'array', 12, {}, { items: { type: 'object', properties: { characteristic: { type: 'string' }, measured: { type: 'string' }, specification: { type: 'string' }, assessment: { type: 'string' } } } }),
     structuredField('problem.gaps', 'Missing facts', 'warning-list', 'array', 12, {}, { items: { type: 'string' } }), structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
-], groups: [group('d2-ai-result', 'AI-generated problem description', ['problem.statement', 'problem.what', 'problem.where', 'problem.when', 'problem.who', 'problem.extent', 'problem.impact', 'problem.is', 'problem.isNot', 'problem.measuredEvidence', 'problem.gaps', 'sources'], '100', 10)] }, null, 2);
+], groups: [group('d2-ai-result', 'AI-generated problem description', ['problem.statement', 'problem.what', 'problem.where', 'problem.when', 'problem.who', 'problem.how', 'problem.extent', 'problem.impact', 'problem.is', 'problem.isNot', 'problem.isIsNotStatus', 'problem.measuredEvidence', 'problem.gaps', 'sources'], '100', 10)] }, null, 2);
 
 const D3_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('containment.objective', 'Containment objective', 'callout', 'string', 12, { required: true, maxLength: 500 }),
@@ -176,6 +183,90 @@ const D4_FORM_SCHEMA = JSON.stringify({ fields: [
     structuredField('rootCause.evidenceGaps', 'Evidence gaps', 'warning-list', 'array', 12, {}, { items: { type: 'string' } }), structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
 ], groups: [group('d4-ai-result', 'AI-generated root cause analysis', ['rootCause.statement', 'rootCause.category', 'rootCause.fiveWhy', 'rootCause.contributingFactors', 'rootCause.independentVerification.verdict', 'rootCause.independentVerification.aiFinding', 'rootCause.independentVerification.recordedFinding', 'rootCause.independentVerification.rationale', 'rootCause.evidenceGaps', 'sources'], '100', 10)] }, null, 2);
 
+/**
+ * D5 — hành động khắc phục vĩnh viễn.
+ *
+ * ── Hai trường mang toàn bộ luật của bước này ──
+ * `origin` phân biệt hành động ĐÃ GHI với đề xuất từ tiền lệ. Là trường có cấu
+ * trúc chứ không phải khác biệt trong câu chữ: UI phải tô hai loại khác nhau mà
+ * không cần đọc hiểu văn bản, và một đề xuất bị đọc nhầm thành việc đã làm là
+ * kiểu sai nguy hiểm nhất ở bước này.
+ *
+ * `linkedCauseStep` buộc mỗi hành động trỏ về một mắt trong chuỗi nhân quả
+ * (R2.5.2). Hành động không gắn được vào nguyên nhân nào thì không phải hành
+ * động khắc phục — nó chỉ là một việc tốt ai đó nghĩ ra.
+ */
+const D5_FORM_SCHEMA = JSON.stringify({ fields: [
+    structuredField('corrective.objective', 'Corrective objective', 'callout', 'string', 12, { required: true, maxLength: 500 }),
+    structuredField('corrective.actions', 'Permanent corrective actions', 'table', 'array', 12, { required: true, minItems: 1 }, { items: { type: 'object', properties: { action: { type: 'string' }, owner: { type: 'string' }, status: { type: 'string' }, origin: { type: 'string' }, linkedCauseStep: { type: 'string' }, verification: { type: 'string' } } } }),
+    structuredField('corrective.rootCauseLink', 'How these actions remove the root cause', 'markdown', 'string', 6, { required: true, minLength: 30 }),
+    structuredField('corrective.effectivenessCriteria', 'Effectiveness criteria', 'tag-selector', 'array', 6, {}, { items: { type: 'string' } }),
+    structuredField('corrective.gaps', 'Open corrective gaps', 'warning-list', 'array', 12, {}, { items: { type: 'string' } }),
+    structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
+], groups: [group('d5-ai-result', 'AI-generated corrective action plan', ['corrective.objective', 'corrective.actions', 'corrective.rootCauseLink', 'corrective.effectivenessCriteria', 'corrective.gaps', 'sources'], '100', 10)] }, null, 2);
+
+/**
+ * D6 — kiểm chứng hiệu quả. KHÔNG có prompt guide, và đó là chủ ý.
+ *
+ * R2.6.1: D6 không được gọi model. Nó là phép đọc thuần danh sách action kèm
+ * status — thứ đã nằm sẵn trong dữ liệu. Cho model viết lại danh sách đó chỉ
+ * tạo cơ hội để một dòng bị diễn đạt thành "đã kiểm chứng hiệu quả", trong khi
+ * dataset không hề chứa bằng chứng kiểm chứng nào.
+ *
+ * Vì vậy ở đây chỉ khai form schema (để render và snapshot) và constraints (để
+ * chặn khẳng định hiệu quả); `combinedPrompt` cố tình bỏ trống.
+ */
+const D6_FORM_SCHEMA = JSON.stringify({ fields: [
+    structuredField('verification.checklist', 'Planned actions and status', 'table', 'array', 12, { required: true }, { items: { type: 'object', properties: { action: { type: 'string' }, actionType: { type: 'string' }, status: { type: 'string' }, sourcePath: { type: 'string' } } } }),
+    structuredField('verification.evidenceAvailable', 'Verification evidence on record', 'status', 'string', 4, { required: true, enum: ['None recorded'] }),
+    structuredField('verification.plan', 'How effectiveness should be verified', 'markdown', 'string', 8, {}),
+    structuredField('verification.gaps', 'What is missing before effectiveness can be claimed', 'warning-list', 'array', 12, {}, { items: { type: 'string' } }),
+    structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
+], groups: [group('d6-ai-result', 'Action status checklist (computed, not AI-drafted)', ['verification.checklist', 'verification.evidenceAvailable', 'verification.plan', 'verification.gaps', 'sources'], '100', 10)] }, null, 2);
+
+/**
+ * D7 — phòng ngừa tái diễn.
+ *
+ * `fmeaLink.status` chỉ có ba giá trị và KHÔNG có giá trị nào nghĩa là "đã cập
+ * nhật" (R2.7.2). FMEA là một tham chiếu chéo để người đi xác nhận, không phải
+ * một việc AI được quyền tuyên bố là đã xong.
+ */
+const D7_FORM_SCHEMA = JSON.stringify({ fields: [
+    structuredField('preventive.objective', 'Prevention objective', 'callout', 'string', 12, { required: true, maxLength: 500 }),
+    structuredField('preventive.actions', 'Preventive actions', 'table', 'array', 12, { required: true, minItems: 1 }, { items: { type: 'object', properties: { action: { type: 'string' }, owner: { type: 'string' }, status: { type: 'string' }, origin: { type: 'string' }, scope: { type: 'string' } } } }),
+    structuredField('preventive.fmeaLink.fmeaId', 'FMEA reference', 'text', 'string', 4, {}),
+    structuredField('preventive.fmeaLink.description', 'FMEA failure mode', 'text', 'string', 4, {}),
+    structuredField('preventive.fmeaLink.status', 'FMEA cross-reference', 'status', 'string', 4, { required: true, enum: ['Link found - confirm update manually', 'No FMEA linked to this notification', 'Not applicable'] }),
+    structuredField('preventive.systemicScope', 'Where else this applies', 'tag-selector', 'array', 6, {}, { items: { type: 'string' } }),
+    structuredField('preventive.gaps', 'Open prevention gaps', 'warning-list', 'array', 6, {}, { items: { type: 'string' } }),
+    structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
+], groups: [group('d7-ai-result', 'AI-generated prevention plan', ['preventive.objective', 'preventive.actions', 'preventive.fmeaLink.fmeaId', 'preventive.fmeaLink.description', 'preventive.fmeaLink.status', 'preventive.systemicScope', 'preventive.gaps', 'sources'], '100', 10)] }, null, 2);
+
+/**
+ * D8 — đóng case. Bốn phần, đúng như R3.3 đòi.
+ *
+ * ── `gate.*` có mặt để RENDER, không phải để model điền ──
+ * Cổng do server tính từ `stepStatus` rồi ghi đè lên bất kỳ thứ gì model trả
+ * (R2.8.2). Vẫn khai trong schema vì snapshot của báo cáo phải chứa kết quả cổng
+ * tại thời điểm sinh — bỏ ra ngoài thì báo cáo cũ không hiện lại được nó.
+ *
+ * ── Vì sao `precedentLessons` và `precedentStatus` tách đôi ──
+ * "Không có tiền lệ nào đủ điểm" và "có tiền lệ nhưng nó không ghi bài học nào"
+ * là HAI câu trả lời khác nhau (R2.8.7). Một mảng rỗng không phân biệt được
+ * chúng, nên trạng thái phải là trường riêng.
+ */
+const D8_FORM_SCHEMA = JSON.stringify({ fields: [
+    structuredField('gate.passed', 'D1–D7 complete', 'status', 'boolean', 4, { required: true }),
+    structuredField('gate.incomplete', 'Steps still open', 'tag-selector', 'array', 8, {}, { items: { type: 'string' } }),
+    structuredField('summary.whatWorked', 'What worked', 'markdown', 'string', 6, { required: true, minLength: 20 }),
+    structuredField('summary.whatDidnt', 'What did not work', 'markdown', 'string', 6, { required: true, minLength: 20 }),
+    structuredField('precedentLessons', 'Lessons from similar cases', 'table', 'array', 12, {}, { items: { type: 'object', properties: { caseId: { type: 'string' }, score: { type: 'string' }, lesson: { type: 'string' } } } }),
+    structuredField('precedentStatus', 'Precedent search outcome', 'status', 'string', 12, { required: true, enum: ['Lessons found', 'Precedent found, no lessons recorded', 'No precedent lessons available'] }),
+    structuredField('recurrence.fmeaToConfirm', 'FMEA entry to confirm as updated', 'text', 'string', 6, {}),
+    structuredField('recurrence.openCaseMatches', 'Open cases the same fix may apply to', 'warning-list', 'array', 6, {}, { items: { type: 'string' } }),
+    structuredField('sources', 'Evidence and traceability', 'evidence-list', 'array', 12, {}, { items: { type: 'string' } }),
+], groups: [group('d8-ai-result', 'AI-generated closure package', ['gate.passed', 'gate.incomplete', 'summary.whatWorked', 'summary.whatDidnt', 'precedentLessons', 'precedentStatus', 'recurrence.fmeaToConfirm', 'recurrence.openCaseMatches', 'sources'], '100', 10)] }, null, 2);
+
 function outputDataSchemaFromForm(formSchemaJson: string): string {
     const form = JSON.parse(formSchemaJson) as { fields: Array<{ key: string; label?: string; dataType?: string; items?: unknown; properties?: unknown; constraints?: { required?: boolean; enum?: unknown[] } }> };
     const schema: { type: 'object'; properties: Record<string, Record<string, unknown>>; required: string[]; additionalProperties: false } = { type: 'object', properties: {}, required: [], additionalProperties: false };
@@ -186,10 +277,84 @@ function outputDataSchemaFromForm(formSchemaJson: string): string {
     return JSON.stringify(schema, null, 2);
 }
 
-const STRUCTURED_CONFIG_OVERRIDES: Record<string, { description: string; combinedPrompt: string; inputSchemaJson: string; formSchemaJson: string; constraintsJson?: string }> = {
+/**
+ * `combinedPrompt` là TUỲ CHỌN, và D6 là lý do.
+ *
+ * Một bước không gọi model thì không có prompt để viết. Bắt buộc trường này sẽ
+ * ép ta đặt vào đó một đoạn hướng dẫn cho lời gọi không bao giờ xảy ra — và
+ * người đọc sau này sẽ tưởng sửa nó thì đổi được hành vi của D6.
+ */
+const STRUCTURED_CONFIG_OVERRIDES: Record<string, { description: string; combinedPrompt?: string; inputSchemaJson: string; formSchemaJson: string; constraintsJson?: string }> = {
     D1: { description: 'Build an explainable cross-functional team with per-member responsibilities, selection reasons, and source traceability.', combinedPrompt: ['Determine the capabilities required by the actual defect before selecting people.', 'Set selectionMethod to exactly one allowed value: Current case team, Precedent recommendation, Hybrid, or Roles only - assignment required.', 'Prefer identities from team.leader and team.members. Use precedents#N.team only to cover a capability missing from the current team.', 'For every roster row separate organizationalRole, assigned8DRole, and caseResponsibility. Do not put a job title in caseResponsibility.', 'For every roster row explain selectionReason and provide sourceType, sourcePath, and sourceCase when applicable.', 'sourcePath must resolve to team.leader, team.members#N, or precedents#N.team#M. Never invent a person.', 'If a required role has no grounded person, use name Unassigned, sourceType unassigned, sourcePath team.gaps, and readinessStatus Needs assignment.', 'Set readinessStatus to exactly Ready, Partial, or Needs assignment. Put the explanation only in readinessRationale.', 'Explain the mix of current-case and precedent sources in sourceSummary, and list all supporting paths in sources.'].join('\n'), inputSchemaJson: outputDataSchemaFromForm(D1_FORM_SCHEMA), formSchemaJson: D1_FORM_SCHEMA, constraintsJson: JSON.stringify({ enabled: true, rules: [{ id: 'D1_GROUNDING', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(team\\.|precedents#)', message: 'Team identities must come from the current team or a cited precedent.' }, { id: 'D1_DATA_BACKED', type: 'dataBackedWhenInputPresent', severity: 'warning', enabled: true, inputFields: ['teamMembers', 'precedentTeams'], message: 'No current or precedent team data supports this assignment.' }] }, null, 2) },
-    D2: { description: 'Describe the problem as structured 5W2H, Is/Is-Not, measurements, and explicit gaps.', combinedPrompt: ['Populate separate fields for statement, What, Where, When, Who, extent, and impact.', 'Return measured evidence as table rows.', 'Use verified facts only and expose missing facts in problem.gaps.', 'Do not hide all 5W2H information inside one narrative field.'].join('\n'), inputSchemaJson: outputDataSchemaFromForm(D2_FORM_SCHEMA), formSchemaJson: D2_FORM_SCHEMA, constraintsJson: JSON.stringify({ enabled: true, rules: [{ id: 'D2_CITATIONS', type: 'citationRequired', severity: 'error', enabled: true, message: 'D2 requires traceable case evidence.' }, { id: 'D2_SOURCES', type: 'sourcePattern', severity: 'warning', enabled: true, pattern: '^(header|product|inspections|isIsNot|derivedFacts)', message: 'Some D2 evidence is outside the configured problem-data scope.' }] }, null, 2) },
+    D2: { description: 'Describe the problem as structured 5W2H, Is/Is-Not, measurements, and explicit gaps.', combinedPrompt: ['Write problem.statement as the narrative paragraph. Every fact in it must come from the verified context.', 'Do NOT write the 5W2H boxes or the Is/Is-Not pair. They are resolved from the same source fields and will replace whatever you put there.', 'Your paragraph must agree with those resolved values — quantity, date, work centre and defect must match the case data exactly.', 'Return measured evidence as table rows.', 'Use verified facts only and expose missing facts in problem.gaps.'].join('\n'), inputSchemaJson: outputDataSchemaFromForm(D2_FORM_SCHEMA), formSchemaJson: D2_FORM_SCHEMA, constraintsJson: JSON.stringify({ enabled: true, rules: [{ id: 'D2_CITATIONS', type: 'citationRequired', severity: 'error', enabled: true, message: 'D2 requires traceable case evidence.' }, { id: 'D2_SOURCES', type: 'sourcePattern', severity: 'warning', enabled: true, pattern: '^(header|product|inspections|isIsNot|derivedFacts)', message: 'Some D2 evidence is outside the configured problem-data scope.' }] }, null, 2) },
     D3: { description: 'Build a structured containment plan with ownership, protection, origin, rationale, and gaps.', combinedPrompt: ['Return containment.actions as rows with action, owner, status, protection, and origin.', 'Separate protection scope, recommendation basis, and gaps.', 'Distinguish recorded actions from precedent-based proposals.', 'Do not collapse the action plan into one narrative paragraph.'].join('\n'), inputSchemaJson: outputDataSchemaFromForm(D3_FORM_SCHEMA), formSchemaJson: D3_FORM_SCHEMA, constraintsJson: JSON.stringify({ enabled: true, rules: [{ id: 'D3_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(actions\\.containment|customer|precedents#)', message: 'Containment actions must be recorded actions or cited proposals.' }, { id: 'D3_DATA_BACKED', type: 'dataBackedWhenInputPresent', severity: 'warning', enabled: true, inputFields: ['actions', 'precedents'], message: 'No current or precedent containment data supports this plan.' }] }, null, 2) },
+    D5: {
+        description: 'Tie every corrective action to a step of the causal chain, separating recorded actions from precedent proposals.',
+        combinedPrompt: [
+            'Return corrective.actions as rows with action, owner, status, origin, linkedCauseStep, and verification.',
+            'Set origin to exactly one of: recorded, proposal. Use recorded only for actions already on this case.',
+            'If no corrective action is recorded on this case, present precedent actions as proposals and cite precedents#N.',
+            'Every action must set linkedCauseStep to a specific fiveWhy#N or rootCause path. Never leave it blank.',
+            'An action that addresses nothing traceable belongs in corrective.gaps, not in the action table.',
+            'Explain in rootCauseLink how the actions together remove the confirmed root cause, not just the symptom.',
+            'If nothing is recorded and no precedent qualifies, say so in corrective.gaps rather than inventing an action.',
+        ].join('\n'),
+        inputSchemaJson: outputDataSchemaFromForm(D5_FORM_SCHEMA),
+        formSchemaJson: D5_FORM_SCHEMA,
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D5_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(actions\\.corrective|rootCause|fiveWhy|precedents#)', message: 'Corrective actions must trace to a recorded action, the causal chain, or a cited precedent.' },
+            { id: 'D5_DATA_BACKED', type: 'dataBackedWhenInputPresent', severity: 'warning', enabled: true, inputFields: ['actions', 'precedents'], message: 'No recorded or precedent corrective action supports this plan.' },
+        ] }, null, 2),
+    },
+    D6: {
+        description: 'Deterministic action-status checklist. This step performs no AI drafting.',
+        // `combinedPrompt` cố tình BỎ TRỐNG — xem ghi chú ở D6_FORM_SCHEMA.
+        // Không phải quên: D6 không gọi model, nên một prompt ở đây sẽ là hướng
+        // dẫn cho một lời gọi không bao giờ xảy ra, và người sửa nó sẽ tưởng
+        // mình đang đổi được hành vi của bước.
+        inputSchemaJson: outputDataSchemaFromForm(D6_FORM_SCHEMA),
+        formSchemaJson: D6_FORM_SCHEMA,
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D6_NO_EFFECTIVENESS_CLAIM', type: 'requiredDisclosure', field: 'verification.evidenceAvailable', severity: 'error', enabled: true, pattern: 'None recorded', message: 'This dataset carries no verification evidence, so no action may be reported as proven effective.' },
+            { id: 'D6_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^actions\\.', message: 'The D6 checklist may only list actions recorded on this case.' },
+        ] }, null, 2),
+    },
+    D7: {
+        description: 'Preventive actions plus the FMEA entry to confirm — a cross-reference, never a claim that it was updated.',
+        combinedPrompt: [
+            'Return preventive.actions as rows with action, owner, status, origin, and scope.',
+            'Set origin to exactly one of: recorded, proposal, using the same rule as D5.',
+            'Set fmeaLink.status to exactly one allowed value. Never state or imply that the FMEA was already updated.',
+            'When a FMEA entry exists for this notification, surface its id and failure mode and ask for manual confirmation.',
+            'Use systemicScope for other lines, materials, or products the same prevention plausibly covers, and cite the source for each.',
+            'If nothing is recorded and no precedent qualifies, say so in preventive.gaps rather than inventing an action.',
+        ].join('\n'),
+        inputSchemaJson: outputDataSchemaFromForm(D7_FORM_SCHEMA),
+        formSchemaJson: D7_FORM_SCHEMA,
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D7_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(actions\\.preventive|fmea|rootCause|precedents#)', message: 'Preventive actions must trace to a recorded action, the FMEA link, or a cited precedent.' },
+            { id: 'D7_FMEA_NOT_ASSERTED', type: 'enum', field: 'preventive.fmeaLink.status', severity: 'error', enabled: true, enum: ['Link found - confirm update manually', 'No FMEA linked to this notification', 'Not applicable'], message: 'FMEA status must stay a cross-reference; the AI never asserts an FMEA was updated.' },
+        ] }, null, 2),
+    },
+    D8: {
+        description: 'Closure package: computed gate, lessons draft, searched precedent lessons, and recurrence flags.',
+        combinedPrompt: [
+            'Draft summary.whatWorked and summary.whatDidnt from this case own recorded lessons when they exist.',
+            'When no lessons are recorded, synthesise them from the confirmed root cause, the D3/D5/D7 actions, and the D6 statuses.',
+            'Every sentence in the summary must trace to a source field. Never start from a blank box and never invent an outcome.',
+            'Fill precedentLessons only from cited precedent cases, one row per lesson, each with caseId and score.',
+            'Set precedentStatus to exactly one allowed value. Precedent found with no lessons and no precedent at all are different answers.',
+            'Use recurrence.openCaseMatches for informational flags only. Never propose writing into another case.',
+            'Do not assert the gate result. It is computed from step status and will be overwritten.',
+        ].join('\n'),
+        inputSchemaJson: outputDataSchemaFromForm(D8_FORM_SCHEMA),
+        formSchemaJson: D8_FORM_SCHEMA,
+        constraintsJson: JSON.stringify({ enabled: true, rules: [
+            { id: 'D8_PRECEDENT_HONESTY', type: 'enum', field: 'precedentStatus', severity: 'error', enabled: true, enum: ['Lessons found', 'Precedent found, no lessons recorded', 'No precedent lessons available'], message: 'D8 must distinguish "precedent found, no lessons recorded" from "no precedent lessons available".' },
+            { id: 'D8_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(lessonsLearned|rootCause|actions\\.|fmea|precedents#|header)', message: 'Every lesson must cite a recorded lesson or a source field.' },
+            { id: 'D8_CITATIONS', type: 'citationRequired', severity: 'error', enabled: true, message: 'D8 requires traceable evidence for the closure summary.' },
+        ] }, null, 2),
+    },
     D4: { description: 'Show the causal chain, conclusion, contributing factors, independent verification, and evidence gaps.', combinedPrompt: ['Populate a structured conclusion, 5-Why table, contributing factors, and independent verification.', 'Independent verification contains verdict, AI finding, recorded finding, and rationale.', 'Expose evidence gaps separately.', 'Treat precedent causes as hypotheses, not facts.'].join('\n'), inputSchemaJson: outputDataSchemaFromForm(D4_FORM_SCHEMA), formSchemaJson: D4_FORM_SCHEMA, constraintsJson: JSON.stringify({ enabled: true, rules: [{ id: 'D4_DISCLOSURE', type: 'requiredDisclosure', field: 'rootCause.independentVerification.rationale', severity: 'error', enabled: true, pattern: 'agree|disagree|insufficient|evidence', message: 'Independent verification must explain agreement, disagreement, or insufficient evidence.' }, { id: 'D4_SOURCES', type: 'sourcePattern', severity: 'error', enabled: true, pattern: '^(fiveWhy|ishikawa|rootCause|independent|precedents#)', message: 'Root-cause conclusions require traceable causal evidence.' }] }, null, 2) },
 };
 
