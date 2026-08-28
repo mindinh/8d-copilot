@@ -70,27 +70,29 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
     }
 
     return (
-        <ol className="min-w-0 space-y-0">
-            {trail.map((event, index) => (
-                <li
-                    key={event.ID}
-                    className={cn(
-                        'min-w-0 border-l-2 py-2.5 pl-3',
-                        // Sự kiện mới nhất đậm hơn — danh sách xếp mới trước.
-                        index === 0 ? 'border-l-primary' : 'border-l-border',
-                    )}
-                >
-                    <div className="text-[11px] tabular-nums text-muted-foreground">
-                        {formatTime(event.at)} · {event.actor}
-                    </div>
-                    <div className="mt-0.5 break-words text-[13px]">{describe(event)}</div>
-                    {event.note && (
-                        <div className="mt-1 break-words rounded bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-                            {event.note}
+        <div className="max-h-[460px] overflow-y-auto px-3.5 py-2">
+            <ol className="min-w-0 space-y-0">
+                {trail.map((event, index) => (
+                    <li
+                        key={event.ID}
+                        className={cn(
+                            'min-w-0 border-l-2 py-2.5 pl-3',
+                            // Sự kiện mới nhất đậm hơn — danh sách xếp mới trước.
+                            index === 0 ? 'border-l-primary' : 'border-l-border',
+                        )}
+                    >
+                        <div className="text-[11px] tabular-nums text-muted-foreground">
+                            {formatTime(event.at)} · {event.actor}
                         </div>
-                    )}
-                </li>
-            ))}
-        </ol>
+                        <div className="mt-0.5 break-words text-[13px]">{describe(event)}</div>
+                        {event.note && (
+                            <div className="mt-1 break-words rounded bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
+                                {event.note}
+                            </div>
+                        )}
+                    </li>
+                ))}
+            </ol>
+        </div>
     );
 }

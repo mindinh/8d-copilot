@@ -1,6 +1,12 @@
-import { useState } from 'react';
-import { Button, cn } from '@cnma/react-ui';
-import { Plus, Star, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+    Button,
+    Input,
+    Label,
+    Textarea,
+    cn,
+} from '@cnma/react-ui';
+import { Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
@@ -15,42 +21,32 @@ import {
 } from '../../../../../shared/action-task';
 
 /**
- * Widget cua D3 va D4, dung lai dung hinh thuc cua ban mockup flagship.
+ * Các widget cho D4 (Root Cause) và các bước hành động (D3, D5, D6, D7).
  *
- * -- Vi sao khong dung `table` cho may thu nay --
- * Ba khoi duoi day tung duoc ve bang widget `table`. Bang lam moi dong nhu nhau,
- * ma o D3 va D4 thi cac dong KHONG nhu nhau: mot buoc trong chuoi 5-Why la ket
- * luan goc, nam nhanh Ishikawa la nhanh da bi loai. Bang xoa mat dung phan thong
- * tin ma ky su can doc dau tien, va do la ly do trang cu doc nhu mot tai lieu
- * thay vi mot ket qua phan tich.
+ * Triết lý widget độc lập: mỗi khối trên Form Editor là một field độc lập,
+ * không widget nào phụ thuộc vào tên bước D hay số bước cố định.
  */
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   D4 — Chuoi 5-Why
-   ───────────────────────────────────────────────────────────────────────── */
+// ── 5-Why Chain ─────────────────────────────────────────────────────────────
 
-/**
- * Mot buoc 5-Why.
- *
- * Chap nhan nhieu ten khoa vi du lieu den tu hai duong: schema output cua D4 dung
- * `{step, why, answer, evidence}`, con CaseContext va Golden Dataset dung
- * `{stepNo, question, answer, evidenceCitation}`. Chi doc mot bo ten thi nua so
- * report se hien ra o rong ma khong bao gi.
- */
 interface WhyStep {
-    stepNo?: number | string;
-    step?: number | string;
-    question?: string;
+    stepNo?: number;
+    step?: number;
     why?: string;
+    question?: string;
     answer?: string;
-    evidence?: string;
-    evidenceCitation?: string;
     isRootCause?: boolean;
+    isRoot?: boolean;
 }
 
-function stepNumber(row: WhyStep, index: number): string {
-    const raw = row.stepNo ?? row.step;
-    return raw === undefined || raw === null || raw === '' ? String(index + 1) : String(raw);
+function truthy(val: unknown): boolean {
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'string') return /^(true|yes|1|x)$/i.test(val.trim());
+    return false;
+}
+
+function stepNumber(row: WhyStep, index: number): number {
+    return Number(row.stepNo ?? row.step ?? index + 1);
 }
 
 /**
@@ -62,14 +58,16 @@ function stepNumber(row: WhyStep, index: number): string {
  */
 function isRootStep(row: WhyStep, index: number, total: number): boolean {
     if (typeof row.isRootCause === 'boolean') return row.isRootCause;
+    if (typeof row.isRoot === 'boolean') return row.isRoot;
     if (/\(root cause\)/i.test(String(row.question ?? row.why ?? ''))) return true;
     return index === total - 1;
 }
 
-export function WhyChainWidget({ value, disciplineID, fieldKey }: {
+export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false }: {
     value: unknown;
     disciplineID?: string;
     fieldKey?: string;
+    readOnly?: boolean;
 }) {
     const initialRows: WhyStep[] = Array.isArray(value) ? (value as WhyStep[]) : [];
     const [steps, setSteps] = useState<WhyStep[]>(initialRows);
@@ -81,6 +79,13 @@ export function WhyChainWidget({ value, disciplineID, fieldKey }: {
     const [selectedRootIndex, setSelectedRootIndex] = useState<number | null>(
         initialRootIndex >= 0 ? initialRootIndex : (steps.length ? steps.length - 1 : null),
     );
+
+    useEffect(() => {
+        const rows: WhyStep[] = Array.isArray(value) ? (value as WhyStep[]) : [];
+        setSteps(rows);
+        const rootIdx = rows.findIndex((row, idx) => isRootStep(row, idx, rows.length));
+        setSelectedRootIndex(rootIdx >= 0 ? rootIdx : (rows.length ? rows.length - 1 : null));
+    }, [value]);
 
     const handleAddStep = () => {
         if (!newQuestion.trim()) return;
@@ -99,6 +104,27 @@ export function WhyChainWidget({ value, disciplineID, fieldKey }: {
             saveDisciplineField(disciplineID, fieldKey || 'whyChain', nextSteps)
                 .then(() => toast.success('Why-step saved to server.'))
                 .catch((err) => toast.error(`Failed to save step: ${err.message}`));
+        }
+    };
+
+    const handleSetRoot = (index: number) => {
+        setSelectedRootIndex(index);
+        const nextSteps = steps.map((s, i) => ({ ...s, isRootCause: i === index }));
+        setSteps(nextSteps);
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, fieldKey || 'whyChain', nextSteps)
+                .then(() => toast.success('Root cause step updated.'))
+                .catch((err) => toast.error(`Failed to save: ${err.message}`));
+        }
+    };
+
+    const handleRemoveStep = (index: number) => {
+        const nextSteps = steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, stepNo: i + 1 }));
+        setSteps(nextSteps);
+        if (disciplineID) {
+            saveDisciplineField(disciplineID, fieldKey || 'whyChain', nextSteps)
+                .then(() => toast.success('Step removed.'))
+                .catch((err) => toast.error(`Failed to save: ${err.message}`));
         }
     };
 
@@ -151,16 +177,28 @@ export function WhyChainWidget({ value, disciplineID, fieldKey }: {
                                     </div>
                                 </div>
 
-                                {!isRoot && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedRootIndex(index)}
-                                        className="shrink-0 text-[11px] font-medium text-muted-foreground opacity-0 group-hover:opacity-100 transition-all hover:text-destructive hover:bg-destructive/10 rounded-md px-2.5 py-1 border border-transparent hover:border-destructive/20 cursor-pointer flex items-center gap-1.5"
-                                        title="Mark this step as root cause"
-                                    >
-                                        <Star className="h-3 w-3" />
-                                        Set root cause
-                                    </button>
+                                {!readOnly && (
+                                    <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                                        {!isRoot && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSetRoot(index)}
+                                                className="text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md px-2.5 py-1 border border-transparent hover:border-destructive/20 cursor-pointer flex items-center gap-1.5"
+                                                title="Mark this step as root cause"
+                                            >
+                                                <Star className="h-3 w-3" />
+                                                Set root cause
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveStep(index)}
+                                            className="text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md p-1 border border-transparent hover:border-destructive/20 cursor-pointer"
+                                            title="Delete step"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         );
@@ -168,36 +206,48 @@ export function WhyChainWidget({ value, disciplineID, fieldKey }: {
                 </div>
             )}
 
-            {isAdding ? (
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                    <p className="text-xs font-semibold">Add 5-Why Step</p>
-                    <input
-                        type="text"
-                        placeholder="Why did this happen? (Question)"
-                        value={newQuestion}
-                        onChange={(e) => setNewQuestion(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <input
-                        type="text"
-                        placeholder="Answer / Finding..."
-                        value={newAnswer}
-                        onChange={(e) => setNewAnswer(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()}>
-                            Add step
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
-                            Cancel
-                        </Button>
+            {!readOnly && (
+                isAdding ? (
+                    <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+                        <p className="text-xs font-semibold text-foreground">Add 5-Why Step</p>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Question <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                                type="text"
+                                placeholder="Why did this happen? (e.g. Why did the clamp slip?)"
+                                value={newQuestion}
+                                onChange={(e) => setNewQuestion(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Answer / Finding
+                            </Label>
+                            <Input
+                                type="text"
+                                placeholder="Enter finding or verification result..."
+                                value={newAnswer}
+                                onChange={(e) => setNewAnswer(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()}>
+                                Add step
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
+                                Cancel
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            ) : (
-                <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
-                    + Add why-step
-                </Button>
+                ) : (
+                    <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
+                        + Add why-step
+                    </Button>
+                )
             )}
         </div>
     );
@@ -220,27 +270,24 @@ interface CauseRow {
     source?: string;
 }
 
-function truthy(value: unknown): boolean {
-    return value === true || String(value ?? '').trim().toUpperCase() === 'Y';
-}
-
 /**
- * Sau nhanh Ishikawa, nhanh duoc chon to do.
- *
- * Ban ghi cua SAP (`caseContext.ishikawa`) LUON thang: no la danh gia da chot,
- * khong phai ket luan AI viet ra. Bat AI chep lai mot ban ghi da co chi tao
- * them mot ban sao co the lech voi ban goc.
- *
- * Nhung rat nhieu case den day voi `ishikawa: []` — khong he co danh gia 6M nao.
- * Truoc day luoi khi do trong vinh vien va nguoi dung khong co gi de lam. Nen
- * khi va CHI KHI khong co ban ghi nao, luoi doc de xuat cua AI tu
- * `data.rootCause.ishikawaBoard`, va noi ro do la de xuat. Dung dung mot khuon
- * voi D1 (de xuat doi ngu tu tien le) va D3 (de xuat hanh dong chan tam).
- *
- * Nhanh KHONG co du lieu van ve o, ghi "Not assessed" — sau o luon day du thi
- * nguoi doc thay ngay dieu tra con thung cho nao. An o trong di la giau mat.
+ * Sáu nhánh Ishikawa, nhánh được chọn tô đỏ.
  */
-export function IshikawaGridWidget({ context, proposed, disciplineID }: { context: unknown; proposed?: unknown; disciplineID?: string }) {
+export function IshikawaGridWidget({
+    context,
+    proposed,
+    disciplineID,
+    savedFindings,
+    savedRootCategory,
+    readOnly = false,
+}: {
+    context: unknown;
+    proposed?: unknown;
+    disciplineID?: string;
+    savedFindings?: unknown;
+    savedRootCategory?: unknown;
+    readOnly?: boolean;
+}) {
     const root = context && typeof context === 'object' ? (context as Record<string, unknown>) : null;
     const recorded: CauseRow[] = Array.isArray(root?.ishikawa) ? (root.ishikawa as CauseRow[]) : [];
     const suggested: CauseRow[] = Array.isArray(proposed)
@@ -259,10 +306,26 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
         return row ? truthy(row.isRootCause) : false;
     });
 
-    const [selectedRootCategory, setSelectedRootCategory] = useState<string | null>(initialRoot ?? null);
-    const [customFindings, setCustomFindings] = useState<Record<string, string>>({});
+    const parsedSavedFindings = (savedFindings && typeof savedFindings === 'object' && !Array.isArray(savedFindings))
+        ? (savedFindings as Record<string, string>)
+        : {};
+    const parsedSavedRoot = typeof savedRootCategory === 'string' && savedRootCategory.trim()
+        ? savedRootCategory.trim()
+        : null;
+
+    const [selectedRootCategory, setSelectedRootCategory] = useState<string | null>(parsedSavedRoot ?? initialRoot ?? null);
+    const [customFindings, setCustomFindings] = useState<Record<string, string>>(parsedSavedFindings);
     const [editingCategory, setEditingCategory] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+
+    useEffect(() => {
+        if (savedFindings && typeof savedFindings === 'object' && !Array.isArray(savedFindings)) {
+            setCustomFindings(savedFindings as Record<string, string>);
+        }
+        if (typeof savedRootCategory === 'string' && savedRootCategory.trim()) {
+            setSelectedRootCategory(savedRootCategory.trim());
+        }
+    }, [savedFindings, savedRootCategory]);
 
     const startEditing = (cat: string, currentText: string) => {
         setEditingCategory(cat);
@@ -322,8 +385,8 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
                     >
                         <div>
                             <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-semibold">{category}</h4>
-                                {!isEditingThis && (
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                {!isEditingThis && !readOnly && (
                                     <button
                                         type="button"
                                         onClick={() => startEditing(category, text || 'Not assessed')}
@@ -335,28 +398,27 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
                             </div>
 
                             {isEditingThis ? (
-                                <div className="mt-1.5 space-y-1.5">
-                                    <input
-                                        type="text"
+                                <div className="mt-2 space-y-2">
+                                    <Textarea
                                         value={editValue}
                                         onChange={(e) => setEditValue(e.target.value)}
-                                        placeholder="Enter finding for this category..."
-                                        className="w-full rounded border px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                        placeholder="Enter finding for this 6M category..."
+                                        className="w-full min-h-[90px] text-[13px] bg-background p-2.5 rounded-md border leading-relaxed resize-y focus-visible:ring-1 focus-visible:ring-primary"
                                         autoFocus
                                     />
-                                    <div className="flex items-center gap-1.5">
-                                        <Button size="sm" className="h-6 text-[11px] px-2 py-0" onClick={() => saveEditing(category)}>
+                                    <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                                        <Button size="sm" className="h-6 text-[11px] px-2.5 font-medium" onClick={() => saveEditing(category)}>
                                             Save
                                         </Button>
-                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 py-0" onClick={() => setEditingCategory(null)}>
+                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 font-medium" onClick={() => setEditingCategory(null)}>
                                             Cancel
                                         </Button>
                                     </div>
                                 </div>
                             ) : (
                                 <p className={cn(
-                                    'mt-1 break-words text-[12.5px]',
-                                    text ? 'text-foreground' : 'italic text-muted-foreground',
+                                    'mt-1.5 break-words text-[13px] leading-relaxed',
+                                    text ? 'text-foreground font-normal' : 'italic text-muted-foreground',
                                 )}>
                                     {text || 'Not assessed'}
                                 </p>
@@ -375,7 +437,7 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
                                     <Star className="h-3 w-3 fill-current" />
                                     Root cause
                                 </div>
-                            ) : (
+                            ) : !readOnly ? (
                                 <button
                                     type="button"
                                     onClick={() => handleSelectRoot(category)}
@@ -383,6 +445,8 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
                                 >
                                     Set as root cause
                                 </button>
+                            ) : (
+                                <span className="text-[11px] text-muted-foreground italic">Non-root factor</span>
                             )}
                         </div>
                     </div>
@@ -397,16 +461,16 @@ export function IshikawaGridWidget({ context, proposed, disciplineID }: { contex
    D3 — The action
    ───────────────────────────────────────────────────────────────────────── */
 
-interface ActionRow {
+export interface ActionRow {
     action?: string;
     actionText?: string;
     owner?: string;
+    assignee?: string;
     status?: string;
-    protection?: string;
     origin?: string;
 }
 
-function cleanActionText(rawText?: string): string {
+function cleanActionText(rawText: string | undefined): string {
     let text = String(rawText ?? '').trim();
     if (!text) return '—';
     text = text.replace(/^(Proposed|Recorded)\s+containment\s+action(\s+based\s+on\s+precedent\s+[A-Z0-9-]+)?:?\s*/i, '');
@@ -415,25 +479,42 @@ function cleanActionText(rawText?: string): string {
     return text.trim() || '—';
 }
 
-export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.', disciplineID, fieldKey, acceptedValue }: {
+export function ActionCardsWidget({
+    value,
+    emptyLabel = 'No action logged yet.',
+    disciplineID,
+    fieldKey,
+    acceptedValue,
+    readOnly = false,
+    reportID = '',
+    disciplineCode = '',
+}: {
     value: unknown;
     emptyLabel?: string;
     disciplineID?: string;
     fieldKey?: string;
     /** Task đã nhận, đọc từ `<prefix>.assignedActions` của chính discipline này. */
     acceptedValue?: unknown;
+    readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
 }) {
     const initialRows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
     const [actions, setActions] = useState<ActionRow[]>(initialRows);
-    const [isAdding, setIsAdding] = useState(false);
-    const [newActionText, setNewActionText] = useState('');
-    const [newOwner, setNewOwner] = useState('');
-    const [newStatus, setNewStatus] = useState('In Process');
 
     // Bảng task là bản ghi RIÊNG, không phải danh sách đề xuất tô màu khác. Giữ
     // bản sao ở đây để nút đổi ngay sang "Added" mà không phải chờ poll một vòng.
     const [tasks, setTasks] = useState<ActionTask[]>(() => normalizeTasks(acceptedValue));
     const assignedField = assignedFieldFor(fieldKey || 'containment.actions');
+
+    useEffect(() => {
+        const initialRows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
+        setActions(initialRows);
+    }, [value]);
+
+    useEffect(() => {
+        setTasks(normalizeTasks(acceptedValue));
+    }, [acceptedValue]);
 
     const accept = (rows: ActionRow[]) => {
         const incoming = rows
@@ -447,16 +528,6 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
         persistTasks(next, incoming.length > 1 ? `${next.length - tasks.length} tasks added.` : 'Task added.');
     };
 
-    const removeAction = (index: number) => {
-        const nextActions = actions.filter((_, i) => i !== index);
-        setActions(nextActions);
-        if (disciplineID) {
-            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
-                .then(() => toast.success('Action removed.'))
-                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
-        }
-    };
-
     const persistTasks = (next: ActionTask[], message = 'Task list saved.') => {
         setTasks(next);
         if (!disciplineID) return;
@@ -466,27 +537,6 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
     };
 
     const pending = actions.filter((row) => actionLabel(row) && !isAccepted(row, tasks));
-
-    const handleAddAction = () => {
-        if (!newActionText.trim()) return;
-        const newRow: ActionRow = {
-            action: newActionText.trim(),
-            owner: newOwner.trim() || 'Quality Engineer',
-            status: newStatus,
-            origin: 'User Added',
-        };
-        const nextActions = [...actions, newRow];
-        setActions(nextActions);
-        setNewActionText('');
-        setNewOwner('');
-        setIsAdding(false);
-
-        if (disciplineID) {
-            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
-                .then(() => toast.success('Action saved to server.'))
-                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
-        }
-    };
 
     return (
         <div className="space-y-3">
@@ -508,7 +558,7 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                                         <span className="whitespace-nowrap text-[11px] font-medium text-success">
                                             ✓ Added
                                         </span>
-                                    ) : (
+                                    ) : !readOnly ? (
                                         <button
                                             type="button"
                                             onClick={() => accept([row])}
@@ -516,16 +566,7 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                                         >
                                             + Add
                                         </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => removeAction(index)}
-                                        aria-label={`Remove action ${index + 1}`}
-                                        className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                        title="Remove action"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
+                                    ) : null}
                                 </div>
                             </div>
                         );
@@ -533,8 +574,8 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2">
-                {pending.length > 1 && (
+            {!readOnly && pending.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
                     <Button
                         size="sm"
                         variant="outline"
@@ -543,60 +584,16 @@ export function ActionCardsWidget({ value, emptyLabel = 'No action logged yet.',
                     >
                         ✓ Accept all suggested ({pending.length})
                     </Button>
-                )}
-                {!isAdding && (
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px]"
-                        onClick={() => setIsAdding(true)}
-                    >
-                        <Plus className="mr-1 h-3 w-3" /> Add action
-                    </Button>
-                )}
-            </div>
-
-            {isAdding && (
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                    <p className="text-xs font-semibold">Add Action</p>
-                    <input
-                        type="text"
-                        placeholder="Action description..."
-                        value={newActionText}
-                        onChange={(e) => setNewActionText(e.target.value)}
-                        className="w-full rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="text"
-                            placeholder="Owner (e.g. Quality Engineer)"
-                            value={newOwner}
-                            onChange={(e) => setNewOwner(e.target.value)}
-                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <select
-                            value={newStatus}
-                            onChange={(e) => setNewStatus(e.target.value)}
-                            className="rounded border px-3 py-1.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                        >
-                            <option value="Planned">Planned</option>
-                            <option value="In Process">In Process</option>
-                            <option value="Done">Done</option>
-                            <option value="Verified">Verified</option>
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" onClick={handleAddAction} disabled={!newActionText.trim()}>
-                            Add action
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
-                            Cancel
-                        </Button>
-                    </div>
                 </div>
             )}
 
-            <TaskTable tasks={tasks} onChange={persistTasks} />
+            <TaskTable
+                tasks={tasks}
+                onChange={persistTasks}
+                readOnly={readOnly}
+                reportID={reportID}
+                disciplineCode={disciplineCode}
+            />
         </div>
     );
 }

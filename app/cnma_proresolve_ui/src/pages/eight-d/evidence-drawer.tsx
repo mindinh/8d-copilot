@@ -81,7 +81,7 @@ export function EvidenceDrawer({
 
     return (
         <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-            <DialogContent className="w-[calc(100%-2rem)] max-w-xl overflow-hidden">
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl md:max-w-3xl overflow-hidden">
                 <DialogHeader>
                     <DialogTitle className="font-mono text-base break-all">{path}</DialogTitle>
                     <DialogDescription>

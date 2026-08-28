@@ -345,7 +345,7 @@ export function extractDeepCase(raw: any): Row | null {
     }));
 
     const team = getArray(obj.teamAssignments ?? obj.team_assignments ?? obj.team).map((r) => stamp({
-        partner_id: r.partnerId ?? r.partner_id,
+        partner_id: String(r.partnerId ?? r.partner_id ?? '').replace(/^BP-/i, ''),
         partner_name: r.partnerName ?? r.partner_name,
         function_title: r.functionTitle ?? r.function_title,
         partner_role: r.partnerRole ?? r.partner_role,
@@ -511,7 +511,7 @@ export function mapCase(raw: any): CaseContext {
 
     // ── Team ──
     const teamRows: TeamRow[] = rows(data, 'team_assignments').map((r) => ({
-        partnerId: String(r.partner_id ?? ''),
+        partnerId: String(r.partner_id ?? '').replace(/^BP-/i, ''),
         partnerName: String(r.partner_name ?? ''),
         functionTitle: String(r.function_title ?? ''),
         partnerRole: String(r.partner_role ?? ''),

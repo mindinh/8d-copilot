@@ -34,6 +34,18 @@ service EightDService {
     entity Disciplines as projection on ns.Disciplines;
 
     /**
+     * Bằng chứng hoàn thành task (PDF evidence).
+     *
+     * Cho phép READ, CREATE, DELETE (KHÔNG cho UPDATE metadata trực tiếp: muốn
+     * đổi file đã nộp thì xoá rồi nộp lại để vết rõ ràng).
+     */
+    @restrict: [
+        { grant: ['READ'], to: ['admin', 'Admin', 'Auditor', 'User', 'authenticated-user'] },
+        { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User'] }
+    ]
+    entity TaskEvidences as projection on ns.TaskEvidences;
+
+    /**
      * Chạy pipeline: validate dataset → map facts → AI parseData → AI analyzeDefect
      * → lưu. Trả về ID của report vừa tạo.
      *
@@ -138,8 +150,37 @@ service EightDService {
      */
     action reviewDiscipline(disciplineID : String, decision : String, note : String) returns String;
 
+    /**
+     * Xác nhận (Confirm) hoặc hủy xác nhận một ô thông tin do AI parse ra trên một bước D.
+     *
+     * @param disciplineID ID dòng trong `Disciplines`.
+     * @param fieldKey     Tên trường thông tin (ví dụ: 'problem.what', 'team.roster'...).
+     * @param confirmed    true = xác nhận; false = hủy xác nhận.
+     * @returns            JSON { confirmedFields: string[] }
+     */
+    action confirmDisciplineField(disciplineID : String, fieldKey : String, confirmed : Boolean) returns String;
+
+    /**
+     * Cập nhật trạng thái xử lý (workState) của một bước D ('NotStarted' | 'InProgress').
+     *
+     * Giá trị 'Completed' bị từ chối với mã lỗi 400 vì 'Completed' là trạng thái
+     * dẫn xuất khi bước đã được Approved qua cổng duyệt.
+     *
+     * @param disciplineID ID dòng trong `Disciplines`.
+     * @param workState    'NotStarted' | 'InProgress'.
+     * @returns            JSON { workState: string }
+     */
+    action setDisciplineWorkState(disciplineID : String, workState : String) returns String;
+
     /** Vet duyet cua mot report, moi nhat truoc. Nguon cho panel audit tren UI. */
     function getReviewTrail(reportID : String) returns String;
+
+    /**
+     * Danh sách toàn bộ bằng chứng hoàn thành của một report (không kèm content).
+     * Phục vụ hiển thị trên tab Evidence của panel lưu trữ.
+     */
+    @(requires: ['admin', 'Admin', 'Auditor', 'User', 'authenticated-user'])
+    function listTaskEvidence(reportID : String) returns String;
 
     /**
      * Nạp case vào kho tiền lệ.

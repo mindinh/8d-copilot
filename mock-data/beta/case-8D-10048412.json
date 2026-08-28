@@ -421,10 +421,10 @@
       { "notification_id": "8D-10048412", "complaint_reference": "N/A - internal defect, no customer reference", "customer_plant_contact": "N/A", "sla_response_due": "N/A" }
     ],
     "team_assignments": [
-      { "notification_id": "8D-10048412", "partner_id": "BP-100001", "partner_name": "Heli Weber", "function_title": "Quality Engineer", "partner_role": "8D Team Leader", "source": "Backfilled from case record" },
-      { "notification_id": "8D-10048412", "partner_id": "BP-100012", "partner_name": "Minh Dinh", "function_title": "Production Engineer", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
-      { "notification_id": "8D-10048412", "partner_id": "BP-100011", "partner_name": "Quyen La", "function_title": "Quality Technician", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
-      { "notification_id": "8D-10048412", "partner_id": "BP-100014", "partner_name": "Thien Tu", "function_title": "Production Worker", "partner_role": "8D Team Member", "source": "Backfilled from case record" }
+      { "notification_id": "8D-10048412", "partner_id": "100001", "partner_name": "Heli Weber", "function_title": "Quality Engineer", "partner_role": "8D Team Leader", "source": "Backfilled from case record" },
+      { "notification_id": "8D-10048412", "partner_id": "100012", "partner_name": "Minh Dinh", "function_title": "Production Engineer", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
+      { "notification_id": "8D-10048412", "partner_id": "100011", "partner_name": "Quyen La", "function_title": "Quality Technician", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
+      { "notification_id": "8D-10048412", "partner_id": "100014", "partner_name": "Thien Tu", "function_title": "Production Worker", "partner_role": "8D Team Member", "source": "Backfilled from case record" }
     ],
     "spc_process_data": []
   },
@@ -555,10 +555,10 @@
       "_join": "team_assignments.notification_id -> notifications.notification_id; team_assignments.partner_id -> BP_DIRECTORY.partner_id",
       "_cardinality": "4 rows (allowed 2-4)",
       "rows": [
-        { "partner_id": "BP-100001", "partner_name": "Heli Weber", "function_title": "Quality Engineer", "partner_role": "8D Team Leader", "source": "Backfilled from case record" },
-        { "partner_id": "BP-100012", "partner_name": "Minh Dinh", "function_title": "Production Engineer", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
-        { "partner_id": "BP-100011", "partner_name": "Quyen La", "function_title": "Quality Technician", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
-        { "partner_id": "BP-100014", "partner_name": "Thien Tu", "function_title": "Production Worker", "partner_role": "8D Team Member", "source": "Backfilled from case record" }
+        { "partner_id": "100001", "partner_name": "Heli Weber", "function_title": "Quality Engineer", "partner_role": "8D Team Leader", "source": "Backfilled from case record" },
+        { "partner_id": "100012", "partner_name": "Minh Dinh", "function_title": "Production Engineer", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
+        { "partner_id": "100011", "partner_name": "Quyen La", "function_title": "Quality Technician", "partner_role": "8D Team Member", "source": "Backfilled from case record" },
+        { "partner_id": "100014", "partner_name": "Thien Tu", "function_title": "Production Worker", "partner_role": "8D Team Member", "source": "Backfilled from case record" }
       ]
     },
     "spc_process_data": {

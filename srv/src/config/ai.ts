@@ -27,9 +27,11 @@ export const AICORE_DEFAULT_MODEL = process.env.AICORE_DEFAULT_MODEL || 'gemini-
  * kể cả bước đổ narrative có sẵn vào ô form, vốn không suy luận gì. Đo trên một
  * lượt chạy thật: cả 5 lời gọi đều là Opus 4.8, tổng 317s.
  *
- * Bảng này chỉ nêu ý kiến cho các bước cơ khí. Bước suy luận thật —
- * `reviewQuality` (chẩn đoán mù) và `analyzeDefect` (viết báo cáo) — CỐ TÌNH
- * không có mặt ở đây, để chúng nhận model mà admin đã chọn.
+ * Bảng này nêu ý kiến cho các bước cơ khí VÀ cho `analyzeDefect`: bước viết
+ * báo cáo được ghim Haiku theo quyết định sản phẩm (tốc độ trước, độ tin cậy
+ * giữ bằng schema chặt + backfill tất định trong pipeline — xem
+ * `postProcess.ts`). Bước suy luận thật còn lại — `reviewQuality` (chẩn đoán
+ * mù) — CỐ TÌNH không có mặt ở đây, để nó nhận model mà admin đã chọn.
  *
  * Thứ tự ưu tiên khi chọn model, xem `resolveModel` ở core/ai/llmClient.ts:
  *   1. cấu hình truyền thẳng vào lời gọi
@@ -48,7 +50,29 @@ export const ACTIVITY_MODEL_DEFAULTS: Readonly<Record<string, string>> = {
   /** Đổ narrative đã có vào ô form đã cấu hình. Thuần cơ khí. */
   analyzeDefectStructuredFields:
     process.env.AICORE_MODEL_STRUCTURE || 'anthropic--claude-4.5-haiku',
+  /**
+   * Viết báo cáo D1–D8. Ghim Haiku để một lượt phân tích 8 bước xong trong
+   * chục giây thay vì vài phút; phần "đúng" không phó thác cho model mà được
+   * bảo đảm bằng response schema chặt và backfill tất định từ CaseContext.
+   * Admin vẫn ghi đè được bằng `models.analyzeDefect` trên trang AI Settings.
+   */
+  analyzeDefect: process.env.AICORE_MODEL_ANALYZE || 'anthropic--claude-4.5-haiku',
 };
+
+/**
+ * Model leo thang cho bước viết báo cáo.
+ *
+ * Chạy Haiku cho nhanh nghĩa là chấp nhận thỉnh thoảng một bước trả JSON hợp lệ
+ * nhưng khuyết trường bắt buộc. Khi retry-có-chỉ-dẫn vẫn không cứu được,
+ * `eightDAnalyzer` gọi đúng MỘT lượt nữa trên model này rồi lấy bản đủ hơn.
+ * Lượt leo thang chỉ xảy ra trên đường hỏng — đường vui vẫn nhanh nguyên Haiku.
+ *
+ * Leo thang hỏng (model không tồn tại trong AI Core, hết quota, ...) thì giữ
+ * kết quả Haiku — không bao giờ làm chết bước vì chính cơ chế cứu nó.
+ * Đặt AICORE_MODEL_ANALYZE_FALLBACK="" để tắt hẳn.
+ */
+export const ANALYZE_FALLBACK_MODEL =
+  process.env.AICORE_MODEL_ANALYZE_FALLBACK ?? 'anthropic--claude-4.5-sonnet';
 
 /**
  * Số chiều vector. Phải khớp ba nơi cùng lúc:

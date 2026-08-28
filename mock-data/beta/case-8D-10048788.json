@@ -1415,7 +1415,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048788",
-        "partner_id": "BP-100012",
+        "partner_id": "100012",
         "partner_name": "Minh Dinh",
         "function_title": "Production Engineer",
         "partner_role": "8D Team Leader",
@@ -1423,7 +1423,7 @@
       },
       {
         "notification_id": "8D-10048788",
-        "partner_id": "BP-100091",
+        "partner_id": "100091",
         "partner_name": "Karl Wagner",
         "function_title": "Maintenance Planner",
         "partner_role": "8D Team Member",
@@ -1633,14 +1633,14 @@
       "_cardinality": "2 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100012",
+          "partner_id": "100012",
           "partner_name": "Minh Dinh",
           "function_title": "Production Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100091",
+          "partner_id": "100091",
           "partner_name": "Karl Wagner",
           "function_title": "Maintenance Planner",
           "partner_role": "8D Team Member",

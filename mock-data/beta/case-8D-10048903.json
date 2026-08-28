@@ -1422,7 +1422,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048903",
-        "partner_id": "BP-100001",
+        "partner_id": "100001",
         "partner_name": "Heli Weber",
         "function_title": "Quality Engineer",
         "partner_role": "8D Team Leader",
@@ -1430,7 +1430,7 @@
       },
       {
         "notification_id": "8D-10048903",
-        "partner_id": "BP-100067",
+        "partner_id": "100067",
         "partner_name": "Marek Nowak",
         "function_title": "Surface Treatment Specialist",
         "partner_role": "8D Team Member",
@@ -1438,7 +1438,7 @@
       },
       {
         "notification_id": "8D-10048903",
-        "partner_id": "BP-100147",
+        "partner_id": "100147",
         "partner_name": "Lena Hoffmann",
         "function_title": "Metrology Specialist",
         "partner_role": "8D Team Member",
@@ -1446,7 +1446,7 @@
       },
       {
         "notification_id": "8D-10048903",
-        "partner_id": "BP-100011",
+        "partner_id": "100011",
         "partner_name": "Quyen La",
         "function_title": "Quality Technician",
         "partner_role": "8D Team Member",
@@ -1662,28 +1662,28 @@
       "_cardinality": "4 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100001",
+          "partner_id": "100001",
           "partner_name": "Heli Weber",
           "function_title": "Quality Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100067",
+          "partner_id": "100067",
           "partner_name": "Marek Nowak",
           "function_title": "Surface Treatment Specialist",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100147",
+          "partner_id": "100147",
           "partner_name": "Lena Hoffmann",
           "function_title": "Metrology Specialist",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100011",
+          "partner_id": "100011",
           "partner_name": "Quyen La",
           "function_title": "Quality Technician",
           "partner_role": "8D Team Member",

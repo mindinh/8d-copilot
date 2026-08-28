@@ -122,7 +122,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100031",
+      "partnerId": "100031",
       "partnerName": "Sara Klein",
       "functionTitle": "Supplier Quality Engineer",
       "partnerRole": "8D Team Leader",
@@ -131,7 +131,7 @@
       "phone": "+49 89 2018 1031"
     },
     {
-      "partnerId": "BP-100014",
+      "partnerId": "100014",
       "partnerName": "Thien Tu",
       "functionTitle": "Quality Engineer",
       "partnerRole": "8D Team Member",
@@ -140,7 +140,7 @@
       "phone": "+49 89 2018 1014"
     },
     {
-      "partnerId": "BP-100133",
+      "partnerId": "100133",
       "partnerName": "Ola Nyberg",
       "functionTitle": "Press Shop Engineer",
       "partnerRole": "8D Team Member",

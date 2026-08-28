@@ -26,6 +26,10 @@
     {
       "name": "$XSAPPNAME.User",
       "description": "Standard User Scope"
+    },
+    {
+      "name": "$XSAPPNAME.Auditor",
+      "description": "Auditor Scope for read-only access to task completion evidence"
     }
   ],
 
@@ -44,6 +48,13 @@
       "scope-references": [
         "$XSAPPNAME.User"
       ]
+    },
+    {
+      "name": "Auditor",
+      "description": "Auditor Role for read-only access to task completion evidence",
+      "scope-references": [
+        "$XSAPPNAME.Auditor"
+      ]
     }
   ],
 
@@ -60,6 +71,13 @@
       "description": "8D Copilot user: read and create 8D reports",
       "role-template-references": [
         "$XSAPPNAME.User"
+      ]
+    },
+    {
+      "name": "CNMA_Proresolve_Auditor",
+      "description": "Read-only access to task completion evidence",
+      "role-template-references": [
+        "$XSAPPNAME.Auditor"
       ]
     }
   ]

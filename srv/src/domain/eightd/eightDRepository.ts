@@ -25,10 +25,16 @@ import {
     type ClosureGate,
     type ReviewStatus,
 } from './review';
+import {
+    parseConfirmedFields,
+} from './fieldConfirm';
+import { assignedFieldFor, normalizeTasks } from '../../../../shared/action-task';
+import { getPath } from './runtimeConfig';
 
 const REPORTS = 'cnma.proresolve.Reports';
 const DISCIPLINES = 'cnma.proresolve.Disciplines';
 const REVIEW_EVENTS = 'cnma.proresolve.ReviewEvents';
+const TASK_EVIDENCES = 'cnma.proresolve.TaskEvidences';
 
 export interface ReportRow {
     ID: string;
@@ -270,9 +276,15 @@ export async function saveAssignedTeam(
     roster: AssignedTeamRow[],
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson')
+        .columns('ID', 'code', 'resultJson', 'reviewStatus')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
     if (row.code !== 'D1') {
         throw Object.assign(
             new Error(`Only D1 has a team roster to save; this discipline is ${row.code}.`),
@@ -314,14 +326,25 @@ export async function saveAssignedTeam(
  * ghi, nen mot lan luu khong bao gio de mat ket luan cua may.
  */
 const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
-    D1: new Set(['team.assignedRoster']),
-    D2: new Set(['problem.statementOverride']),
-    D3: new Set(['containment.actions', 'containment.actionsOverride', 'actionItems', 'actions']),
-    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa']),
-    D5: new Set(['corrective.actions', 'actionItems', 'actions']),
-    D6: new Set(['implementation.actions', 'actionItems', 'actions']),
-    D7: new Set(['prevention.actions', 'actionItems', 'actions']),
-    D8: new Set(['closure.notes']),
+    D1: new Set(['team.assignedRoster', 'team.roster']),
+    D2: new Set([
+        'problem.statementOverride',
+        'problem.what',
+        'problem.where',
+        'problem.when',
+        'problem.who',
+        'problem.how',
+        'problem.extent',
+        'problem.is',
+        'problem.isNot',
+        'problem.isIsNotBasis',
+    ]),
+    D3: new Set(['containment.actions', 'containment.actionsOverride', 'containment.assignedActions', 'actionItems', 'actions']),
+    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa', 'rootCause.fiveWhy', 'rootCause.customFindings']),
+    D5: new Set(['corrective.actions', 'corrective.assignedActions', 'actionItems', 'actions']),
+    D6: new Set(['verification.plan', 'verification.assignedActions', 'implementation.actions', 'implementation.assignedActions', 'actionItems', 'actions']),
+    D7: new Set(['preventive.actions', 'preventive.assignedActions', 'preventive.fmea', 'prevention.actions', 'prevention.assignedActions', 'actionItems', 'actions']),
+    D8: new Set(['closure.notes', 'closure.teamRecognition', 'closure.lessonsWhatWorked', 'closure.lessonsWhatDidNot']),
 });
 
 /**
@@ -336,9 +359,15 @@ export async function saveDisciplineFieldValue(
     value: unknown,
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson')
+        .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
 
     const allowed = HUMAN_WRITABLE_FIELDS[String(row.code)];
     if (!allowed?.has(fieldKey)) {
@@ -371,8 +400,125 @@ export async function saveDisciplineFieldValue(
     }
     cursor[parts[parts.length - 1]] = value;
 
-    await UPDATE(DISCIPLINES).set({ resultJson: JSON.stringify(data) }).where({ ID: disciplineID });
+    // Tự động chuyển NotStarted -> InProgress khi có thao tác sửa thật
+    const currentWorkState = String((row as any).workState ?? 'NotStarted');
+    const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
+
+    await UPDATE(DISCIPLINES).set({
+        resultJson: JSON.stringify(data),
+        workState: nextWorkState,
+    }).where({ ID: disciplineID });
+
     cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
+}
+
+/**
+ * Xác nhận hoặc gỡ xác nhận một trường thông tin AI trong bước D.
+ */
+export async function confirmDisciplineField(
+    disciplineID: string,
+    fieldKey: string,
+    confirmed: boolean,
+): Promise<{ confirmedFields: string[] }> {
+    const row = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'report_ID', 'resultJson', 'reviewStatus', 'confirmedFieldsJson', 'workState')
+        .where({ ID: disciplineID });
+    if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
+
+    if (confirmed) {
+        // CỔNG CHẶN SERVER: Kiểm tra bằng chứng hoàn thành (evidence) cho các task đã Done
+        let resultData: Record<string, unknown> = {};
+        try {
+            resultData = JSON.parse(String((row as any).resultJson ?? '{}'));
+        } catch { /* empty */ }
+
+        const assignedKey = assignedFieldFor(fieldKey);
+        const tasksRaw = getPath(resultData, assignedKey) || getPath(resultData, fieldKey);
+        const tasks = normalizeTasks(tasksRaw);
+        const doneTasks = tasks.filter((t) => t.status === 'Done');
+
+        if (doneTasks.length > 0) {
+            const reportID = String((row as any).report_ID ?? '');
+            const disciplineCode = String(row.code ?? '');
+            const evidences = await SELECT.from(TASK_EVIDENCES)
+                .columns('taskId')
+                .where({ reportID, disciplineCode });
+            const evidenceTaskIds = new Set(evidences.map((e: any) => String(e.taskId)));
+            const missingEvidence = doneTasks.filter((t) => !evidenceTaskIds.has(t.id));
+            if (missingEvidence.length > 0) {
+                const names = missingEvidence.map((t) => t.name || t.id).join(', ');
+                throw Object.assign(
+                    new Error(
+                        `Cannot confirm "${fieldKey}": ${missingEvidence.length} task(s) marked Done are missing completion evidence (${names}). Please upload PDF evidence before confirming.`,
+                    ),
+                    { code: 400 },
+                );
+            }
+        }
+    }
+
+    const keys = fieldKey.split(',').map((k) => k.trim()).filter(Boolean);
+    const currentList = parseConfirmedFields((row as any).confirmedFieldsJson);
+    const set = new Set(currentList);
+    for (const k of keys) {
+        if (confirmed) {
+            set.add(k);
+        } else {
+            set.delete(k);
+        }
+    }
+    const nextConfirmed = [...set];
+
+    // Tự động chuyển NotStarted -> InProgress khi có thao tác confirm đầu tiên
+    const currentWorkState = String((row as any).workState ?? 'NotStarted');
+    const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
+
+    await UPDATE(DISCIPLINES).set({
+        confirmedFieldsJson: JSON.stringify(nextConfirmed),
+        workState: nextWorkState,
+    }).where({ ID: disciplineID });
+
+    cds.log('eightd-repo').info(
+        `${confirmed ? 'Confirmed' : 'Unconfirmed'} ${fieldKey} on discipline ${disciplineID} (${row.code})`,
+    );
+    return { confirmedFields: nextConfirmed };
+}
+
+/**
+ * Đặt trạng thái xử lý (workState) của bước D (NotStarted <-> InProgress).
+ */
+export async function setDisciplineWorkState(
+    disciplineID: string,
+    newWorkState: string,
+): Promise<{ workState: string }> {
+    const state = String(newWorkState ?? '').trim();
+    if (state !== 'NotStarted' && state !== 'InProgress' && state !== 'Completed') {
+        throw Object.assign(
+            new Error(`Invalid workState "${state}". Allowed values: NotStarted, InProgress, Completed.`),
+            { code: 400 },
+        );
+    }
+
+    const row = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'reviewStatus', 'workState')
+        .where({ ID: disciplineID });
+    if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
+
+    const reviewStatus = state === 'Completed' ? 'Approved' : 'Draft';
+
+    await UPDATE(DISCIPLINES).set({
+        workState: state,
+        reviewStatus: reviewStatus,
+    }).where({ ID: disciplineID });
+
+    cds.log('eightd-repo').info(`Set workState to ${state} on discipline ${disciplineID} (${row.code})`);
+    return { workState: state };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -406,13 +552,23 @@ export async function reviewDiscipline(
     actor: string,
 ): Promise<ReviewResult> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'reviewStatus', 'report_ID')
+        .columns('ID', 'code', 'reviewStatus', 'report_ID', 'formSchemaJson', 'confirmedFieldsJson', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
 
     const reportID = String((row as any).report_ID ?? '');
     const fromStatus = normalizeStatus((row as any).reviewStatus);
     const at = new Date().toISOString();
+
+    let nextWorkState = String((row as any).workState ?? 'NotStarted');
+
+    if (toStatus === 'Approved') {
+        nextWorkState = 'Completed';
+    } else if (toStatus === 'Draft') {
+        nextWorkState = 'InProgress';
+    } else if (toStatus === 'ChangeRequested') {
+        nextWorkState = 'InProgress';
+    }
 
     await UPDATE(DISCIPLINES).set({
         reviewStatus: toStatus,
@@ -421,6 +577,7 @@ export async function reviewDiscipline(
         // Ghi chú thuộc về quyết định vừa rồi. Duyệt xong mà giữ lại ghi chú của
         // lần trả lại trước thì màn hình nói ngược với trạng thái.
         reviewNote: note ?? null,
+        workState: nextWorkState,
     }).where({ ID: disciplineID });
 
     await INSERT.into(REVIEW_EVENTS).entries({
@@ -468,3 +625,164 @@ export async function getClosureGate(reportID: string): Promise<ClosureGate> {
         .where({ report_ID: reportID });
     return evaluateClosureGate(rows as any[]);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quản lý bằng chứng hoàn thành (Task Completion Evidence)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TaskEvidenceRow {
+    ID: string;
+    reportID: string;
+    disciplineCode: string;
+    taskId: string;
+    fileName: string;
+    fileSize: number;
+    mediaType: string;
+    uploadedBy: string;
+    uploadedAt: string;
+}
+
+export function findTaskInResultJson(resultJson: string | null | undefined, taskId: string): { status: string } | null {
+    if (!resultJson) return null;
+    try {
+        const data = typeof resultJson === 'string' ? JSON.parse(resultJson) : resultJson;
+        if (!data || typeof data !== 'object') return null;
+
+        const candidateArrays: unknown[] = [];
+        if (data.containment?.assignedActions) candidateArrays.push(data.containment.assignedActions);
+        if (data.corrective?.assignedActions) candidateArrays.push(data.corrective.assignedActions);
+        if (data.preventive?.assignedActions) candidateArrays.push(data.preventive.assignedActions);
+        if (Array.isArray(data.assignedActions)) candidateArrays.push(data.assignedActions);
+        if (Array.isArray(data.tasks)) candidateArrays.push(data.tasks);
+
+        for (const val of Object.values(data)) {
+            if (Array.isArray(val)) candidateArrays.push(val);
+            else if (val && typeof val === 'object') {
+                for (const subVal of Object.values(val as Record<string, unknown>)) {
+                    if (Array.isArray(subVal)) candidateArrays.push(subVal);
+                }
+            }
+        }
+
+        for (const arr of candidateArrays) {
+            const normalized = normalizeTasks(arr);
+            const found = normalized.find((t) => t.id === taskId);
+            if (found) return found;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+export async function createTaskEvidence(params: {
+    reportID: string;
+    disciplineCode: string;
+    taskId: string;
+    fileName: string;
+    fileSize: number;
+    mediaType: string;
+    content?: any;
+    actor: string;
+}): Promise<TaskEvidenceRow> {
+    const { reportID, disciplineCode, taskId, fileName, fileSize, mediaType, content, actor } = params;
+
+    if (mediaType !== 'application/pdf') {
+        throw Object.assign(new Error('Only PDF files are allowed.'), { code: 400 });
+    }
+
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (fileSize > MAX_SIZE) {
+        const actualMb = (fileSize / (1024 * 1024)).toFixed(2);
+        throw Object.assign(
+            new Error(`File size exceeds 10 MB limit (actual: ${actualMb} MB).`),
+            { code: 400 },
+        );
+    }
+
+    const discipline = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'reviewStatus', 'resultJson')
+        .where({ report_ID: reportID, code: disciplineCode });
+    if (!discipline) {
+        throw Object.assign(new Error(`Discipline ${disciplineCode} not found for report ${reportID}.`), { code: 404 });
+    }
+
+    if (normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${disciplineCode} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
+
+    const task = findTaskInResultJson((discipline as any).resultJson, taskId);
+    if (!task || task.status !== 'Done') {
+        throw Object.assign(
+            new Error('Evidence can only be uploaded for tasks with status Done.'),
+            { code: 400 },
+        );
+    }
+
+    const ID = cds.utils.uuid();
+    const uploadedAt = new Date().toISOString();
+
+    await INSERT.into(TASK_EVIDENCES).entries({
+        ID,
+        reportID,
+        disciplineCode,
+        taskId,
+        fileName: fileName || 'evidence.pdf',
+        fileSize,
+        mediaType,
+        content: content ?? null,
+        uploadedBy: actor || 'anonymous',
+        uploadedAt,
+    });
+
+    cds.log('eightd-repo').info(
+        `Created task evidence ${ID} (${fileName}) for task ${taskId} on report ${reportID} (${disciplineCode}) by ${actor}`,
+    );
+
+    return {
+        ID,
+        reportID,
+        disciplineCode,
+        taskId,
+        fileName: fileName || 'evidence.pdf',
+        fileSize,
+        mediaType,
+        uploadedBy: actor || 'anonymous',
+        uploadedAt,
+    };
+}
+
+export async function deleteTaskEvidence(evidenceID: string): Promise<{ deleted: string }> {
+    const row = await SELECT.one.from(TASK_EVIDENCES)
+        .columns('ID', 'reportID', 'disciplineCode', 'taskId', 'fileName')
+        .where({ ID: evidenceID });
+    if (!row) {
+        throw Object.assign(new Error(`Evidence ${evidenceID} not found.`), { code: 404 });
+    }
+
+    const discipline = await SELECT.one.from(DISCIPLINES)
+        .columns('ID', 'code', 'reviewStatus')
+        .where({ report_ID: (row as any).reportID, code: (row as any).disciplineCode });
+    if (discipline && normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+        throw Object.assign(
+            new Error(`Discipline ${(row as any).disciplineCode} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
+
+    await DELETE.from(TASK_EVIDENCES).where({ ID: evidenceID });
+    cds.log('eightd-repo').info(`Deleted task evidence ${evidenceID}`);
+    return { deleted: evidenceID };
+}
+
+export async function listTaskEvidence(reportID: string): Promise<TaskEvidenceRow[]> {
+    const rows = await SELECT.from(TASK_EVIDENCES)
+        .columns('ID', 'reportID', 'disciplineCode', 'taskId', 'fileName', 'fileSize', 'mediaType', 'uploadedBy', 'uploadedAt')
+        .where({ reportID })
+        .orderBy('uploadedAt desc');
+    return rows as unknown as TaskEvidenceRow[];
+}
+

@@ -82,7 +82,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100088",
+      "partnerId": "100088",
       "partnerName": "Rita Fischer",
       "functionTitle": "Assembly Supervisor",
       "partnerRole": "  ",
@@ -91,7 +91,7 @@
       "phone": "+49 89 2018 1088"
     },
     {
-      "partnerId": "BP-100012",
+      "partnerId": "100012",
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Eng.",
       "partnerRole": "8D Team Member",
@@ -100,7 +100,7 @@
       "phone": "+49 89 2018 1012"
     },
     {
-      "partnerId": "BP-100091",
+      "partnerId": "100091",
       "partnerName": "Karl Wagner",
       "functionTitle": "Maintenance Planner",
       "partnerRole": "8D Team Member",

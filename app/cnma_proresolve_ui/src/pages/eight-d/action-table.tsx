@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
+    Badge,
     Button,
     Dialog,
     DialogContent,
     DialogDescription,
     DialogHeader,
     DialogTitle,
+    Input,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Textarea,
     cn,
 } from '@cnma/react-ui';
-import { Eye, Edit2, Paperclip, Plus, Sparkles, Trash2, User } from 'lucide-react';
+import { Clock, Edit2, Eye, FileText, Paperclip, Plus, Sparkles, Tag, Trash2, User } from 'lucide-react';
 import { TASK_STATUSES, type ActionTask } from '../../../../../shared/action-task';
+import { listTaskEvidence } from '@/services/eightd-service';
+import { TaskEvidenceSection } from './task-evidence';
 
 /**
  * Bảng việc đã chốt của một bước D.
@@ -20,8 +32,7 @@ import { TASK_STATUSES, type ActionTask } from '../../../../../shared/action-tas
  * chắn để tới lúc audit không ai nói được việc nào đã có người chịu trách nhiệm.
  * Cùng quan hệ với `team.roster` → `team.assignedRoster` ở D1.
  *
- * Bảng cố ý chỉ hiện năm cột. Mô tả, đính kèm và phần còn lại nằm sau nút chi
- * tiết — một bảng phải quét được bằng mắt, và mô tả dài làm hỏng đúng việc đó.
+ * Bảng hiển thị 6 cột: Task | Assignee | Duration | Status | Evidence | (actions).
  */
 
 const STATUS_TONE: Record<string, string> = {
@@ -53,11 +64,17 @@ function Blank({ label }: { label: string }) {
 function TaskDetail({
     task,
     initialEditing = false,
+    readOnly = false,
+    reportID = '',
+    disciplineCode = '',
     onClose,
     onSave,
 }: {
     task: ActionTask | null;
     initialEditing?: boolean;
+    readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
     onClose: () => void;
     onSave: (updatedTask: ActionTask) => void;
 }) {
@@ -66,14 +83,14 @@ function TaskDetail({
     const [isEditing, setIsEditing] = useState(initialEditing);
     const [name, setName] = useState(task.name);
     const [assignee, setAssignee] = useState(task.assignee);
-    const [durationDays, setDurationDays] = useState(task.durationDays || 0);
+    const [durationDays, setDurationDays] = useState<number | string>(task.durationDays ? String(task.durationDays) : '');
     const [status, setStatus] = useState(task.status || 'Not started');
     const [description, setDescription] = useState(task.description);
 
     useEffect(() => {
         setName(task.name);
         setAssignee(task.assignee);
-        setDurationDays(task.durationDays || 0);
+        setDurationDays(task.durationDays ? String(task.durationDays) : '');
         setStatus(task.status || 'Not started');
         setDescription(task.description);
         setIsEditing(initialEditing);
@@ -88,160 +105,222 @@ function TaskDetail({
             status,
             description: description.trim(),
         });
+        setIsEditing(false);
     };
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle className="text-base flex items-center justify-between pr-6">
-                        {isEditing ? (
-                            <input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                className="w-full rounded border bg-background px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                                placeholder="Task name..."
-                            />
-                        ) : (
-                            <span>{task.name}</span>
-                        )}
-                    </DialogTitle>
-                    <DialogDescription className="text-xs">
-                        Task detail & assignment — view or edit task information.
-                    </DialogDescription>
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl md:max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader className="space-y-2 border-b pb-3">
+                    <div className="flex items-center justify-between gap-2 pr-6">
+                        <div className="flex items-center gap-2.5">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <FileText className="h-4 w-4" />
+                            </span>
+                            <div>
+                                <DialogTitle className="text-base font-semibold">
+                                    {isEditing ? 'Edit Task Details' : 'Task Details'}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground">
+                                    {isEditing
+                                        ? 'Update task assignment, schedule, and scope'
+                                        : 'View detailed task instructions and assignment status'}
+                                </DialogDescription>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {task.origin === 'AI suggestion' ? (
+                                <Badge variant="outline" className="gap-1 text-[11px] font-normal border-primary/30 text-primary bg-primary/5">
+                                    <Sparkles className="h-3.5 w-3.5" /> AI Suggestion
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="gap-1 text-[11px] font-normal text-muted-foreground">
+                                    <User className="h-3.5 w-3.5" /> User Added
+                                </Badge>
+                            )}
+                            <StatusChip status={isEditing ? status : task.status} />
+                        </div>
+                    </div>
                 </DialogHeader>
 
                 {isEditing ? (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
-                                Description
-                            </label>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                rows={3}
-                                className="w-full rounded border bg-background p-2 text-[13px] leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
-                                placeholder="Task description & instructions..."
+                    <div className="space-y-4 pt-2">
+                        {/* Task Name */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Task Name <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                className="h-8 text-xs bg-background font-medium"
+                                placeholder="Task name..."
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
+                        {/* Description */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Description & Instructions
+                            </Label>
+                            <Textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                rows={4}
+                                className="text-xs leading-relaxed bg-background min-h-[80px]"
+                                placeholder="Detailed instructions, scope of work, or criteria..."
+                            />
+                        </div>
+
+                        {/* Grid */}
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
                                     Assignee
-                                </label>
-                                <input
+                                </Label>
+                                <Input
                                     value={assignee}
                                     onChange={(e) => setAssignee(e.target.value)}
-                                    className="w-full rounded border bg-background px-2.5 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-primary"
-                                    placeholder="Assignee name..."
+                                    className="h-8 text-xs bg-background"
+                                    placeholder="e.g. Quality Engineer"
                                 />
                             </div>
-                            <div>
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
                                     Duration (Days)
-                                </label>
-                                <input
+                                </Label>
+                                <Input
                                     type="number"
                                     min={0}
+                                    placeholder="0"
                                     value={durationDays}
-                                    onChange={(e) => setDurationDays(Number(e.target.value))}
-                                    className="w-full rounded border bg-background px-2.5 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-primary"
+                                    onChange={(e) => setDurationDays(e.target.value)}
+                                    className="h-8 text-xs bg-background"
                                 />
                             </div>
-                            <div>
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
                                     Status
-                                </label>
-                                <select
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value)}
-                                    className="w-full rounded border bg-background px-2.5 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-primary"
-                                >
-                                    {TASK_STATUSES.map((st) => (
-                                        <option key={st} value={st}>{st}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
-                                    Origin
-                                </label>
-                                <input
-                                    disabled
-                                    value={task.origin}
-                                    className="w-full rounded border bg-muted px-2.5 py-1 text-[13px] text-muted-foreground cursor-not-allowed"
-                                />
+                                </Label>
+                                <Select value={status} onValueChange={setStatus}>
+                                    <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TASK_STATUSES.map((st) => (
+                                            <SelectItem key={st} value={st}>{st}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t">
                             <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs">
                                 Cancel
                             </Button>
-                            <Button size="sm" onClick={handleSave} className="h-8 text-xs">
+                            <Button size="sm" onClick={handleSave} disabled={!name.trim()} className="h-8 text-xs">
                                 Save changes
                             </Button>
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Description
+                    <div className="space-y-4 pt-2">
+                        {/* Task Title Box */}
+                        <div className="rounded-lg border bg-card p-3.5 space-y-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Task Statement
                             </div>
-                            <p className="mt-1 text-[13px] leading-relaxed">
-                                {task.description || <Blank label="No description yet." />}
+                            <p className="text-sm font-medium leading-relaxed text-foreground break-words">
+                                {task.name}
                             </p>
                         </div>
 
-                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-                            <div className="min-w-0">
-                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</dt>
-                                <dd className="mt-0.5 text-[13px]">{task.assignee || <Blank label="Not assigned" />}</dd>
+                        {/* Attribute Cards Grid */}
+                        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                                    <User className="h-4 w-4 text-muted-foreground" /> Assignee
+                                </div>
+                                <div className="text-xs font-semibold text-foreground truncate">
+                                    {task.assignee || <Blank label="Unassigned" />}
+                                </div>
                             </div>
-                            <div className="min-w-0">
-                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Duration</dt>
-                                <dd className="mt-0.5 text-[13px]">
-                                    {task.durationDays > 0 ? `${task.durationDays} day${task.durationDays > 1 ? 's' : ''}` : <Blank label="Not estimated" />}
-                                </dd>
-                            </div>
-                            <div className="min-w-0">
-                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</dt>
-                                <dd className="mt-0.5 text-[13px]"><StatusChip status={task.status} /></dd>
-                            </div>
-                            <div className="min-w-0">
-                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Origin</dt>
-                                <dd className="mt-0.5 text-[13px]">{task.origin}</dd>
-                            </div>
-                        </dl>
 
-                        <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Attachments
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" /> Duration
+                                </div>
+                                <div className="text-xs font-semibold text-foreground">
+                                    {task.durationDays > 0 ? `${task.durationDays} day${task.durationDays > 1 ? 's' : ''}` : <Blank label="Not estimated" />}
+                                </div>
                             </div>
-                            {task.attachments.length === 0 ? (
-                                <p className="mt-1 text-[13px]"><Blank label="None attached." /></p>
-                            ) : (
-                                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                                    <Tag className="h-3.5 w-3.5 text-muted-foreground" /> Status
+                                </div>
+                                <div>
+                                    <StatusChip status={task.status} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Description Section */}
+                        {/* Description Section */}
+                        <div className="rounded-lg border bg-muted/10 p-3.5 space-y-1.5">
+                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Description & Instructions
+                            </div>
+                            <div className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                                {task.description ? (
+                                    task.description
+                                ) : (
+                                    <span className="italic text-muted-foreground">No description or instructions recorded.</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Completion Evidence Section */}
+                        {reportID && disciplineCode && (
+                            <TaskEvidenceSection
+                                reportID={reportID}
+                                disciplineCode={disciplineCode}
+                                task={task}
+                                readOnly={readOnly}
+                            />
+                        )}
+
+                        {/* Attachments Section */}
+                        {task.attachments && task.attachments.length > 0 && (
+                            <div className="space-y-1.5">
+                                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Attachments ({task.attachments.length})
+                                </div>
+                                <ul className="flex flex-wrap gap-2">
                                     {task.attachments.map((file) => (
                                         <li
                                             key={file.name}
-                                            className="inline-flex items-center gap-1 rounded border bg-muted px-2 py-0.5 text-[11px]"
+                                            className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs"
                                         >
-                                            <Paperclip className="h-3 w-3" />
-                                            <span className="font-medium">{file.kind}</span>
+                                            <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <span className="font-medium text-foreground">{file.kind}</span>
                                             <span className="text-muted-foreground">{file.name}</span>
                                         </li>
                                     ))}
                                 </ul>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                            <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs">
-                                Edit Task
+                        {/* Footer */}
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t">
+                            {!readOnly && (
+                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs gap-1.5">
+                                    <Edit2 className="h-3.5 w-3.5" /> Edit Task
+                                </Button>
+                            )}
+                            <Button size="sm" variant="default" onClick={onClose} className="h-8 text-xs">
+                                Close
                             </Button>
                         </div>
                     </div>
@@ -251,14 +330,34 @@ function TaskDetail({
     );
 }
 
-export function TaskTable({ tasks, onChange }: {
+export function TaskTable({
+    tasks,
+    onChange,
+    readOnly = false,
+    reportID = '',
+    disciplineCode = '',
+}: {
     tasks: ActionTask[];
     onChange: (next: ActionTask[]) => void;
+    readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
 }) {
     const [selectedTask, setSelectedTask] = useState<ActionTask | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [adding, setAdding] = useState(false);
-    const [draft, setDraft] = useState('');
+
+    const [newTaskName, setNewTaskName] = useState('');
+    const [newDescription, setNewDescription] = useState('');
+    const [newAssignee, setNewAssignee] = useState('');
+    const [newDurationDays, setNewDurationDays] = useState<number | string>('');
+    const [newStatus, setNewStatus] = useState<string>(TASK_STATUSES[0]);
+
+    const { data: evidences = [] } = useQuery({
+        queryKey: ['8d', 'evidence', reportID],
+        queryFn: () => listTaskEvidence(reportID),
+        enabled: Boolean(reportID),
+    });
 
     const persist = onChange;
 
@@ -272,21 +371,25 @@ export function TaskTable({ tasks, onChange }: {
         setSelectedTask(null);
     };
 
-    const addByHand = () => {
-        const name = draft.trim();
+    const handleCreateTask = () => {
+        const name = newTaskName.trim();
         if (!name) return;
-        setDraft('');
-        setAdding(false);
         persist([...tasks, {
-            id: `task-manual-${tasks.length + 1}`,
+            id: `task-manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
             name,
-            description: '',
-            assignee: '',
-            durationDays: 0,
-            status: TASK_STATUSES[0],
+            description: newDescription.trim(),
+            assignee: newAssignee.trim(),
+            durationDays: Math.max(0, Number(newDurationDays) || 0),
+            status: newStatus || TASK_STATUSES[0],
             origin: 'User added',
             attachments: [],
         }]);
+        setNewTaskName('');
+        setNewDescription('');
+        setNewAssignee('');
+        setNewDurationDays('');
+        setNewStatus(TASK_STATUSES[0]);
+        setAdding(false);
     };
 
     return (
@@ -295,12 +398,12 @@ export function TaskTable({ tasks, onChange }: {
                 Assigned tasks
             </div>
             <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[560px] text-[13px]">
+                <table className="w-full min-w-[660px] text-[13px]">
                     <thead>
                         <tr className="border-b bg-muted/40 text-left">
-                            {['Task', 'Assignee', 'Duration', 'Status', ''].map((head) => (
+                            {['Task', 'Assignee', 'Duration', 'Status', 'Evidence', ''].map((head, idx) => (
                                 <th
-                                    key={head}
+                                    key={head || `action-col-${idx}`}
                                     className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                                 >
                                     {head}
@@ -311,106 +414,220 @@ export function TaskTable({ tasks, onChange }: {
                     <tbody>
                         {tasks.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
                                     No task accepted yet. Use <span className="font-medium">+ Add</span> on a
                                     suggestion above, or add one by hand.
                                 </td>
                             </tr>
-                        ) : tasks.map((task) => (
-                            <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30">
-                                <td className="px-3 py-2">
-                                    <span className="flex items-center gap-1.5">
-                                        {task.origin === 'AI suggestion' && (
-                                            <Sparkles className="h-3 w-3 shrink-0 text-primary" />
-                                        )}
-                                        <span className="font-medium">{task.name}</span>
-                                    </span>
-                                </td>
-                                <td className="px-3 py-2">
-                                    {task.assignee
-                                        ? <span className="inline-flex items-center gap-1">
-                                            <User className="h-3 w-3 text-muted-foreground" />{task.assignee}
+                        ) : tasks.map((task) => {
+                            const taskFiles = evidences.filter(
+                                (e) => e.taskId === task.id && (disciplineCode ? e.disciplineCode === disciplineCode : true),
+                            );
+                            const isMissingEvidence = task.status === 'Done' && taskFiles.length === 0;
+
+                            return (
+                                <tr
+                                    key={task.id}
+                                    className={cn(
+                                        'border-b last:border-0 transition-colors',
+                                        isMissingEvidence
+                                            ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500 hover:bg-amber-500/15'
+                                            : 'hover:bg-muted/30',
+                                    )}
+                                >
+                                    <td className="px-3 py-2">
+                                        <span className="flex items-center gap-1.5">
+                                            {task.origin === 'AI suggestion' && (
+                                                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                            )}
+                                            <span className="font-medium">{task.name}</span>
                                         </span>
-                                        : <Blank label="Unassigned" />}
-                                </td>
-                                <td className="px-3 py-2 tabular-nums">
-                                    {task.durationDays > 0 ? `${task.durationDays}d` : <Blank label="—" />}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap"><StatusChip status={task.status} /></td>
-                                <td className="px-3 py-2 text-right">
-                                    <div className="inline-flex items-center gap-1 justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
-                                            aria-label={`Detail for ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10"
-                                            title="View detail"
-                                        >
-                                            <Eye className="h-3.5 w-3.5" />
-                                            Detail
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
-                                            aria-label={`Edit ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
-                                            title="Edit task"
-                                        >
-                                            <Edit2 className="h-3.5 w-3.5" />
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeTask(task.id)}
-                                            aria-label={`Remove ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
-                                            title="Remove task"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                            Remove
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        {task.assignee
+                                            ? <span className="inline-flex items-center gap-1.5 text-foreground">
+                                                <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                <span>{task.assignee}</span>
+                                            </span>
+                                            : <Blank label="Unassigned" />}
+                                    </td>
+                                    <td className="px-3 py-2 tabular-nums">
+                                        {task.durationDays > 0 ? `${task.durationDays}d` : <Blank label="—" />}
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        <StatusChip status={task.status} />
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        {task.status !== 'Done' ? (
+                                            <span className="text-muted-foreground">—</span>
+                                        ) : taskFiles.length === 0 ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning hover:bg-warning/20 transition-colors cursor-pointer"
+                                                title="Completion evidence required. Click to view or upload."
+                                            >
+                                                Required
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors cursor-pointer"
+                                                title="View attached evidence"
+                                            >
+                                                {taskFiles.length} {taskFiles.length === 1 ? 'PDF' : 'PDFs'}
+                                            </button>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        <div className="inline-flex items-center gap-1 justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                aria-label="View details"
+                                                className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                                title="View details"
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                            </button>
+                                            {!readOnly && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
+                                                        aria-label="Edit task"
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                                        title="Edit task"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeTask(task.id)}
+                                                        aria-label="Remove task"
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                                                        title="Remove task"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
 
-            {adding ? (
-                <div className="flex items-center gap-1.5">
-                    <input
-                        autoFocus
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') addByHand(); }}
-                        placeholder="Task name…"
-                        className="flex-1 rounded border bg-background px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <Button size="sm" className="h-7 text-[11px]" onClick={addByHand}>Add</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setAdding(false)}>
-                        Cancel
+            {!readOnly && (
+                adding ? (
+                    <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+                        <p className="text-xs font-semibold text-foreground">Add New Task</p>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Task Name <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                                type="text"
+                                placeholder="e.g. Replace clamp pads and perform calibration..."
+                                value={newTaskName}
+                                onChange={(e) => setNewTaskName(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Description & Instructions
+                            </Label>
+                            <Textarea
+                                placeholder="Detailed instructions, scope of work, or criteria..."
+                                value={newDescription}
+                                onChange={(e) => setNewDescription(e.target.value)}
+                                rows={2}
+                                className="text-xs leading-relaxed bg-background min-h-[60px]"
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Assignee
+                                </Label>
+                                <Input
+                                    type="text"
+                                    placeholder="e.g. Quality Engineer"
+                                    value={newAssignee}
+                                    onChange={(e) => setNewAssignee(e.target.value)}
+                                    className="h-8 text-xs bg-background"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Duration (Days)
+                                </Label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    placeholder="0"
+                                    value={newDurationDays}
+                                    onChange={(e) => setNewDurationDays(e.target.value)}
+                                    className="h-8 text-xs bg-background"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                    Status
+                                </Label>
+                                <Select value={newStatus} onValueChange={setNewStatus}>
+                                    <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TASK_STATUSES.map((st) => (
+                                            <SelectItem key={st} value={st}>
+                                                {st}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()}>
+                                Add task
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={() => setAdding(true)}
+                    >
+                        <Plus className="mr-1 h-3 w-3" /> Add task
                     </Button>
-                </div>
-            ) : (
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => setAdding(true)}
-                >
-                    <Plus className="mr-1 h-3 w-3" /> Add task
-                </Button>
+                )
             )}
 
             <TaskDetail
                 task={selectedTask}
                 initialEditing={isEditMode}
+                readOnly={readOnly}
+                reportID={reportID}
+                disciplineCode={disciplineCode}
                 onClose={() => setSelectedTask(null)}
                 onSave={updateTask}
             />
         </div>
     );
 }
+
 
 
