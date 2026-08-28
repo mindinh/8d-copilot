@@ -73,6 +73,7 @@ import {
     PipelineError,
     type AnalyzeOutcome,
     type CaseContext,
+    type DisciplineCode,
     type DisciplineDraft,
     type EightDResult,
 } from './types';
@@ -477,6 +478,8 @@ async function generateReportProgressive(
     independent: IndependentAnalysis,
     perStep: PerStepPrecedents,
     onStepComplete?: StepCompleteCallback,
+    initialCompleted?: Map<string, DisciplineDraft>,
+    targetStepCodes: readonly DisciplineCode[] = STEP_CODES,
 ): Promise<{
     result: EightDResult;
     tokens: number;
@@ -489,13 +492,6 @@ async function generateReportProgressive(
     const repairs: string[] = [];
 
     // Cả tám bước, không phải D1–D4.
-    //
-    // Danh sách này từng bị viết cứng thành ['D1','D2','D3','D4'] từ hồi chỉ bốn
-    // bước đầu có Form Editor. Giờ StepPrompts trong DB có form cho cả tám (D5:5
-    // trường, D6:5, D7:6, D8:7), nhưng chúng chưa bao giờ được nạp — nên D5–D8
-    // không có contract trong prompt, không có validation, và `resultJson` của
-    // chúng luôn là `{}`. Lấy thẳng `STEP_CODES` để không còn hai danh sách phải
-    // nhớ đồng bộ.
     const configurableCodes = STEP_CODES;
     const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
     const effectiveConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
@@ -528,7 +524,7 @@ async function generateReportProgressive(
 
     const disciplineGuides = await getDisciplineGuide();
     /** Bước đã sinh xong, tra theo mã — thứ tự D1..D8 dựng lại ở cuối. */
-    const completed = new Map<string, DisciplineDraft>();
+    const completed = new Map<string, DisciplineDraft>(initialCompleted ? initialCompleted.entries() : []);
 
     /**
      * Xếp hàng các lượt ghi DB.
@@ -889,7 +885,7 @@ async function generateReportProgressive(
             return discipline ? [discipline] : [];
         });
 
-    const waves = planStepWaves(STEP_CODES);
+    const waves = planStepWaves(targetStepCodes);
     for (const [index, wave] of waves.entries()) {
         const preceding = orderedCompleted();
         const startedAt = Date.now();
@@ -1022,6 +1018,99 @@ export async function analyze(
     } = onStepComplete
         ? await phase('analyze', () => generateReportProgressive(context, enrichment, independent, perStep, onStepComplete))
         : await phase('analyze', () => generateReport(context, enrichment, independent, perStep));
+
+    const [parseModel, analyzeModel] = await Promise.all([
+        resolveModel(ACTIVITY_PARSE),
+        resolveModel(ACTIVITY_ANALYZE),
+    ]);
+
+    const runtime = Object.fromEntries(result.disciplines.flatMap((discipline) => {
+        const config = runtimeConfigs[discipline.code];
+        if (!config?.formSchema) return [];
+        const violations = validateFlexibleResult(discipline, config, runtimeInputs[discipline.code] ?? {});
+        return [[discipline.code, {
+            resultJson: JSON.stringify(discipline.data ?? {}),
+            formSchemaJson: JSON.stringify(config.formSchema),
+            validationJson: JSON.stringify({ version: 1, violations, inputDiagnostics: inputDiagnostics[discipline.code] ?? [], repairs }),
+            configVersion: config.configVersion,
+        }]];
+    }));
+
+    return {
+        context,
+        result,
+        independent,
+        models: { parse: parseModel, analyze: analyzeModel },
+        precedents: perStep,
+        tokensUsed: parseTokens + diagnoseTokens + analyzeTokens,
+        durationMs: Date.now() - started,
+        repairs,
+        runtime,
+    };
+}
+
+/**
+ * Phân tích lại các bước downstream (D5..D8) dựa trên các bước trước đó (D1..D4) đã có và đã sửa.
+ */
+export async function analyzeDownstreamReport(
+    raw: unknown,
+    existingDisciplines: Array<{ code: string; title?: string; summary?: string; content?: string; actionItems?: string; sources?: string; confidence?: number; dataBacked?: boolean; resultJson?: string }>,
+    fromStep: DisciplineCode = 'D5',
+    onStepComplete?: StepCompleteCallback,
+): Promise<AnalyzeOutcome> {
+    const started = Date.now();
+    const fromIndex = STEP_CODES.indexOf(fromStep);
+    const downstreamCodes: readonly DisciplineCode[] = fromIndex >= 0 ? STEP_CODES.slice(fromIndex) : (['D5', 'D6', 'D7', 'D8'] as const);
+    const priorCodes: readonly DisciplineCode[] = fromIndex >= 0 ? STEP_CODES.slice(0, fromIndex) : (['D1', 'D2', 'D3', 'D4'] as const);
+
+    const initialCompleted = new Map<string, DisciplineDraft>();
+    for (const row of existingDisciplines) {
+        if ((priorCodes as readonly string[]).includes(row.code)) {
+            const code = row.code as DisciplineCode;
+            let data = {};
+            try { data = JSON.parse(row.resultJson || '{}'); } catch { }
+            initialCompleted.set(code, {
+                code,
+                sequence: STEP_CODES.indexOf(code) + 1,
+                title: row.title ?? DISCIPLINE_TITLES[code] ?? '',
+                summary: row.summary ?? '',
+                content: row.content ?? '',
+                actionItems: typeof row.actionItems === 'string' ? JSON.parse(row.actionItems || '[]') : (Array.isArray(row.actionItems) ? row.actionItems : []),
+                sources: typeof row.sources === 'string' ? JSON.parse(row.sources || '[]') : (Array.isArray(row.sources) ? row.sources : []),
+                confidence: typeof row.confidence === 'number' ? row.confidence : 0.8,
+                dataBacked: typeof row.dataBacked === 'boolean' ? row.dataBacked : true,
+                data,
+            });
+        }
+    }
+
+    const context = mapCase(raw);
+    const [
+        { enrichment, tokens: parseTokens },
+        { analysis: independent, tokens: diagnoseTokens },
+        perStep,
+    ] = await Promise.all([
+        enrichContext(raw, context),
+        diagnoseIndependently(context),
+        findPrecedentsByStep(context, raw).catch(() => emptyPerStepPrecedents()),
+    ]);
+
+    const {
+        result,
+        tokens: analyzeTokens,
+        configs: runtimeConfigs,
+        inputs: runtimeInputs,
+        diagnostics: inputDiagnostics,
+        repairs,
+    } = await generateReportProgressive(
+        context,
+        enrichment,
+        independent,
+        perStep,
+        onStepComplete,
+        initialCompleted,
+        downstreamCodes,
+    );
 
     const [parseModel, analyzeModel] = await Promise.all([
         resolveModel(ACTIVITY_PARSE),

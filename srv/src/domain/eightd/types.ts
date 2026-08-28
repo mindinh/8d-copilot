@@ -173,7 +173,9 @@ export interface CaseContext {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const DISCIPLINE_CODES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] as const;
+export const STEP_CODES = DISCIPLINE_CODES;
 export type DisciplineCode = (typeof DISCIPLINE_CODES)[number];
+export type StepCode = DisciplineCode;
 
 export const DISCIPLINE_TITLES: Record<DisciplineCode, string> = {
     D1: 'Establish the Team',

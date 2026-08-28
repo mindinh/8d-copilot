@@ -18,7 +18,7 @@
  */
 
 import cds from '@sap/cds';
-import type { AnalyzeOutcome, CaseContext } from './types';
+import type { AnalyzeOutcome, CaseContext, DisciplineCode } from './types';
 import {
     evaluateClosureGate,
     normalizeStatus,
@@ -200,6 +200,32 @@ export async function saveResult(reportID: string, outcome: AnalyzeOutcome): Pro
     });
 }
 
+/** Ghi kết quả cho các bước downstream và cập nhật summary của report mà không xoá các bước trước. */
+export async function saveDownstreamResult(
+    reportID: string,
+    outcome: AnalyzeOutcome,
+    downstreamCodes: readonly DisciplineCode[],
+): Promise<void> {
+    const { result, models, tokensUsed, durationMs } = outcome;
+
+    for (const d of result.disciplines) {
+        if (downstreamCodes.includes(d.code)) {
+            await savePartialDiscipline(reportID, {
+                discipline: d,
+                runtime: outcome.runtime?.[d.code],
+            });
+        }
+    }
+
+    await finalizeReport(reportID, {
+        internalSummary: result.internalSummary,
+        customerSummary: result.customerSummary,
+        models,
+        tokensUsed,
+        durationMs,
+    });
+}
+
 /**
  * Đánh dấu thất bại.
  *
@@ -340,7 +366,18 @@ const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Obj
         'problem.isIsNotBasis',
     ]),
     D3: new Set(['containment.actions', 'containment.actionsOverride', 'containment.assignedActions', 'actionItems', 'actions']),
-    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa', 'rootCause.fiveWhy', 'rootCause.customFindings']),
+    D4: new Set([
+        'whyChain',
+        'ishikawaCustomFindings',
+        'selectedRootCategory',
+        'rootCause.whyChain',
+        'rootCause.ishikawa',
+        'rootCause.fiveWhy',
+        'rootCause.customFindings',
+        'rootCause.statement',
+        'rootCause.statementOverride',
+        'statement',
+    ]),
     D5: new Set(['corrective.actions', 'corrective.assignedActions', 'actionItems', 'actions']),
     D6: new Set(['verification.plan', 'verification.assignedActions', 'implementation.actions', 'implementation.assignedActions', 'actionItems', 'actions']),
     D7: new Set(['preventive.actions', 'preventive.assignedActions', 'preventive.fmea', 'prevention.actions', 'prevention.assignedActions', 'actionItems', 'actions']),

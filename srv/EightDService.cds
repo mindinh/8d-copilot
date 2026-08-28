@@ -62,12 +62,15 @@ service EightDService {
      */
     action analyzeFromJson(payload : LargeString, title : String) returns String;
 
-    /**
-     * Chạy lại trên `sourcePayload` đã lưu. Xoá toàn bộ disciplines cũ rồi ghi
-     * bộ mới — không merge, vì trộn hai lần chạy khác model sẽ cho ra một báo
-     * cáo không nhất quán mà chẳng ai truy được phần nào từ đâu.
-     */
     action reanalyze(reportID : String) returns String;
+
+    /**
+     * Chạy lại các bước downstream (ví dụ D5..D8) dựa trên kết quả các bước trước đã sửa.
+     *
+     * @param reportID ID của report.
+     * @param fromStep Mã bước bắt đầu chạy lại (mặc định là 'D5').
+     */
+    action reanalyzeDownstream(reportID : String, fromStep : String) returns String;
 
     // ── Kho case lịch sử ─────────────────────────────────────────────────────
 

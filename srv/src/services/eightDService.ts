@@ -28,7 +28,7 @@
  */
 
 import cds from '@sap/cds';
-import { analyze } from '../domain/eightd/eightDAnalyzer';
+import { analyze, analyzeDownstreamReport } from '../domain/eightd/eightDAnalyzer';
 import { mapCase } from '../domain/eightd/caseMapper';
 import { blockingIssues, validateDataset } from '../domain/eightd/datasetValidator';
 import { getGlobalModelConfig } from '../core/ai/globalModelConfig';
@@ -45,6 +45,7 @@ import {
     reviewDiscipline,
     saveAssignedTeam,
     saveDisciplineFieldValue,
+    saveDownstreamResult,
     savePartialDiscipline,
     saveReportContext,
     saveResult,
@@ -57,7 +58,7 @@ import {
     statusForDecision,
     REVIEW_DECISIONS,
 } from '../domain/eightd/review';
-import { PipelineError, type CaseContext } from '../domain/eightd/types';
+import { DISCIPLINE_CODES, STEP_CODES, PipelineError, type CaseContext, type DisciplineCode } from '../domain/eightd/types';
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
 
@@ -153,6 +154,55 @@ function runInBackground(reportID: string, payload: string): void {
     });
 }
 
+/**
+ * Chạy lại các bước downstream ở nền bằng AI rồi ghi kết quả.
+ */
+function runDownstreamInBackground(
+    reportID: string,
+    payload: string,
+    existingDisciplines: any[],
+    fromStep: string = 'D5',
+): void {
+    cds.spawn({}, async () => {
+        try {
+            const fromCode = (DISCIPLINE_CODES.includes(fromStep as DisciplineCode) ? fromStep : 'D5') as DisciplineCode;
+            const fromIndex = STEP_CODES.indexOf(fromCode);
+            const downstreamCodes = STEP_CODES.slice(fromIndex);
+
+            const outcome = await analyzeDownstreamReport(
+                JSON.parse(payload),
+                existingDisciplines,
+                fromCode,
+                async (stepOutcome) => {
+                    await cds.tx(async () => {
+                        await savePartialDiscipline(reportID, {
+                            discipline: stepOutcome.discipline,
+                            runtime: stepOutcome.runtimeInfo,
+                        });
+                    });
+                    LOG.info(`Report ${reportID}: downstream step ${stepOutcome.discipline.code} đã commit.`);
+                },
+            );
+
+            await cds.tx(async () => {
+                await saveDownstreamResult(reportID, outcome, downstreamCodes);
+            });
+            LOG.info(
+                `Report ${reportID} downstream (từ ${fromStep}) xong trong ${(outcome.durationMs / 1000).toFixed(1)}s, ` +
+                `${outcome.tokensUsed} token` +
+                (outcome.repairs.length ? `, postProcess chữa ${outcome.repairs.length} chỗ` : ''),
+            );
+        } catch (e: any) {
+            LOG.error(`Report ${reportID} reanalyzeDownstream thất bại:`, e);
+            try {
+                await markFailed(reportID, describe(e));
+            } catch (writeErr: any) {
+                LOG.error(`Không ghi được trạng thái Failed cho ${reportID}:`, writeErr?.message);
+            }
+        }
+    });
+}
+
 export function registerEightDHandlers(srv: any): void {
 
     // ── analyzeFromJson ──────────────────────────────────────────────────────
@@ -225,6 +275,41 @@ export function registerEightDHandlers(srv: any): void {
         runInBackground(reportID, row.sourcePayload);
 
         LOG.info(`Report ${reportID} (case ${row.notificationId}) đã xếp lịch chạy lại`);
+        return reportID;
+    });
+
+    // ── reanalyzeDownstream ───────────────────────────────────────────────────
+    srv.on('reanalyzeDownstream', async (req: any) => {
+        const { reportID, fromStep = 'D5' } = req.data ?? {};
+        if (typeof reportID !== 'string' || !reportID.trim()) {
+            return req.error(400, 'reportID is required.');
+        }
+
+        const row = await getReportForRerun(reportID);
+        if (!row) return req.error(404, `Report ${reportID} not found.`);
+        if (!row.sourcePayload) {
+            return req.error(422, `Report ${reportID} has no sourcePayload to re-run.`);
+        }
+        const db = await cds.connect.to('db');
+        const existingDisciplines = await db.run(
+            SELECT.from('cnma.proresolve.Disciplines').where({ report_ID: reportID }),
+        );
+
+        const fromCode = (DISCIPLINE_CODES.includes(fromStep as DisciplineCode) ? fromStep : 'D5') as DisciplineCode;
+        const fromIndex = STEP_CODES.indexOf(fromCode);
+        const downstreamCodes = STEP_CODES.slice(fromIndex);
+
+        // Xoá các bước downstream cũ khỏi DB để UI lập tức chuyển sang trạng thái sinh (Generating...)
+        for (const code of downstreamCodes) {
+            await db.run(DELETE.from('cnma.proresolve.Disciplines').where({ report_ID: reportID, code }));
+        }
+
+        await markAnalyzing(reportID);
+        await getGlobalModelConfig();
+
+        runDownstreamInBackground(reportID, row.sourcePayload, existingDisciplines, fromStep);
+
+        LOG.info(`Report ${reportID} (case ${row.notificationId}) đã xếp lịch phân tích lại các bước từ ${fromStep}`);
         return reportID;
     });
 

@@ -214,7 +214,7 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
         );
     }
     if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} readOnly={isLocked} reportID={reportID} disciplineCode={disciplineCode} />;
-    if (field.widget === 'ai-draft') return <AiDraftWidget value={value} />;
+    if (field.widget === 'ai-draft') return <AiDraftWidget value={value} disciplineID={disciplineID} readOnly={isLocked} reportID={reportID} fieldKey={field.key} />;
     if (field.widget === 'fmea-link') return <FmeaLinkWidget value={value} />;
     // Cổng đóng case là sự thật về CẢ report, nên nó đọc trạng thái duyệt của các
     // bước anh em chứ không đọc `resultJson` — để model tự trả lời câu này là để
@@ -407,17 +407,11 @@ function isExcludedField(code: string, key: string, label?: string): boolean {
     return false;
 }
 
-export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson, siblings = [] }: {
+export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson, siblings = [], reportID = '' }: {
     discipline: Discipline8D;
     caseContext?: string;
-    /**
-     * Tam buoc cua cung report.
-     *
-     * Chi widget `closure-gate` cua D8 can den: "case nay dong duoc chua" la su
-     * that ve CA report chu khong phai ket luan cua rieng mot buoc, nen no phai
-     * doc trang thai duyet cua cac buoc anh em.
-     */
     siblings?: Discipline8D[];
+    reportID?: string;
     /**
      * Bo cuc dang cau hinh trong Form Editor, doc song tu `StepPrompts`.
      *
@@ -540,7 +534,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
                                                 data={data}
                                                 siblings={siblings}
                                                 readOnly={isCompleted}
-                                                reportID={(discipline as any).report_ID || (discipline as any).reportID || ''}
+                                                reportID={reportID || (discipline as any).report_ID || (discipline as any).reportID || ''}
                                                 disciplineCode={discipline.code}
                                             />
                                         );

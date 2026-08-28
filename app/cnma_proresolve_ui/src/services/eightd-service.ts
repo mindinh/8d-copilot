@@ -359,6 +359,15 @@ class EightDService extends BaseODataService<Report8D> {
         return res.data.value;
     }
 
+    /** Chạy lại các bước downstream (D5..D8) sau khi sửa D4. */
+    async reanalyzeDownstream(reportID: string, fromStep: string = 'D5'): Promise<string> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/reanalyzeDownstream`,
+            { reportID, fromStep },
+        );
+        return res.data.value;
+    }
+
     /**
      * Case tiền lệ của một report, kèm điểm và diễn giải từng tiêu chí.
      *
@@ -815,4 +824,8 @@ export async function deleteTaskEvidence(evidenceID: string): Promise<void> {
 
 export function getEvidenceDownloadUrl(evidenceID: string): string {
     return `/api/cnma/EIGHTD_SRV/TaskEvidences(${evidenceID})/content`;
+}
+
+export async function reanalyzeDownstream(reportID: string, fromStep: string = 'D5'): Promise<string> {
+    return eightDService.reanalyzeDownstream(reportID, fromStep);
 }

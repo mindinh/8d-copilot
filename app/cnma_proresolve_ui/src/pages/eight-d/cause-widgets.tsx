@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
     Button,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     Input,
     Label,
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { Star, Trash2 } from 'lucide-react';
+import { AlertTriangle, Edit3, Loader2, RefreshCw, Sparkles, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { saveDisciplineField } from '@/services/eightd-service';
+import { useQueryClient } from '@tanstack/react-query';
+import { reanalyzeDownstream, saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
 import {
     actionLabel,
@@ -602,34 +610,231 @@ export function ActionCardsWidget({
    Khoi ban nhap cua AI
    ───────────────────────────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Khối kết luận Root Cause (AI Draft + Chỉnh sửa & Chạy lại các bước sau)
+   ───────────────────────────────────────────────────────────────────────── */
+
 /**
- * Ket luan do AI soan, danh dau ro la BAN NHAP.
- *
- * -- Vi sao khong dung `callout` -
- * `callout` la mot khoi thong tin trung tinh: no noi "day la thong tin quan
- * trong". Cai can noi o day khac han - "day la MAY viet, chua ai duyet". Nhan
- * "AI DRAFT" nam de len vien khoi lam dieu do trong mot cai liec, va no la quy
- * uoc xuyen suot ban mockup.
- *
- * Mau canh bao nhat chu khong phai mau thanh cong: ban nhap chua duoc duyet thi
- * khong duoc trong nhu mot ket luan da chot.
+ * Kết luận Root Cause do AI soạn hoặc kỹ sư chỉnh sửa.
+ * Cho phép chỉnh sửa nội dung kết luận và cảnh báo xác nhận chạy lại các bước downstream (D5..D8).
  */
-export function AiDraftWidget({ value }: { value: unknown }) {
+export function AiDraftWidget({
+    value,
+    disciplineID,
+    readOnly = false,
+    reportID = '',
+    fieldKey = 'rootCause.statement',
+}: {
+    value: unknown;
+    disciplineID?: string;
+    readOnly?: boolean;
+    reportID?: string;
+    fieldKey?: string;
+}) {
+    const queryClient = useQueryClient();
+    const params = useParams<{ id?: string }>();
+    const effectiveReportID = reportID || params.id || '';
     const text = typeof value === 'string' ? value.trim() : '';
-    if (!text) {
-        return (
-            <p className="text-sm italic text-muted-foreground">
-                The AI produced no conclusion for this step.
-            </p>
-        );
-    }
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(text);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!editing) {
+            setDraft(text);
+        }
+    }, [text, editing]);
+
+    const handleStartEdit = () => {
+        setDraft(text);
+        setEditing(true);
+    };
+
+    const handleCancel = () => {
+        setDraft(text);
+        setEditing(false);
+    };
+
+    const handleRequestSave = () => {
+        if (draft.trim() === text) {
+            setEditing(false);
+            return;
+        }
+        setConfirmOpen(true);
+    };
+
+    const handleSaveAndReanalyze = async (reanalyze: boolean) => {
+        if (!disciplineID) return;
+        setSaving(true);
+        try {
+            const nextValue = draft.trim();
+            await saveDisciplineField(disciplineID, fieldKey || 'rootCause.statement', nextValue);
+            toast.success('Đã lưu kết luận nguyên nhân gốc.');
+            setConfirmOpen(false);
+            setEditing(false);
+
+            if (reanalyze && effectiveReportID) {
+                toast.info('Bắt đầu phân tích lại các bước sau D4 (D5, D6, D7, D8)...');
+                await reanalyzeDownstream(effectiveReportID, 'D5');
+                toast.success('Đã xếp lịch phân tích lại các bước D5-D8.');
+            }
+
+            await queryClient.invalidateQueries({ queryKey: ['8d'] });
+        } catch (e: any) {
+            toast.error(e?.response?.data?.error?.message || e.message || 'Lỗi khi lưu nguyên nhân gốc.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
-        <div className="relative mt-2 rounded-lg border border-destructive/25 bg-destructive/[0.04] px-4 py-4">
-            <span className="absolute -top-2.5 left-3.5 rounded-full bg-destructive px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
-                AI draft
-            </span>
-            <p className="break-words text-[13px] leading-relaxed">{text}</p>
+        <div className="relative mt-2 rounded-xl border border-primary/25 bg-primary/[0.03] p-4 shadow-xs transition-all">
+            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/15">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-foreground">
+                        {disciplineID ? 'Root Cause Conclusion (D4)' : 'AI Draft'}
+                    </span>
+                </div>
+                {!readOnly && disciplineID && !editing && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                        onClick={handleStartEdit}
+                    >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Chỉnh sửa
+                    </Button>
+                )}
+            </div>
+
+            {editing ? (
+                <div className="space-y-3 pt-1">
+                    <Textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        rows={3}
+                        placeholder="Nhập kết luận nguyên nhân gốc (ngắn gọn, đúng trọng tâm)..."
+                        className="text-[13px] leading-relaxed resize-y bg-background font-normal"
+                        autoFocus
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                            {draft.length} ký tự
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={handleCancel}
+                                disabled={saving}
+                            >
+                                Hủy
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs gap-1.5"
+                                onClick={handleRequestSave}
+                                disabled={saving || !draft.trim()}
+                            >
+                                Lưu thay đổi
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="min-w-0">
+                    {text ? (
+                        <p className="break-words text-[13px] leading-relaxed text-foreground font-medium">
+                            {text}
+                        </p>
+                    ) : (
+                        <p className="text-sm italic text-muted-foreground">
+                            The AI produced no conclusion for this step.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Warning Confirmation Modal */}
+            <Dialog open={confirmOpen} onOpenChange={(open) => { if (!open && !saving) setConfirmOpen(false); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <div className="flex items-center gap-2 text-warning mb-1">
+                            <AlertTriangle className="h-5 w-5 shrink-0" />
+                            <DialogTitle className="text-base font-bold text-foreground">
+                                Xác nhận thay đổi Root Cause
+                            </DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground leading-relaxed pt-1">
+                            Thay đổi nguyên nhân gốc (Root Cause) ở bước D4 sẽ tác động trực tiếp đến các bước hành động và phòng ngừa tiếp theo:
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs">
+                        <div className="font-semibold text-warning-foreground flex items-center gap-1.5">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Các bước phụ thuộc sẽ được chạy lại:
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-muted-foreground pl-1">
+                            <li><strong className="text-foreground">D5 (Corrective Actions):</strong> Khắc phục theo nguyên nhân mới.</li>
+                            <li><strong className="text-foreground">D6 (Verification Plan):</strong> Nghiệm thu và kiểm tra hiệu quả.</li>
+                            <li><strong className="text-foreground">D7 (Preventive Actions):</strong> Ngăn ngừa tái phát và cập nhật FMEA.</li>
+                            <li><strong className="text-foreground">D8 (Closure & Lessons):</strong> Tổng kết và công nhận nhóm.</li>
+                        </ul>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                        Hệ thống sẽ lưu nguyên nhân gốc mới và tự động kích hoạt AI phân tích lại từ bước D5 trở đi.
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfirmOpen(false)}
+                            disabled={saving}
+                            className="text-xs"
+                        >
+                            Hủy
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleSaveAndReanalyze(false)}
+                            disabled={saving}
+                            className="text-xs"
+                        >
+                            Chỉ lưu D4
+                        </Button>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleSaveAndReanalyze(true)}
+                            disabled={saving}
+                            className="text-xs gap-1.5 bg-primary font-semibold"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    Đang xử lý...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    Lưu & Chạy lại D5-D8
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
