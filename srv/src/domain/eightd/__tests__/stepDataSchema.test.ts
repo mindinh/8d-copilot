@@ -14,6 +14,7 @@
 
 import { buildStepDataSchema, normalizeStepConfig } from '../runtimeConfig';
 import { DISCIPLINE_ITEM_PROPERTIES, buildSingleDisciplineSchema } from '../schemas';
+import { DEFAULT_STEP_PROMPTS } from '../precedent/defaults';
 
 const config = (fields: unknown[]) =>
     normalizeStepConfig('D1', { formSchemaJson: JSON.stringify({ version: 1, fields }) });
@@ -63,6 +64,28 @@ describe('buildStepDataSchema', () => {
         const schema = buildStepDataSchema(config([SELECTION_METHOD])) as any;
         expect(schema.required).toContain('team');
         expect(schema.properties.team.required).toContain('selectionMethod');
+    });
+
+    it('giữ required item-level của row — chốt chặn row 5-Why có why mà không có answer', () => {
+        // Không có `required` trong items thì một row {step, why} thiếu answer
+        // vẫn hợp lệ theo schema — đúng kiểu khuyết mà Haiku hay trả.
+        const fiveWhyStrict = {
+            ...FIVE_WHY,
+            items: { ...FIVE_WHY.items, required: ['step', 'why', 'answer', 'evidence'] },
+        };
+        const schema = buildStepDataSchema(config([fiveWhyStrict])) as any;
+        expect(schema.properties.rootCause.properties.fiveWhy.items.required)
+            .toEqual(['step', 'why', 'answer', 'evidence']);
+    });
+
+    it('cấu hình D4 mặc định khai required item-level cho fiveWhy lẫn ishikawaBoard', () => {
+        const d4 = DEFAULT_STEP_PROMPTS.find((p) => p.stepCode === 'D4')!;
+        const schema = buildStepDataSchema(normalizeStepConfig('D4', d4)) as any;
+        const root = schema.properties.rootCause.properties;
+        expect(root.fiveWhy.items.required).toEqual(['step', 'why', 'answer', 'evidence']);
+        expect(root.ishikawaBoard.items.required).toEqual(['category', 'finding', 'isRootCause', 'source']);
+        expect(root.ishikawaBoard.minItems).toBe(6);
+        expect(schema.required).toContain('rootCause');
     });
 
     it('giữ minItems và kiểu phần tử của mảng đối tượng', () => {

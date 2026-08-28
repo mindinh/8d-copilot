@@ -14,12 +14,14 @@
 import {
     DISCIPLINE_CODES,
     DISCIPLINE_TITLES,
+    ISHIKAWA_CATEGORIES,
     type CaseContext,
     type DisciplineCode,
     type DisciplineDraft,
     type EightDResult,
 } from './types';
 import { buildSourceVocabulary, checkSources } from './sourceVocabulary';
+import type { IndependentFinding } from './independentAnalysis';
 
 function placeholder(code: DisciplineCode, index: number): DisciplineDraft {
     return {
@@ -36,6 +38,244 @@ function placeholder(code: DisciplineCode, index: number): DisciplineDraft {
         dataBacked: false,
         data: {},
     };
+}
+
+/** Giới hạn khớp `maxLength` của hai trường tương ứng trong D4_FORM_SCHEMA. */
+const D4_FINDING_MAX = 220;
+const D4_STATEMENT_MAX = 320;
+
+/** Bóc `finding` từ `independent` (IndependentAnalysis), chịu được shape lạ. */
+function findingOf(independent: unknown): IndependentFinding | null {
+    const finding = (independent as { finding?: unknown } | null | undefined)?.finding;
+    if (!finding || typeof finding !== 'object') return null;
+    const candidate = finding as IndependentFinding;
+    return typeof candidate.rootCauseCategory === 'string' ? candidate : null;
+}
+
+/**
+ * Backfill D4 tất định từ CaseContext VÀ từ chẩn đoán độc lập.
+ *
+ * D4 là bước cả báo cáo bị chấm theo — và pipeline này thực ra có sẵn HAI nguồn
+ * root cause không phụ thuộc vào lượt viết báo cáo:
+ *   - bản ghi của kỹ sư trong CaseContext (fiveWhy / ishikawa / rootCause), và
+ *   - chẩn đoán mù (`independentAnalysis`): một lượt gọi CHUYÊN root cause, tự
+ *     dựng `derivedFiveWhy`, tự chọn nhánh 6M, tự loại năm nhánh kia kèm lý do.
+ *
+ * Trước đây cả hai chỉ được đưa vào prompt làm ngữ cảnh, còn `data.rootCause`
+ * vẫn phó thác cho model viết báo cáo — model nhỏ chạy nhanh (Haiku) thỉnh
+ * thoảng bỏ bảng Ishikawa, bỏ answer của một bước 5-Why, quên cờ root cause.
+ * Nhờ hai nguồn trên, các trường cấu trúc của D4 dựng lại được BẰNG CODE:
+ *
+ *   1. `fiveWhy`: bản ghi thắng tuyệt đối; case chưa điều tra thì chuỗi khuyết
+ *      answer bị thay NGUYÊN KHỐI bằng `derivedFiveWhy` (vá lai hai chuỗi khác
+ *      nhau sẽ ra một chuỗi không ai theo nổi)
+ *   2. `ishikawaBoard` đủ sáu nhánh: recorded > verdict của chẩn đoán độc lập
+ *      (statement cho nhánh nó chọn, reason cho nhánh nó loại) > "not assessed"
+ *   3. đúng một nhánh mang cờ isRootCause: theo bản ghi, không có bản ghi thì
+ *      theo nhánh chẩn đoán độc lập chọn — luôn source='proposed', kỹ sư mới là
+ *      người xác nhận
+ *   4. `statement`: bản ghi, hoặc giả thuyết đóng khung rõ ràng từ chẩn đoán
+ *      độc lập — không bao giờ trống
+ *
+ * Mọi thứ lấy từ chẩn đoán độc lập đều mang source='proposed' và được trích
+ * `independent` trong sources — không bịa, chỉ chiếu lại kết quả một lượt suy
+ * luận đã chạy và đã được đối chiếu.
+ */
+function backfillRootCause(
+    d: DisciplineDraft,
+    context: CaseContext,
+    independent: unknown,
+    repairs: string[],
+): void {
+    const finding = findingOf(independent);
+    let usedFinding = false;
+    const data = (d.data ??= {});
+    const root: Record<string, unknown> =
+        data.rootCause && typeof data.rootCause === 'object' && !Array.isArray(data.rootCause)
+            ? data.rootCause as Record<string, unknown>
+            : {};
+    data.rootCause = root;
+
+    // ── 1. Chuỗi 5-Why ──
+    const modelRows = (Array.isArray(root.fiveWhy) ? root.fiveWhy : [])
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+        .filter((row) => String(row.why ?? '').trim());
+    const chainComplete = modelRows.length > 0
+        && modelRows.every((row) => String(row.answer ?? '').trim());
+    const findingChain = (finding?.derivedFiveWhy ?? [])
+        .filter((row) => String(row?.question ?? '').trim() && String(row?.answer ?? '').trim())
+        .map((row, index) => ({
+            step: index + 1,
+            why: row.question,
+            answer: row.answer,
+            evidence: row.evidence ?? '',
+        }));
+    if (context.fiveWhy.length) {
+        if (!modelRows.length) {
+            root.fiveWhy = context.fiveWhy.map((row) => ({
+                step: row.stepNo,
+                why: row.question,
+                answer: row.answer,
+                evidence: row.evidenceCitation,
+            }));
+            repairs.push('D4: rootCause.fiveWhy trống; chép lại chuỗi 5-Why đã ghi từ CaseContext.');
+        } else {
+            let patched = 0;
+            for (const row of modelRows) {
+                const recorded = context.fiveWhy.find((r) => r.stepNo === Number(row.step));
+                if (!recorded) continue;
+                if (!String(row.answer ?? '').trim()) { row.answer = recorded.answer; patched += 1; }
+                if (!String(row.evidence ?? '').trim()) row.evidence = recorded.evidenceCitation;
+            }
+            if (patched) repairs.push(`D4: ${patched} bước 5-Why thiếu answer; điền lại từ bản ghi.`);
+            root.fiveWhy = modelRows;
+        }
+    } else if (findingChain.length && (!modelRows.length || !chainComplete)) {
+        root.fiveWhy = findingChain;
+        usedFinding = true;
+        repairs.push(modelRows.length
+            ? 'D4: chuỗi 5-Why của model khuyết answer; thay bằng chuỗi từ chẩn đoán độc lập (proposed).'
+            : 'D4: rootCause.fiveWhy trống; dùng chuỗi từ chẩn đoán độc lập (proposed).');
+    } else if (modelRows.length) {
+        root.fiveWhy = modelRows;
+    }
+
+    // ── 2. Bảng Ishikawa — luôn đủ sáu nhánh ──
+    const boardRows = (Array.isArray(root.ishikawaBoard) ? root.ishikawaBoard : [])
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+    const boardWasEmpty = boardRows.length === 0;
+    const byCategory = new Map<string, Record<string, unknown>>();
+    for (const row of boardRows) {
+        const category = String(row.category ?? '');
+        if ((ISHIKAWA_CATEGORIES as readonly string[]).includes(category) && !byCategory.has(category)) {
+            byCategory.set(category, row);
+        }
+    }
+    let recordedRestored = 0;
+    for (const recorded of context.ishikawa) {
+        if (!(ISHIKAWA_CATEGORIES as readonly string[]).includes(recorded.category)) continue;
+        const existing = byCategory.get(recorded.category);
+        if (existing && String(existing.finding ?? '').trim()) continue;
+        const verdict = [recorded.description, recorded.metricValue ? `(${recorded.metricValue})` : '']
+            .filter(Boolean).join(' ').slice(0, D4_FINDING_MAX);
+        byCategory.set(recorded.category, {
+            category: recorded.category,
+            finding: verdict,
+            isRootCause: recorded.isRootCause,
+            source: 'recorded',
+        });
+        recordedRestored += 1;
+    }
+    // Verdict của chẩn đoán độc lập cho nhánh còn trống: statement cho nhánh nó
+    // chọn, reason cho năm nhánh nó loại, runner-up nếu có.
+    const findingVerdicts = new Map<string, string>();
+    if (finding) {
+        if (String(finding.rootCauseStatement ?? '').trim()) {
+            findingVerdicts.set(finding.rootCauseCategory, finding.rootCauseStatement);
+        }
+        for (const ruled of finding.ruledOut ?? []) {
+            if (ruled && String(ruled.reason ?? '').trim() && !findingVerdicts.has(ruled.category)) {
+                findingVerdicts.set(ruled.category, ruled.reason);
+            }
+        }
+        if (finding.runnerUpCategory && finding.runnerUpReason
+            && !findingVerdicts.has(finding.runnerUpCategory)) {
+            findingVerdicts.set(finding.runnerUpCategory, finding.runnerUpReason);
+        }
+    }
+    let fromFinding = 0;
+    for (const category of ISHIKAWA_CATEGORIES) {
+        const row = byCategory.get(category);
+        if (row && String(row.finding ?? '').trim()) continue;
+        const verdict = findingVerdicts.get(category);
+        if (verdict) {
+            byCategory.set(category, {
+                category,
+                finding: verdict.slice(0, D4_FINDING_MAX),
+                isRootCause: false,
+                source: 'proposed',
+            });
+            fromFinding += 1;
+            usedFinding = true;
+        } else if (!row) {
+            byCategory.set(category, { category, finding: 'not assessed', isRootCause: false, source: 'proposed' });
+        } else {
+            row.finding = 'not assessed';
+        }
+    }
+    if (recordedRestored) {
+        repairs.push(`D4: bảng Ishikawa thiếu ${recordedRestored} nhánh đã ghi; chép lại từ CaseContext.`);
+    }
+    if (fromFinding) {
+        repairs.push(`D4: ${fromFinding} nhánh Ishikawa trống; điền verdict từ chẩn đoán độc lập (proposed).`);
+    }
+    if (boardWasEmpty && !recordedRestored && !fromFinding) {
+        repairs.push('D4: rootCause.ishikawaBoard trống; dựng khung 6M (not assessed).');
+    }
+    const board = ISHIKAWA_CATEGORIES.map((category) => byCategory.get(category)!);
+    root.ishikawaBoard = board;
+
+    // ── 3. Đúng một nhánh mang cờ root cause ──
+    const marked = board.filter((row) => row.isRootCause === true);
+    const recordedCategory = context.rootCause?.category;
+    if (marked.length > 1) {
+        const keep = marked.find((row) => row.category === recordedCategory)
+            ?? marked.find((row) => row.category === finding?.rootCauseCategory)
+            ?? marked[0];
+        for (const row of marked) if (row !== keep) row.isRootCause = false;
+        repairs.push(`D4: ${marked.length} nhánh Ishikawa cùng mang cờ root cause; chỉ giữ ${String(keep.category)}.`);
+    } else if (!marked.length) {
+        const target = recordedCategory && byCategory.has(recordedCategory)
+            ? recordedCategory
+            : finding && byCategory.has(finding.rootCauseCategory)
+                ? finding.rootCauseCategory
+                : null;
+        if (target) {
+            byCategory.get(target)!.isRootCause = true;
+            if (target === recordedCategory) {
+                repairs.push(`D4: không nhánh nào được đánh dấu root cause; đánh dấu lại ${target} theo bản ghi.`);
+            } else {
+                usedFinding = true;
+                repairs.push(`D4: không nhánh nào được đánh dấu root cause; đánh dấu ${target} theo chẩn đoán độc lập (proposed).`);
+            }
+        }
+    }
+
+    // ── 4. Kết luận ──
+    if (!String(root.statement ?? '').trim()) {
+        const tagged = context.fiveWhy.find((row) => row.isRootCauseStep);
+        const recordedFallback = context.rootCause
+            ? `${context.rootCause.category}: ${context.rootCause.description}`
+            : tagged?.answer ?? '';
+        if (recordedFallback) {
+            const clean = recordedFallback.replace(/^Root cause:\s*/i, '').trim();
+            root.statement = `Root cause: ${clean}`.slice(0, D4_STATEMENT_MAX);
+            repairs.push('D4: thiếu rootCause.statement; dựng lại từ root cause đã ghi.');
+        } else if (finding && String(finding.rootCauseStatement ?? '').trim()) {
+            const raw = finding.rootCauseStatement.trim().replace(/^(Root cause:\s*|Root cause \(hypothesis\):\s*)/i, '');
+            root.statement = (
+                `Root cause (hypothesis): ${raw}`
+            ).slice(0, D4_STATEMENT_MAX);
+            usedFinding = true;
+            repairs.push('D4: thiếu rootCause.statement; dựng giả thuyết từ chẩn đoán độc lập.');
+        }
+    }
+
+    // ── 5. Evidence gaps — chỉ điền khi model BỎ HẲN trường, không đè mảng rỗng
+    //      có chủ đích ──
+    if (root.evidenceGaps === undefined && finding?.evidenceGaps?.length) {
+        const gaps = finding.evidenceGaps
+            .filter((gap): gap is string => typeof gap === 'string' && gap.trim().length > 0)
+            .slice(0, 10);
+        if (gaps.length) {
+            root.evidenceGaps = gaps;
+            usedFinding = true;
+            repairs.push('D4: thiếu rootCause.evidenceGaps; lấy từ chẩn đoán độc lập.');
+        }
+    }
+
+    // Đã dùng chẩn đoán độc lập thì phải trích dẫn nó — luật grounding của D4.
+    if (usedFinding && !d.sources.includes('independent')) d.sources.push('independent');
 }
 
 export function postProcess(
@@ -156,6 +396,13 @@ export function postProcess(
 
         return d;
     });
+
+    // D4 phải ra ĐỦ (statement, 5-Why có answer, bảng Ishikawa sáu nhánh, cờ
+    // root cause) trên mọi lượt chạy — kể cả khi model bỏ sót, kể cả khi cả
+    // discipline bị thay bằng placeholder. Dữ liệu đã ghi và chẩn đoán độc lập
+    // là hai nguồn code tự chiếu lại được.
+    const d4 = disciplines.find((discipline) => discipline.code === 'D4');
+    if (d4) backfillRootCause(d4, context, independent, repairs);
 
     // ── Discipline nào không có fact nào chống lưng thì không được tự tin ──
     // Ánh xạ từ mã discipline sang chỗ chứa fact tương ứng trong CaseContext.

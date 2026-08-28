@@ -116,10 +116,17 @@ export function extractJson<T>(raw: string, step: string): T {
  *
  * KHÔNG thử lại khi lỗi là truncation — lần sau cũng sẽ cụt y hệt, phải sửa
  * ngân sách token chứ không phải gọi lại.
+ *
+ * `validate` (tuỳ chọn) bắt loại hỏng thứ hai mà parse không thấy: JSON hợp lệ
+ * nhưng THIẾU RUỘT — model nhỏ bỏ trường bắt buộc, bỏ answer trong một row.
+ * Trả về chuỗi mô tả chỗ thiếu ⇒ gọi lại đúng một lần kèm chỉ dẫn đó; lần hai
+ * vẫn thiếu (hoặc chết) thì DÙNG BẢN TỐT NHẤT ĐANG CÓ chứ không ném — một bước
+ * khuyết vài trường còn cứu được bằng backfill, một lượt phân tích chết thì không.
  */
 export async function callAndParse<T>(
     step: string,
     call: (repairHint?: string) => Promise<{ content: string; finishReason?: string; limits?: CallLimits }>,
+    validate?: (value: T) => string | undefined,
 ): Promise<{ value: T; raw: string }> {
     const attempt = async (repairHint?: string) => {
         const res = await call(repairHint);
@@ -127,16 +134,34 @@ export async function callAndParse<T>(
         return { value: extractJson<T>(res.content, step), raw: res.content };
     };
 
+    let first: { value: T; raw: string };
     try {
-        return await attempt();
+        first = await attempt();
     } catch (e: any) {
         // Cụt token thì gọi lại vô ích — ném luôn.
         if (e instanceof PipelineError && e.code === 502 && /hết token/.test(e.message)) throw e;
 
-        return attempt(
+        first = await attempt(
             'Your previous response could not be parsed as JSON. ' +
             `The error was: ${e.message}. ` +
             'Return ONLY valid JSON matching the schema, with no prose and no code fences.',
         );
+    }
+
+    const issue = validate?.(first.value);
+    if (!issue) return first;
+
+    try {
+        const second = await attempt(
+            'Your previous response was valid JSON but incomplete: ' + issue + ' ' +
+            'Return the complete JSON again with every listed field filled. ' +
+            'Keep everything that was already correct.',
+        );
+        const secondIssue = validate!(second.value);
+        if (!secondIssue) return second;
+        // Cả hai lượt đều khuyết: giữ lượt khuyết ÍT hơn (mô tả thiếu ngắn hơn).
+        return secondIssue.length < issue.length ? second : first;
+    } catch {
+        return first;
     }
 }

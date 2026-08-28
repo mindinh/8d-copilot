@@ -33,8 +33,6 @@ import {
     Factory,
     FileJson,
     FileText,
-    FileUp,
-    FolderOpen,
     Plus,
     RefreshCw,
     ShieldAlert,

@@ -16,6 +16,7 @@
 
 import cds from '@sap/cds';
 import { complete, resolveModel } from '../../core/ai/llmClient';
+import { ANALYZE_FALLBACK_MODEL } from '../../config/ai';
 import { blockingIssues, qualityIssues, validateDataset } from './datasetValidator';
 import { mapCase } from './caseMapper';
 import {
@@ -50,6 +51,7 @@ import {
     buildFlexibleResponseSchema,
     buildRuntimeSources,
     buildStepDataSchema,
+    getPath,
     normalizeStepConfig,
     setPath,
     syncLegacyFields,
@@ -97,6 +99,51 @@ const ACTIVITY_ANALYZE = 'analyzeDefect';
 const ACTIVITY_STRUCTURE = 'analyzeDefectStructuredFields';
 /** Chẩn đoán mù dùng activity riêng để admin chỉnh model/budget độc lập. */
 const ACTIVITY_DIAGNOSE = 'reviewQuality';
+
+/**
+ * Kiểm "đủ ruột" cho output một bước — validate của `callAndParse`.
+ *
+ * Parse chỉ bắt được JSON hỏng; loại hỏng thật sự gặp với model nhỏ là JSON
+ * HỢP LỆ nhưng khuyết — thiếu `rootCause.ishikawaBoard`, row 5-Why không có
+ * `answer`. Schema đã khai các ràng buộc này, nhưng schema đi qua orchestration
+ * không phải lúc nào cũng được thực thi tuyệt đối; đây là chốt kiểm phía mình.
+ * Trả về mô tả chỗ thiếu ⇒ `callAndParse` gọi lại đúng một lần kèm chỉ dẫn đó.
+ *
+ * `data` trống hoàn toàn thì KHÔNG báo: đó là đường fallback envelope phẳng,
+ * lượt `ACTIVITY_STRUCTURE` phía sau sẽ điền — retry ở đây chỉ phí một lời gọi.
+ */
+function missingRequiredData(config: RuntimeStepConfig | undefined, rawValue: any): string | undefined {
+    const fields = config?.formSchema?.fields;
+    if (!fields?.length) return undefined;
+    const draft = rawValue?.disciplines?.[0] ?? rawValue;
+    const data = draft?.data;
+    if (!data || typeof data !== 'object' || !Object.keys(data).length) return undefined;
+
+    const problems: string[] = [];
+    for (const field of fields) {
+        if (field.source && field.source !== 'ai_enrichment') continue;
+        // Chịu cả hai kiểu khoá model hay trả: lồng theo path và khoá phẳng có dấu chấm.
+        const value = getPath(data, field.key) ?? (data as Record<string, unknown>)[field.key];
+        const empty = value === undefined || value === null || value === ''
+            || (Array.isArray(value) && value.length === 0);
+        if (field.constraints.required && empty) {
+            problems.push(`data.${field.key} is missing or empty`);
+            continue;
+        }
+        const itemRequired = field.items?.required;
+        if (Array.isArray(value) && itemRequired?.length) {
+            for (const [index, row] of value.entries()) {
+                if (!row || typeof row !== 'object') continue;
+                const absent = itemRequired.filter((key) => {
+                    const item = (row as Record<string, unknown>)[key];
+                    return item === undefined || item === null || item === '';
+                });
+                if (absent.length) problems.push(`data.${field.key}[${index + 1}] is missing ${absent.join(', ')}`);
+            }
+        }
+    }
+    return problems.length ? `${problems.slice(0, 8).join('; ')}.` : undefined;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bước AI 1 — làm giàu ngữ cảnh
@@ -169,10 +216,12 @@ async function diagnoseIndependently(
             ],
             {
                 activity: ACTIVITY_DIAGNOSE,
-                // Đặt 0 để chẩn đoán tất định hết mức có thể. Lưu ý: CDK BỎ QUA
-                // temperature với model Claude khi extended thinking đang bật
-                // (xem log 'Compat: dropped temperature'), nên với Claude cùng
-                // một input vẫn có thể ra chuỗi lập luận khác nhau giữa các lần.
+                // Đặt 0 để chẩn đoán tất định hết mức có thể. Với model Claude,
+                // thinkingBudget 256 dưới ngưỡng 1024 của Anthropic nên llmClient
+                // tự bỏ nó đi — nhờ vậy temperature 0 THẬT SỰ tới được model
+                // thay vì bị CDK xoá (xem effectiveThinkingBudget trong
+                // core/ai/llmClient.ts). Chỉ khi admin cấu hình budget >= 1024
+                // thì thinking bật và temperature bị bỏ đúng luật Anthropic.
                 temperature: 0,
                 max_tokens: BUDGET.diagnose.maxTokens,
                 thinkingBudget: BUDGET.diagnose.thinkingBudget,
@@ -557,7 +606,7 @@ async function generateReportProgressive(
         // Nhãn kèm mã bước: `analyzeDefect` là tên activity dùng chung cho cả tám
         // bước lẫn lượt viết tóm tắt, nên lỗi chỉ ghi activity thì không biết
         // bước nào hỏng.
-        const { value: rawStepValue } = await callAndParse<any>(`${code}/${ACTIVITY_ANALYZE}`, async (repairHint) => {
+        const stepCall = (modelOverride?: string) => async (repairHint?: string) => {
             const callWith = async (
                 schema: Record<string, unknown> | undefined,
                 temperature = 0.2,
@@ -576,6 +625,9 @@ async function generateReportProgressive(
                 ],
                 {
                     activity: ACTIVITY_ANALYZE,
+                    // Lượt leo thang ép model mạnh hơn cho ĐÚNG lời gọi này;
+                    // resolveModel theo activity vẫn quyết mọi lượt bình thường.
+                    ...(modelOverride ? { model: modelOverride } : {}),
                     temperature,
                     max_tokens: BUDGET.stepAnalyze.maxTokens,
                     thinkingBudget: BUDGET.stepAnalyze.thinkingBudget,
@@ -647,7 +699,41 @@ async function generateReportProgressive(
                     produced: (res.usage as any)?.completionTokens ?? res.usage?.totalTokens,
                 },
             };
-        });
+        };
+
+        let parsedStep = await callAndParse<any>(
+            `${code}/${ACTIVITY_ANALYZE}`,
+            stepCall(),
+            (value) => missingRequiredData(stepConfig, value),
+        );
+
+        // ── Thang leo model ──
+        // Haiku + retry-có-chỉ-dẫn vẫn khuyết trường bắt buộc thì gọi đúng MỘT
+        // lượt trên model mạnh hơn và lấy bản đủ hơn. Đường vui (đa số lượt chạy)
+        // không tốn gì; đường hỏng đổi vài giây lấy một bước trọn vẹn. Leo thang
+        // chết vì bất cứ lý do gì thì giữ kết quả sẵn có — cơ chế cứu không được
+        // phép trở thành lý do hỏng.
+        const unresolved = missingRequiredData(stepConfig, parsedStep.value);
+        if (unresolved && ANALYZE_FALLBACK_MODEL) {
+            const currentModel = await resolveModel(ACTIVITY_ANALYZE);
+            if (currentModel !== ANALYZE_FALLBACK_MODEL) {
+                LOG.warn(
+                    `${code}: sau retry vẫn thiếu trường bắt buộc (${unresolved}) — `
+                    + `leo thang một lượt lên ${ANALYZE_FALLBACK_MODEL}.`,
+                );
+                try {
+                    const escalated = await callAndParse<any>(
+                        `${code}/${ACTIVITY_ANALYZE}@fallback`,
+                        stepCall(ANALYZE_FALLBACK_MODEL),
+                    );
+                    const escalatedIssue = missingRequiredData(stepConfig, escalated.value);
+                    if (!escalatedIssue || escalatedIssue.length < unresolved.length) parsedStep = escalated;
+                } catch (error: any) {
+                    LOG.warn(`${code}: leo thang thất bại (${error?.message ?? error}); giữ kết quả sẵn có.`);
+                }
+            }
+        }
+        const rawStepValue = parsedStep.value;
 
         let discipline: DisciplineDraft = rawStepValue.disciplines ? rawStepValue.disciplines[0] : rawStepValue;
         if (!discipline || discipline.code !== code) {
