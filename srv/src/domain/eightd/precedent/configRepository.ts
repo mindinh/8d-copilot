@@ -237,6 +237,13 @@ export async function seedRetrievalConfig(): Promise<void> {
                     }
                     patch.version = 4;
                 }
+                if (usesStructuredDefaultForm && Number(current?.version ?? 1) <= 5) {
+                    // v6 siet do co dong D4: prompt ngan gon, truc dien, khong lan man disclaimer
+                    for (const field of ['inputSchemaJson', 'formSchemaJson', 'combinedPrompt', 'constraintsJson'] as const) {
+                        if (configuredDefault[field]) patch[field] = configuredDefault[field];
+                    }
+                    patch.version = 6;
+                }
                 const previousD1Fields = ['team.objective', 'team.roster', 'team.skillCoverage', 'team.readinessStatus', 'team.gaps', 'team.assignmentRationale', 'sources'];
                 const usesPreviousD1Default = configuredDefault.stepCode === 'D1'
                     && currentFields.length === previousD1Fields.length

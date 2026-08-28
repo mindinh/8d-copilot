@@ -69,7 +69,7 @@ export const INDEPENDENT_SCHEMA = {
         rootCauseCategory: { type: 'string', enum: [...ISHIKAWA_CATEGORIES] },
         rootCauseStatement: {
             type: 'string',
-            description: 'One sentence naming the specific cause, not just the category',
+            description: 'Ultra-concise one-sentence root cause statement naming the specific cause and category directly (e.g. "Undefined or missing milling process specification (Method)"). Max 150 characters.',
         },
         derivedFiveWhy: {
             type: 'array',
@@ -125,23 +125,28 @@ out from the evidence.
 
 ## YOUR TASK
 
-1. Build a 5-Why chain, 2 to 5 steps. Start from the observed defect and drive
-   down until you reach a cause that, if fixed, prevents recurrence. Each step
-   must cite the specific evidence that supports it — a measurement, a finding, a
-   date, a value. A step you cannot evidence is a step you have not earned.
+1. Build a 5-Why chain, 2 to 5 steps. Keep questions short & crisp, and answers
+   direct & punchy (max 1 concise sentence per step, stating the direct cause).
+   Start from the observed defect and drive down until you reach a cause that,
+   if fixed, prevents recurrence. Each step must cite the specific evidence that
+   supports it.
 
 2. Name the root cause branch: exactly one of Man, Machine, Method, Material,
    Measurement, Environment.
 
-3. Rule out the other five. Give a concrete reason for each, drawn from its
-   finding. "Not relevant" is not a reason. "Spindle runout measured 4um against
-   a 10um limit, so the machine was within tolerance" is a reason.
+3. Write an ultra-concise rootCauseStatement: exactly 1 brief sentence stating
+   the root cause directly (e.g. "Undefined or missing milling process specification (Method).").
+   Do not write disclaimers or audit plans here.
 
-4. Name the runner-up branch — the one you would investigate next if you turned
+4. Rule out the other five. Give a concrete 1-sentence reason for each, drawn from
+   its finding (e.g. "Spindle runout measured 4um against 10um limit; within tolerance").
+   "Not relevant" is not a reason.
+
+5. Name the runner-up branch — the one you would investigate next if you turned
    out to be wrong — and say what would make you switch to it. If the evidence
    is genuinely unambiguous, set both runner-up fields to null.
 
-5. Report your confidence honestly, and list what further evidence you would ask
+6. Report your confidence honestly, and list what further evidence you would ask
    for.
 
 ## HOW TO WEIGH THE EVIDENCE
