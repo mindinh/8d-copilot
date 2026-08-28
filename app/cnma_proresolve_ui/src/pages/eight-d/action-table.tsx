@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
     Badge,
     Button,
@@ -19,6 +20,8 @@ import {
 } from '@cnma/react-ui';
 import { Clock, Edit2, Eye, FileText, Paperclip, Plus, Sparkles, Tag, Trash2, User } from 'lucide-react';
 import { TASK_STATUSES, type ActionTask } from '../../../../../shared/action-task';
+import { listTaskEvidence } from '@/services/eightd-service';
+import { TaskEvidenceSection } from './task-evidence';
 
 /**
  * Bảng việc đã chốt của một bước D.
@@ -29,8 +32,7 @@ import { TASK_STATUSES, type ActionTask } from '../../../../../shared/action-tas
  * chắn để tới lúc audit không ai nói được việc nào đã có người chịu trách nhiệm.
  * Cùng quan hệ với `team.roster` → `team.assignedRoster` ở D1.
  *
- * Bảng cố ý chỉ hiện năm cột. Mô tả, đính kèm và phần còn lại nằm sau nút chi
- * tiết — một bảng phải quét được bằng mắt, và mô tả dài làm hỏng đúng việc đó.
+ * Bảng hiển thị 6 cột: Task | Assignee | Duration | Status | Evidence | (actions).
  */
 
 const STATUS_TONE: Record<string, string> = {
@@ -63,12 +65,16 @@ function TaskDetail({
     task,
     initialEditing = false,
     readOnly = false,
+    reportID = '',
+    disciplineCode = '',
     onClose,
     onSave,
 }: {
     task: ActionTask | null;
     initialEditing?: boolean;
     readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
     onClose: () => void;
     onSave: (updatedTask: ActionTask) => void;
 }) {
@@ -104,7 +110,7 @@ function TaskDetail({
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl md:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader className="space-y-2 border-b pb-3">
                     <div className="flex items-center justify-between gap-2 pr-6">
                         <div className="flex items-center gap-2.5">
@@ -261,6 +267,7 @@ function TaskDetail({
                         </div>
 
                         {/* Description Section */}
+                        {/* Description Section */}
                         <div className="rounded-lg border bg-muted/10 p-3.5 space-y-1.5">
                             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Description & Instructions
@@ -273,6 +280,16 @@ function TaskDetail({
                                 )}
                             </div>
                         </div>
+
+                        {/* Completion Evidence Section */}
+                        {reportID && disciplineCode && (
+                            <TaskEvidenceSection
+                                reportID={reportID}
+                                disciplineCode={disciplineCode}
+                                task={task}
+                                readOnly={readOnly}
+                            />
+                        )}
 
                         {/* Attachments Section */}
                         {task.attachments && task.attachments.length > 0 && (
@@ -313,10 +330,18 @@ function TaskDetail({
     );
 }
 
-export function TaskTable({ tasks, onChange, readOnly = false }: {
+export function TaskTable({
+    tasks,
+    onChange,
+    readOnly = false,
+    reportID = '',
+    disciplineCode = '',
+}: {
     tasks: ActionTask[];
     onChange: (next: ActionTask[]) => void;
     readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
 }) {
     const [selectedTask, setSelectedTask] = useState<ActionTask | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -327,6 +352,12 @@ export function TaskTable({ tasks, onChange, readOnly = false }: {
     const [newAssignee, setNewAssignee] = useState('');
     const [newDurationDays, setNewDurationDays] = useState<number | string>('');
     const [newStatus, setNewStatus] = useState<string>(TASK_STATUSES[0]);
+
+    const { data: evidences = [] } = useQuery({
+        queryKey: ['8d', 'evidence', reportID],
+        queryFn: () => listTaskEvidence(reportID),
+        enabled: Boolean(reportID),
+    });
 
     const persist = onChange;
 
@@ -367,12 +398,12 @@ export function TaskTable({ tasks, onChange, readOnly = false }: {
                 Assigned tasks
             </div>
             <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[560px] text-[13px]">
+                <table className="w-full min-w-[660px] text-[13px]">
                     <thead>
                         <tr className="border-b bg-muted/40 text-left">
-                            {['Task', 'Assignee', 'Duration', 'Status', ''].map((head) => (
+                            {['Task', 'Assignee', 'Duration', 'Status', 'Evidence', ''].map((head, idx) => (
                                 <th
-                                    key={head}
+                                    key={head || `action-col-${idx}`}
                                     className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                                 >
                                     {head}
@@ -383,73 +414,110 @@ export function TaskTable({ tasks, onChange, readOnly = false }: {
                     <tbody>
                         {tasks.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
                                     No task accepted yet. Use <span className="font-medium">+ Add</span> on a
                                     suggestion above, or add one by hand.
                                 </td>
                             </tr>
-                        ) : tasks.map((task) => (
-                            <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30">
-                                <td className="px-3 py-2">
-                                    <span className="flex items-center gap-1.5">
-                                        {task.origin === 'AI suggestion' && (
-                                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                        )}
-                                        <span className="font-medium">{task.name}</span>
-                                    </span>
-                                </td>
-                                <td className="px-3 py-2">
-                                    {task.assignee
-                                        ? <span className="inline-flex items-center gap-1.5 text-foreground">
-                                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            <span>{task.assignee}</span>
+                        ) : tasks.map((task) => {
+                            const taskFiles = evidences.filter(
+                                (e) => e.taskId === task.id && (disciplineCode ? e.disciplineCode === disciplineCode : true),
+                            );
+                            const isMissingEvidence = task.status === 'Done' && taskFiles.length === 0;
+
+                            return (
+                                <tr
+                                    key={task.id}
+                                    className={cn(
+                                        'border-b last:border-0 transition-colors',
+                                        isMissingEvidence
+                                            ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500 hover:bg-amber-500/15'
+                                            : 'hover:bg-muted/30',
+                                    )}
+                                >
+                                    <td className="px-3 py-2">
+                                        <span className="flex items-center gap-1.5">
+                                            {task.origin === 'AI suggestion' && (
+                                                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                            )}
+                                            <span className="font-medium">{task.name}</span>
                                         </span>
-                                        : <Blank label="Unassigned" />}
-                                </td>
-                                <td className="px-3 py-2 tabular-nums">
-                                    {task.durationDays > 0 ? `${task.durationDays}d` : <Blank label="—" />}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap"><StatusChip status={task.status} /></td>
-                                <td className="px-3 py-2 text-right">
-                                    <div className="inline-flex items-center gap-1 justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
-                                            aria-label={`Detail for ${task.name}`}
-                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10"
-                                            title="View detail"
-                                        >
-                                            <Eye className="h-3.5 w-3.5" />
-                                            Detail
-                                        </button>
-                                        {!readOnly && (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
-                                                    aria-label={`Edit ${task.name}`}
-                                                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
-                                                    title="Edit task"
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5" />
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeTask(task.id)}
-                                                    aria-label={`Remove ${task.name}`}
-                                                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
-                                                    title="Remove task"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                    Remove
-                                                </button>
-                                            </>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        {task.assignee
+                                            ? <span className="inline-flex items-center gap-1.5 text-foreground">
+                                                <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                <span>{task.assignee}</span>
+                                            </span>
+                                            : <Blank label="Unassigned" />}
+                                    </td>
+                                    <td className="px-3 py-2 tabular-nums">
+                                        {task.durationDays > 0 ? `${task.durationDays}d` : <Blank label="—" />}
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        <StatusChip status={task.status} />
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        {task.status !== 'Done' ? (
+                                            <span className="text-muted-foreground">—</span>
+                                        ) : taskFiles.length === 0 ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning hover:bg-warning/20 transition-colors cursor-pointer"
+                                                title="Completion evidence required. Click to view or upload."
+                                            >
+                                                Required
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors cursor-pointer"
+                                                title="View attached evidence"
+                                            >
+                                                {taskFiles.length} {taskFiles.length === 1 ? 'PDF' : 'PDFs'}
+                                            </button>
                                         )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        <div className="inline-flex items-center gap-1 justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                aria-label="View details"
+                                                className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                                title="View details"
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                            </button>
+                                            {!readOnly && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
+                                                        aria-label="Edit task"
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                                        title="Edit task"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeTask(task.id)}
+                                                        aria-label="Remove task"
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                                                        title="Remove task"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -552,11 +620,14 @@ export function TaskTable({ tasks, onChange, readOnly = false }: {
                 task={selectedTask}
                 initialEditing={isEditMode}
                 readOnly={readOnly}
+                reportID={reportID}
+                disciplineCode={disciplineCode}
                 onClose={() => setSelectedTask(null)}
                 onSave={updateTask}
             />
         </div>
     );
 }
+
 
 

@@ -1442,7 +1442,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048745",
-        "partner_id": "BP-100001",
+        "partner_id": "100001",
         "partner_name": "Heli Weber",
         "function_title": "Quality Engineer",
         "partner_role": "8D Team Leader",
@@ -1450,7 +1450,7 @@
       },
       {
         "notification_id": "8D-10048745",
-        "partner_id": "BP-100102",
+        "partner_id": "100102",
         "partner_name": "Dario Conti",
         "function_title": "Bonding Process Engineer",
         "partner_role": "8D Team Member",
@@ -1458,7 +1458,7 @@
       },
       {
         "notification_id": "8D-10048745",
-        "partner_id": "BP-100115",
+        "partner_id": "100115",
         "partner_name": "Eva Lindqvist",
         "function_title": "Facilities Engineer",
         "partner_role": "8D Team Member",
@@ -1466,7 +1466,7 @@
       },
       {
         "notification_id": "8D-10048745",
-        "partner_id": "BP-100012",
+        "partner_id": "100012",
         "partner_name": "Minh Dinh",
         "function_title": "Production Engineer",
         "partner_role": "8D Team Member",
@@ -1693,28 +1693,28 @@
       "_cardinality": "4 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100001",
+          "partner_id": "100001",
           "partner_name": "Heli Weber",
           "function_title": "Quality Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100102",
+          "partner_id": "100102",
           "partner_name": "Dario Conti",
           "function_title": "Bonding Process Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100115",
+          "partner_id": "100115",
           "partner_name": "Eva Lindqvist",
           "function_title": "Facilities Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100012",
+          "partner_id": "100012",
           "partner_name": "Minh Dinh",
           "function_title": "Production Engineer",
           "partner_role": "8D Team Member",

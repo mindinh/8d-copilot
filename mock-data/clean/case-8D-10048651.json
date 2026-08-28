@@ -122,7 +122,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100014",
+      "partnerId": "100014",
       "partnerName": "Thien Tu",
       "functionTitle": "Quality Engineer",
       "partnerRole": "8D Team Leader",
@@ -131,7 +131,7 @@
       "phone": "+49 89 2018 1014"
     },
     {
-      "partnerId": "BP-100067",
+      "partnerId": "100067",
       "partnerName": "Marek Nowak",
       "functionTitle": "Surface Treatment Specialist",
       "partnerRole": "8D Team Member",

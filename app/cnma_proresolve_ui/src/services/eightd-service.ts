@@ -48,7 +48,14 @@ export interface Discipline8D {
     reviewedAt: string | null;
     /** Lý do trả lại. Chỉ có nghĩa khi reviewStatus = 'ChangeRequested'. */
     reviewNote: string | null;
+
+    /** JSON mảng các fieldKey của AI đã được confirm. */
+    confirmedFieldsJson: string | null;
+    /** 'NotStarted' | 'InProgress' | 'Completed'. */
+    workState: DisciplineWorkState | null;
 }
+
+export type DisciplineWorkState = 'NotStarted' | 'InProgress' | 'Completed';
 
 export const REVIEW_STATUSES = ['Draft', 'Approved', 'ChangeRequested'] as const;
 export type ReviewStatus = typeof REVIEW_STATUSES[number];
@@ -94,6 +101,25 @@ export interface ReviewResult {
 export function reviewStatusOf(discipline: Pick<Discipline8D, 'reviewStatus'>): ReviewStatus {
     const value = discipline.reviewStatus;
     return value && (REVIEW_STATUSES as readonly string[]).includes(value) ? value : 'Draft';
+}
+
+/** Đọc mảng các fieldKey đã confirm từ chuỗi JSON. */
+export function parseConfirmedFields(json: string | null | undefined): string[] {
+    if (!json) return [];
+    try {
+        const parsed = JSON.parse(json);
+        return Array.isArray(parsed) ? parsed.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    } catch {
+        return [];
+    }
+}
+
+/** Trạng thái xử lý của bước D: Approved -> Completed; còn lại là InProgress hoặc NotStarted. */
+export function workStateOf(discipline: Pick<Discipline8D, 'workState' | 'reviewStatus'>): DisciplineWorkState {
+    if (reviewStatusOf(discipline) === 'Approved') return 'Completed';
+    const ws = discipline.workState;
+    if (ws === 'InProgress') return 'InProgress';
+    return 'NotStarted';
 }
 
 /** Một bước trong chuỗi 5-Why do AI tự dựng khi chưa thấy đáp án. */
@@ -454,7 +480,8 @@ export async function getPartnerDirectory(): Promise<PartnerDirectoryEntry[]> {
     const rows = (response.data?.value ?? response.data ?? []) as Array<Record<string, unknown>>;
     const merged = new Map<string, PartnerDirectoryEntry>();
     for (const row of Array.isArray(rows) ? rows : []) {
-        const partnerId = String(row.partnerId ?? '').trim();
+        const rawId = String(row.partnerId ?? '').trim();
+        const partnerId = rawId.replace(/^BP-/i, '');
         if (!partnerId) continue;
         const partnerName = String(row.partnerName ?? '').trim() || partnerId;
         const slug = partnerName.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
@@ -574,14 +601,100 @@ export async function saveDisciplineField(
                     cursor = cursor[part];
                 }
                 cursor[parts[parts.length - 1]] = value;
+
+                const currentWs = d.workState || 'NotStarted';
+                const nextWs = currentWs === 'NotStarted' ? 'InProgress' : currentWs;
+
                 return {
                     ...d,
                     resultJson: JSON.stringify(data),
+                    workState: nextWs,
                 };
             }),
         };
     });
     void queryClient.invalidateQueries({ queryKey: ['8d', 'report'] });
+}
+
+/**
+ * Xác nhận (Confirm) hoặc hủy xác nhận một trường thông tin AI của bước D.
+ */
+export async function confirmDisciplineField(
+    disciplineID: string,
+    fieldKey: string,
+    confirmed: boolean,
+): Promise<string[]> {
+    const response = await axiosInstance.post('api/cnma/EIGHTD_SRV/confirmDisciplineField', {
+        disciplineID,
+        fieldKey,
+        confirmed,
+    });
+
+    queryClient.setQueriesData<{ disciplines?: Discipline8D[] }>({ queryKey: ['8d', 'report'] }, (old) => {
+        if (!old || !old.disciplines) return old;
+        return {
+            ...old,
+            disciplines: old.disciplines.map((d) => {
+                if (d.ID !== disciplineID) return d;
+                const currentConfirmed = parseConfirmedFields(d.confirmedFieldsJson);
+                const set = new Set(currentConfirmed);
+                if (confirmed) {
+                    set.add(fieldKey);
+                } else {
+                    set.delete(fieldKey);
+                }
+                const nextConfirmed = [...set];
+                const currentWs = d.workState || 'NotStarted';
+                const nextWs = currentWs === 'NotStarted' ? 'InProgress' : currentWs;
+
+                return {
+                    ...d,
+                    confirmedFieldsJson: JSON.stringify(nextConfirmed),
+                    workState: nextWs,
+                };
+            }),
+        };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['8d'] });
+
+    const raw = response.data?.value ?? response.data;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed?.confirmedFields ?? [];
+}
+
+/**
+ * Cập nhật trạng thái xử lý (workState) cho bước D ('NotStarted' | 'InProgress' | 'Completed').
+ */
+export async function setDisciplineWorkState(
+    disciplineID: string,
+    workState: DisciplineWorkState,
+): Promise<string> {
+    const response = await axiosInstance.post('api/cnma/EIGHTD_SRV/setDisciplineWorkState', {
+        disciplineID,
+        workState,
+    });
+
+    const nextReviewStatus: ReviewStatus = workState === 'Completed' ? 'Approved' : 'Draft';
+
+    queryClient.setQueriesData<{ disciplines?: Discipline8D[] }>({ queryKey: ['8d', 'report'] }, (old) => {
+        if (!old || !old.disciplines) return old;
+        return {
+            ...old,
+            disciplines: old.disciplines.map((d) => {
+                if (d.ID !== disciplineID) return d;
+                return {
+                    ...d,
+                    workState,
+                    reviewStatus: nextReviewStatus,
+                };
+            }),
+        };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['8d'] });
+
+    const raw = response.data?.value ?? response.data;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed?.workState ?? workState;
 }
 
 /**
@@ -614,4 +727,92 @@ export async function getReviewTrail(
     );
     const raw = response.data?.value ?? response.data;
     return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task Completion Evidence (PDF Attachments)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TaskEvidenceItem {
+    ID: string;
+    reportID: string;
+    disciplineCode: string;
+    taskId: string;
+    fileName: string;
+    fileSize: number;
+    mediaType: string;
+    uploadedBy: string;
+    uploadedAt: string;
+}
+
+export async function listTaskEvidence(reportID: string): Promise<TaskEvidenceItem[]> {
+    const response = await axiosInstance.get(
+        `api/cnma/EIGHTD_SRV/listTaskEvidence(reportID='${encodeURIComponent(reportID)}')`,
+    );
+    const raw = response.data?.value ?? response.data;
+    return typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
+}
+
+export async function uploadTaskEvidence(params: {
+    reportID: string;
+    disciplineCode: string;
+    taskId: string;
+    file: File;
+}): Promise<TaskEvidenceItem> {
+    const { reportID, disciplineCode, taskId, file } = params;
+
+    // Client-side validation
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        throw new Error('Only PDF files are allowed.');
+    }
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_SIZE) {
+        const actualMb = (file.size / (1024 * 1024)).toFixed(2);
+        throw new Error(`File size exceeds 10 MB limit (actual: ${actualMb} MB).`);
+    }
+
+    // 1. Create entity metadata record
+    const createRes = await axiosInstance.post('api/cnma/EIGHTD_SRV/TaskEvidences', {
+        reportID,
+        disciplineCode,
+        taskId,
+        fileName: file.name,
+        fileSize: file.size,
+        mediaType: 'application/pdf',
+    });
+    const created = createRes.data?.value ?? createRes.data;
+    const evidenceID = created?.ID;
+    if (!evidenceID) throw new Error('Failed to create evidence record.');
+
+    // 2. Stream binary content
+    await axiosInstance.put(`api/cnma/EIGHTD_SRV/TaskEvidences(${evidenceID})/content`, file, {
+        headers: {
+            'Content-Type': 'application/pdf',
+        },
+    });
+
+    void queryClient.invalidateQueries({ queryKey: ['8d', 'evidence'] });
+    void queryClient.invalidateQueries({ queryKey: ['8d'] });
+
+    return {
+        ID: evidenceID,
+        reportID,
+        disciplineCode,
+        taskId,
+        fileName: file.name,
+        fileSize: file.size,
+        mediaType: 'application/pdf',
+        uploadedBy: created?.uploadedBy || '',
+        uploadedAt: created?.uploadedAt || new Date().toISOString(),
+    };
+}
+
+export async function deleteTaskEvidence(evidenceID: string): Promise<void> {
+    await axiosInstance.delete(`api/cnma/EIGHTD_SRV/TaskEvidences(${evidenceID})`);
+    void queryClient.invalidateQueries({ queryKey: ['8d', 'evidence'] });
+    void queryClient.invalidateQueries({ queryKey: ['8d'] });
+}
+
+export function getEvidenceDownloadUrl(evidenceID: string): string {
+    return `/api/cnma/EIGHTD_SRV/TaskEvidences(${evidenceID})/content`;
 }

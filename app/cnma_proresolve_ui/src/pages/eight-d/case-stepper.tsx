@@ -1,6 +1,6 @@
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '@cnma/react-ui';
-import { reviewStatusOf, type Discipline8D, type ReviewStatus } from '@/services/eightd-service';
+import { reviewStatusOf, type Discipline8D } from '@/services/eightd-service';
 import { blockedBy, stepProgress, type StepCode } from '../../../../../shared/step-status';
 
 /**
@@ -18,12 +18,6 @@ const STEP_LABELS: Record<string, string> = {
     D6: 'Implement',
     D7: 'Preventive',
     D8: 'Closure',
-};
-
-const STATUS_TEXT: Record<ReviewStatus, string> = {
-    Approved: 'Complete',
-    ChangeRequested: 'Changes requested',
-    Draft: 'Not started',
 };
 
 export function CaseStepper({
@@ -73,7 +67,13 @@ export function CaseStepper({
                     if (discipline) {
                         const revStatus = reviewStatusOf(discipline);
                         done = revStatus === 'Approved';
-                        statusText = STATUS_TEXT[revStatus];
+                        if (done) {
+                            statusText = 'Complete';
+                        } else if (revStatus === 'ChangeRequested') {
+                            statusText = 'Changes requested';
+                        } else {
+                            statusText = discipline.workState === 'InProgress' ? 'In process' : 'Not started';
+                        }
                     } else if (isAnalyzing) {
                         // Backend sinh theo ĐỢT song song, nên bước về đích không
                         // theo thứ tự D1..D8 và không phải bước nào chưa có dữ
@@ -102,15 +102,16 @@ export function CaseStepper({
                             <span
                                 className={cn(
                                     'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
-                                    done && 'bg-success text-success-foreground',
-                                    !done && discipline && reviewStatusOf(discipline) === 'ChangeRequested' && 'bg-warning text-warning-foreground',
-                                    !done && discipline && reviewStatusOf(discipline) === 'Draft' && 'border border-border text-muted-foreground',
+                                    done && 'bg-success text-white',
+                                    !done && discipline && reviewStatusOf(discipline) === 'ChangeRequested' && 'bg-warning text-white',
+                                    !done && discipline && reviewStatusOf(discipline) === 'Draft' && discipline.workState === 'InProgress' && 'border border-primary text-primary bg-primary/10',
+                                    !done && discipline && reviewStatusOf(discipline) === 'Draft' && discipline.workState !== 'InProgress' && 'border border-border text-muted-foreground',
                                     !discipline && isCurrentAnalyzing && 'border border-info text-info bg-info/10',
                                     !discipline && !isCurrentAnalyzing && 'border border-border/50 text-muted-foreground/50',
                                 )}
                             >
                                 {done ? (
-                                    <Check className="h-3 w-3" />
+                                    <Check className="h-3 w-3 text-white" strokeWidth={2.5} />
                                 ) : isCurrentAnalyzing ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
@@ -133,8 +134,9 @@ export function CaseStepper({
                                         'block text-[11px]',
                                         done ? 'text-success'
                                             : discipline && reviewStatusOf(discipline) === 'ChangeRequested' ? 'text-warning'
-                                                : isCurrentAnalyzing ? 'text-info font-medium'
-                                                    : 'text-muted-foreground',
+                                                : discipline && discipline.workState === 'InProgress' ? 'text-primary font-medium'
+                                                    : isCurrentAnalyzing ? 'text-info font-medium'
+                                                        : 'text-muted-foreground',
                                     )}
                                 >
                                     {statusText}

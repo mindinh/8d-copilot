@@ -3,14 +3,10 @@ import {
     Button,
     Input,
     Label,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Textarea,
     cn,
 } from '@cnma/react-ui';
-import { Plus, Star, Trash2 } from 'lucide-react';
+import { Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
@@ -389,7 +385,7 @@ export function IshikawaGridWidget({
                     >
                         <div>
                             <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-semibold">{category}</h4>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
                                 {!isEditingThis && !readOnly && (
                                     <button
                                         type="button"
@@ -402,28 +398,27 @@ export function IshikawaGridWidget({
                             </div>
 
                             {isEditingThis ? (
-                                <div className="mt-1.5 space-y-1.5">
-                                    <input
-                                        type="text"
+                                <div className="mt-2 space-y-2">
+                                    <Textarea
                                         value={editValue}
                                         onChange={(e) => setEditValue(e.target.value)}
-                                        placeholder="Enter finding for this category..."
-                                        className="w-full rounded border px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                        placeholder="Enter finding for this 6M category..."
+                                        className="w-full min-h-[90px] text-[13px] bg-background p-2.5 rounded-md border leading-relaxed resize-y focus-visible:ring-1 focus-visible:ring-primary"
                                         autoFocus
                                     />
-                                    <div className="flex items-center gap-1.5">
-                                        <Button size="sm" className="h-6 text-[11px] px-2 py-0" onClick={() => saveEditing(category)}>
+                                    <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                                        <Button size="sm" className="h-6 text-[11px] px-2.5 font-medium" onClick={() => saveEditing(category)}>
                                             Save
                                         </Button>
-                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 py-0" onClick={() => setEditingCategory(null)}>
+                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 font-medium" onClick={() => setEditingCategory(null)}>
                                             Cancel
                                         </Button>
                                     </div>
                                 </div>
                             ) : (
                                 <p className={cn(
-                                    'mt-1 break-words text-[12.5px]',
-                                    text ? 'text-foreground' : 'italic text-muted-foreground',
+                                    'mt-1.5 break-words text-[13px] leading-relaxed',
+                                    text ? 'text-foreground font-normal' : 'italic text-muted-foreground',
                                 )}>
                                     {text || 'Not assessed'}
                                 </p>
@@ -491,6 +486,8 @@ export function ActionCardsWidget({
     fieldKey,
     acceptedValue,
     readOnly = false,
+    reportID = '',
+    disciplineCode = '',
 }: {
     value: unknown;
     emptyLabel?: string;
@@ -499,13 +496,11 @@ export function ActionCardsWidget({
     /** Task đã nhận, đọc từ `<prefix>.assignedActions` của chính discipline này. */
     acceptedValue?: unknown;
     readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
 }) {
     const initialRows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
     const [actions, setActions] = useState<ActionRow[]>(initialRows);
-    const [isAdding, setIsAdding] = useState(false);
-    const [newActionText, setNewActionText] = useState('');
-    const [newOwner, setNewOwner] = useState('');
-    const [newStatus, setNewStatus] = useState('In Process');
 
     // Bảng task là bản ghi RIÊNG, không phải danh sách đề xuất tô màu khác. Giữ
     // bản sao ở đây để nút đổi ngay sang "Added" mà không phải chờ poll một vòng.
@@ -533,16 +528,6 @@ export function ActionCardsWidget({
         persistTasks(next, incoming.length > 1 ? `${next.length - tasks.length} tasks added.` : 'Task added.');
     };
 
-    const removeAction = (index: number) => {
-        const nextActions = actions.filter((_, i) => i !== index);
-        setActions(nextActions);
-        if (disciplineID) {
-            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
-                .then(() => toast.success('Action removed.'))
-                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
-        }
-    };
-
     const persistTasks = (next: ActionTask[], message = 'Task list saved.') => {
         setTasks(next);
         if (!disciplineID) return;
@@ -552,27 +537,6 @@ export function ActionCardsWidget({
     };
 
     const pending = actions.filter((row) => actionLabel(row) && !isAccepted(row, tasks));
-
-    const handleAddAction = () => {
-        if (!newActionText.trim()) return;
-        const newRow: ActionRow = {
-            action: newActionText.trim(),
-            owner: newOwner.trim() || 'Quality Engineer',
-            status: newStatus,
-            origin: 'User Added',
-        };
-        const nextActions = [...actions, newRow];
-        setActions(nextActions);
-        setNewActionText('');
-        setNewOwner('');
-        setIsAdding(false);
-
-        if (disciplineID) {
-            saveDisciplineField(disciplineID, fieldKey || 'containment.actions', nextActions)
-                .then(() => toast.success('Action saved to server.'))
-                .catch((err) => toast.error(`Failed to save action: ${err.message}`));
-        }
-    };
 
     return (
         <div className="space-y-3">
@@ -603,17 +567,6 @@ export function ActionCardsWidget({
                                             + Add
                                         </button>
                                     ) : null}
-                                    {!readOnly && (
-                                        <button
-                                            type="button"
-                                            onClick={() => removeAction(index)}
-                                            aria-label={`Remove action ${index + 1}`}
-                                            className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                            title="Remove action"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                    )}
                                 </div>
                             </div>
                         );
@@ -621,88 +574,26 @@ export function ActionCardsWidget({
                 </div>
             )}
 
-            {!readOnly && (
+            {!readOnly && pending.length > 1 && (
                 <div className="flex flex-wrap items-center gap-2">
-                    {pending.length > 1 && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[11px]"
-                            onClick={() => accept(pending)}
-                        >
-                            ✓ Accept all suggested ({pending.length})
-                        </Button>
-                    )}
-                    {!isAdding && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[11px]"
-                            onClick={() => setIsAdding(true)}
-                        >
-                            <Plus className="mr-1 h-3 w-3" /> Add action
-                        </Button>
-                    )}
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={() => accept(pending)}
+                    >
+                        ✓ Accept all suggested ({pending.length})
+                    </Button>
                 </div>
             )}
 
-            {!readOnly && isAdding && (
-                <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-                    <p className="text-xs font-semibold text-foreground">Add Action</p>
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                            Action Description <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            type="text"
-                            placeholder="e.g. Sort batch 2605 and quarantine non-conforming parts..."
-                            value={newActionText}
-                            onChange={(e) => setNewActionText(e.target.value)}
-                            className="h-8 text-xs bg-background"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
-                                Assignee
-                            </Label>
-                            <Input
-                                type="text"
-                                placeholder="e.g. Quality Engineer"
-                                value={newOwner}
-                                onChange={(e) => setNewOwner(e.target.value)}
-                                className="h-8 text-xs bg-background"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
-                                Status
-                            </Label>
-                            <Select value={newStatus} onValueChange={setNewStatus}>
-                                <SelectTrigger className="h-8 text-xs bg-background w-full">
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Planned">Planned</SelectItem>
-                                    <SelectItem value="In Process">In Process</SelectItem>
-                                    <SelectItem value="Done">Done</SelectItem>
-                                    <SelectItem value="Verified">Verified</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" onClick={handleAddAction} disabled={!newActionText.trim()}>
-                            Add action
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
-                            Cancel
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            <TaskTable tasks={tasks} onChange={persistTasks} readOnly={readOnly} />
+            <TaskTable
+                tasks={tasks}
+                onChange={persistTasks}
+                readOnly={readOnly}
+                reportID={reportID}
+                disciplineCode={disciplineCode}
+            />
         </div>
     );
 }

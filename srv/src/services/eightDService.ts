@@ -33,10 +33,13 @@ import { mapCase } from '../domain/eightd/caseMapper';
 import { blockingIssues, validateDataset } from '../domain/eightd/datasetValidator';
 import { getGlobalModelConfig } from '../core/ai/globalModelConfig';
 import {
+    confirmDisciplineField,
     createReport,
+    findTaskInResultJson,
     getClosureGate,
     getReportForRerun,
     getReviewTrail,
+    listTaskEvidence,
     markAnalyzing,
     markFailed,
     reviewDiscipline,
@@ -45,6 +48,7 @@ import {
     savePartialDiscipline,
     saveReportContext,
     saveResult,
+    setDisciplineWorkState,
     sweepStuckAnalyzing,
     type AssignedTeamRow,
 } from '../domain/eightd/eightDRepository';
@@ -437,6 +441,113 @@ export function registerEightDHandlers(srv: any): void {
             return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
         }
         return JSON.stringify({ saved: fieldKey });
+    });
+
+    // ── confirmDisciplineField ───────────────────────────────────────────────
+    srv.on('confirmDisciplineField', async (req: any) => {
+        const disciplineID = req.data?.disciplineID;
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID is required.');
+        }
+        const fieldKey = String(req.data?.fieldKey ?? '').trim();
+        if (!fieldKey) return req.error(400, 'fieldKey is required.');
+        const confirmed = req.data?.confirmed === true;
+
+        try {
+            const result = await confirmDisciplineField(disciplineID, fieldKey, confirmed);
+            return JSON.stringify(result);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
+    });
+
+    // ── setDisciplineWorkState ───────────────────────────────────────────────
+    srv.on('setDisciplineWorkState', async (req: any) => {
+        const disciplineID = req.data?.disciplineID;
+        if (typeof disciplineID !== 'string' || !disciplineID.trim()) {
+            return req.error(400, 'disciplineID is required.');
+        }
+        const workState = String(req.data?.workState ?? '').trim();
+        if (!workState) return req.error(400, 'workState is required.');
+
+        try {
+            const result = await setDisciplineWorkState(disciplineID, workState);
+            return JSON.stringify(result);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
+    });
+
+    // ── TaskEvidences ────────────────────────────────────────────────────────
+    srv.before('CREATE', 'TaskEvidences', async (req: any) => {
+        const { reportID, disciplineCode, taskId, fileName, fileSize, mediaType } = req.data ?? {};
+        if (!reportID || !disciplineCode || !taskId) {
+            return req.error(400, 'reportID, disciplineCode, and taskId are required.');
+        }
+        if (mediaType !== 'application/pdf') {
+            return req.error(400, 'Only PDF files are allowed.');
+        }
+        const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+        const size = Number(fileSize) || 0;
+        if (size > MAX_SIZE) {
+            const actualMb = (size / (1024 * 1024)).toFixed(2);
+            return req.error(400, `File size exceeds 10 MB limit (actual: ${actualMb} MB).`);
+        }
+
+        const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
+            .columns('ID', 'code', 'reviewStatus', 'resultJson')
+            .where({ report_ID: reportID, code: disciplineCode });
+        if (!discipline) {
+            return req.error(404, `Discipline ${disciplineCode} not found for report ${reportID}.`);
+        }
+
+        if (discipline.reviewStatus === 'Approved') {
+            return req.error(400, `Discipline ${disciplineCode} has been completed and locked.`);
+        }
+
+        const task = findTaskInResultJson(discipline.resultJson, taskId);
+        if (!task || task.status !== 'Done') {
+            return req.error(400, 'Evidence can only be uploaded for tasks with status Done.');
+        }
+
+        req.data.uploadedBy = req.user?.id || 'anonymous';
+        req.data.uploadedAt = new Date().toISOString();
+    });
+
+    srv.before('UPDATE', 'TaskEvidences', async (req: any) => {
+        // Only allow media streaming (content upload), block direct metadata mutations
+        const keys = Object.keys(req.data ?? {}).filter((k) => k !== 'ID' && k !== 'content' && k !== 'mediaType');
+        if (keys.length > 0) {
+            return req.error(400, 'Direct modification of evidence metadata is not permitted. Delete and re-upload instead.');
+        }
+    });
+
+    srv.before('DELETE', 'TaskEvidences', async (req: any) => {
+        const id = req.data?.ID;
+        if (!id) return;
+        const row = await SELECT.one.from('cnma.proresolve.TaskEvidences')
+            .columns('ID', 'reportID', 'disciplineCode')
+            .where({ ID: id });
+        if (row) {
+            const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
+                .columns('ID', 'reviewStatus')
+                .where({ report_ID: row.reportID, code: row.disciplineCode });
+            if (discipline && discipline.reviewStatus === 'Approved') {
+                return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
+            }
+        }
+    });
+
+    // ── listTaskEvidence ─────────────────────────────────────────────────────
+    srv.on('listTaskEvidence', async (req: any) => {
+        const reportID = String(req.data?.reportID ?? '').trim();
+        if (!reportID) return req.error(400, 'reportID is required.');
+        try {
+            const rows = await listTaskEvidence(reportID);
+            return JSON.stringify(rows);
+        } catch (e: any) {
+            return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
+        }
     });
 
     // ── clearCaseLibrary ─────────────────────────────────────────────────────

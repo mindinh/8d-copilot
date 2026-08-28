@@ -1428,7 +1428,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048834",
-        "partner_id": "BP-100031",
+        "partner_id": "100031",
         "partner_name": "Sara Klein",
         "function_title": "Supplier Quality Engineer",
         "partner_role": "8D Team Leader",
@@ -1436,7 +1436,7 @@
       },
       {
         "notification_id": "8D-10048834",
-        "partner_id": "BP-100014",
+        "partner_id": "100014",
         "partner_name": "Thien Tu",
         "function_title": "Quality Engineer",
         "partner_role": "8D Team Member",
@@ -1444,7 +1444,7 @@
       },
       {
         "notification_id": "8D-10048834",
-        "partner_id": "BP-100133",
+        "partner_id": "100133",
         "partner_name": "Ola Nyberg",
         "function_title": "Press Shop Engineer",
         "partner_role": "8D Team Member",
@@ -1659,21 +1659,21 @@
       "_cardinality": "3 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100031",
+          "partner_id": "100031",
           "partner_name": "Sara Klein",
           "function_title": "Supplier Quality Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100014",
+          "partner_id": "100014",
           "partner_name": "Thien Tu",
           "function_title": "Quality Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100133",
+          "partner_id": "100133",
           "partner_name": "Ola Nyberg",
           "function_title": "Press Shop Engineer",
           "partner_role": "8D Team Member",

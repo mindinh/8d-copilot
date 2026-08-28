@@ -1422,7 +1422,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048651",
-        "partner_id": "BP-100014",
+        "partner_id": "100014",
         "partner_name": "Thien Tu",
         "function_title": "Quality Engineer",
         "partner_role": "8D Team Leader",
@@ -1430,7 +1430,7 @@
       },
       {
         "notification_id": "8D-10048651",
-        "partner_id": "BP-100067",
+        "partner_id": "100067",
         "partner_name": "Marek Nowak",
         "function_title": "Surface Treatment Specialist",
         "partner_role": "8D Team Member",
@@ -1646,14 +1646,14 @@
       "_cardinality": "2 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100014",
+          "partner_id": "100014",
           "partner_name": "Thien Tu",
           "function_title": "Quality Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100067",
+          "partner_id": "100067",
           "partner_name": "Marek Nowak",
           "function_title": "Surface Treatment Specialist",
           "partner_role": "8D Team Member",

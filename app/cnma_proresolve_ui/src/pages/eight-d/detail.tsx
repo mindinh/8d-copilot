@@ -230,7 +230,7 @@ export function EightDDetailPage() {
                 </TabsList>
 
                 <TabsContent value="disciplines" className="mt-0 outline-none">
-                    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
+                    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_290px]">
 
                         {/* ── Cot trai: tien do + dieu huong ── */}
                         <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
@@ -258,7 +258,10 @@ export function EightDDetailPage() {
                                 if (selected) {
                                     return (
                                         <div key={selected.ID} className="min-w-0 space-y-4">
-                                            <DisciplineReviewBox discipline={selected} />
+                                            <DisciplineReviewBox
+                                                discipline={selected}
+                                                liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null}
+                                            />
 
                                             {selected.code === 'D6' && <ActionChecklist actions={caseActions} />}
 
@@ -293,8 +296,8 @@ export function EightDDetailPage() {
                             <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
                                 <Tabs value={sideTab} onValueChange={(v) => setSideTab(v as SideTab)}>
                                     <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="audit" className="text-xs">Audit trail</TabsTrigger>
-                                        <TabsTrigger value="similar" className="text-xs">Similar cases</TabsTrigger>
+                                        <TabsTrigger value="audit" className="text-xs">Audit</TabsTrigger>
+                                        <TabsTrigger value="similar" className="text-xs">Similar</TabsTrigger>
                                     </TabsList>
 
                                     <TabsContent value="audit" className="mt-3">

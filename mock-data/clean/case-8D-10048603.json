@@ -134,7 +134,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100011",
+      "partnerId": "100011",
       "partnerName": "Quyen La",
       "functionTitle": "Quality Technician",
       "partnerRole": "8D Team Leader",
@@ -143,7 +143,7 @@
       "phone": "+49 89 2018 1011"
     },
     {
-      "partnerId": "BP-100012",
+      "partnerId": "100012",
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Engineer",
       "partnerRole": "8D Team Member",
@@ -152,7 +152,7 @@
       "phone": "+49 89 2018 1012"
     },
     {
-      "partnerId": "BP-100045",
+      "partnerId": "100045",
       "partnerName": "Ingo Braun",
       "functionTitle": "Manufacturing Engineer",
       "partnerRole": "8D Team Member",
@@ -161,7 +161,7 @@
       "phone": "+49 89 2018 1045"
     },
     {
-      "partnerId": "BP-100052",
+      "partnerId": "100052",
       "partnerName": "Petra Vogel",
       "functionTitle": "Document Control Officer",
       "partnerRole": "8D Team Member",

@@ -100,7 +100,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100011",
+      "partnerId": "100011",
       "partnerName": "Quyen La",
       "functionTitle": "Quality Technician",
       "partnerRole": "8D Team Leader",
@@ -109,7 +109,7 @@
       "phone": "+49 89 2018 1011"
     },
     {
-      "partnerId": "BP-100088",
+      "partnerId": "100088",
       "partnerName": "Rita Fischer",
       "functionTitle": "Assembly Supervisor",
       "partnerRole": "8D Team Member",
@@ -118,7 +118,7 @@
       "phone": "+49 89 2018 1088"
     },
     {
-      "partnerId": "BP-100091",
+      "partnerId": "100091",
       "partnerName": "Karl Wagner",
       "functionTitle": "Maintenance Planner",
       "partnerRole": "8D Team Member",

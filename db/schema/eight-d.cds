@@ -173,6 +173,11 @@ entity Disciplines : cuid, managed {
     reviewedAt   : DateTime;
     /** Bắt buộc khi ChangeRequested — "cần sửa" mà không nói sửa gì thì vô dụng. */
     reviewNote   : String(500);
+
+    /** JSON mảng string chứa các fieldKey của AI đã được người dùng bấm Confirm. */
+    confirmedFieldsJson : LargeString;
+    /** 'NotStarted' | 'InProgress' | 'Completed'. Trạng thái xử lý của bước D. */
+    workState           : String(16) default 'NotStarted';
 }
 
 /**
@@ -197,3 +202,26 @@ entity ReviewEvents : cuid {
     actor          : String(120);
     at             : DateTime;
 }
+
+/**
+ * Bằng chứng hoàn thành hành động (PDF completion evidence cho từng Action Task).
+ *
+ * Không dùng Association ngược về Disciplines: hàng ở đây phải sống sót kể cả khi
+ * report bị chạy lại (reanalyze) và discipline cũ bị thay. Khoá liên kết là bộ ba
+ * (reportID, disciplineCode, taskId) dạng giá trị độc lập.
+ */
+entity TaskEvidences : cuid {
+    reportID       : String(36);
+    /** 'D3' | 'D5' | 'D7'... */
+    disciplineCode : String(4);
+    taskId         : String(64);
+    fileName       : String(255);
+    fileSize       : Integer;
+    @Core.MediaType  : mediaType
+    content        : LargeBinary;
+    @Core.IsMediaType: true
+    mediaType      : String(100);
+    uploadedBy     : String(120);
+    uploadedAt     : DateTime;
+}
+

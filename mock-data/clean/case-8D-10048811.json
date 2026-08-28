@@ -134,7 +134,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100001",
+      "partnerId": "100001",
       "partnerName": "Heli Weber",
       "functionTitle": "Quality Engineer",
       "partnerRole": "8D Team Leader",
@@ -143,7 +143,7 @@
       "phone": "+49 89 2018 1001"
     },
     {
-      "partnerId": "BP-100045",
+      "partnerId": "100045",
       "partnerName": "Ingo Braun",
       "functionTitle": "Manufacturing Engineer",
       "partnerRole": "8D Team Member",
@@ -152,7 +152,7 @@
       "phone": "+49 89 2018 1045"
     },
     {
-      "partnerId": "BP-100052",
+      "partnerId": "100052",
       "partnerName": "Petra Vogel",
       "functionTitle": "Document Control Officer",
       "partnerRole": "8D Team Member",

@@ -1,14 +1,30 @@
 import {
-    Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge,
+    Badge,
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn,
 } from '@cnma/react-ui';
 import { AlertCircle, AlertTriangle, CheckCircle2, Link2 } from 'lucide-react';
-import { reviewStatusOf, type Discipline8D } from '@/services/eightd-service';
+import { useQuery } from '@tanstack/react-query';
+import {
+    listTaskEvidence,
+    reviewStatusOf,
+    type Discipline8D,
+} from '@/services/eightd-service';
 import { Markdown } from './markdown';
 import { AiSuggestWidget, DecisionTableWidget, TeamRosterProvider, type RosterRow } from './team-roster-widget';
-import { ComplaintReferenceWidget, IsBoxWidget, IsNotBoxWidget, ProblemStatementWidget, W2hCellWidget } from './problem-widgets';
+import {
+    ComplaintReferenceWidget,
+    IS_NOT_FIELD_KEYS,
+    IsBoxWidget,
+    IsIsNotSectionWidget,
+    IsNotBasisWidget,
+    IsNotBoxWidget,
+    ProblemStatementWidget,
+    W2H_FIELD_KEYS,
+    W2hCellWidget,
+    W2hSectionWidget,
+} from './problem-widgets';
 import { ActionCardsWidget, AiDraftWidget, IshikawaGridWidget, WhyChainWidget } from './cause-widgets';
-import { assignedFieldFor } from '../../../../../shared/action-task';
+import { assignedFieldFor, normalizeTasks } from '../../../../../shared/action-task';
 import { ClosureGateWidget, FmeaLinkWidget } from './closure-widgets';
 
 interface SnapshotField { key: string; label: string; widget: string; visible?: boolean; colSpan?: number; rowSpan?: number }
@@ -32,7 +48,19 @@ const ROW_SPANS: Record<number, string> = { 2: 'row-span-2', 3: 'row-span-3', 4:
  * Is/Is-Not - von da co nhan rieng ben trong dung theo mockup - thi thanh ra in
  * hai lan cung mot chu. Danh sach nay tat cai o tren, de nhan ben trong lam viec.
  */
-const SELF_LABELLED_WIDGETS = new Set(['w2h-cell', 'is-box', 'isnot-box', 'complaint-reference']);
+const SELF_LABELLED_WIDGETS = new Set([
+    'w2h-cell',
+    'is-box',
+    'isnot-box',
+    'isnot-basis',
+    'problem.isIsNotBasis',
+    'complaint-reference',
+    'ai-suggest',
+    'decision-table',
+    'problem-statement',
+    'problem.statement',
+    'statement',
+]);
 
 /**
  * Widget tu lo trang thai RONG cua no.
@@ -47,7 +75,7 @@ const SELF_LABELLED_WIDGETS = new Set(['w2h-cell', 'is-box', 'isnot-box', 'compl
  * khi khong co du lieu.
  */
 const SELF_EMPTY_WIDGETS = new Set([
-    'w2h-cell', 'is-box', 'isnot-box', 'complaint-reference',
+    'w2h-cell', 'is-box', 'isnot-box', 'isnot-basis', 'problem.isIsNotBasis', 'complaint-reference',
     'ai-suggest', 'decision-table', 'problem-statement',
     // `ishikawa-grid` doc tu caseContext chu khong tu gia tri field, nen gia tri
     // luon rong — khong co mat o day thi no khong bao gio duoc goi.
@@ -60,8 +88,6 @@ const SELF_EMPTY_WIDGETS = new Set([
     // case, khong phai o trong. 'closure-gate' thi khong doc gia tri field nao ca.
     'fmea-link', 'closure-gate',
 ]);
-
-
 
 function parseObject<T>(value: string | null | undefined): T | null {
     if (!value) return null;
@@ -135,7 +161,8 @@ function EvidenceList({ paths, context }: { paths: string[]; context: Record<str
     })}</div>;
 }
 
-function FieldValue({ field, value, context, disciplineID, data, siblings, readOnly = false }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[]; readOnly?: boolean }) {
+function FieldValue({ field, value, context, disciplineID, data, siblings, readOnly = false, reportID = '', disciplineCode = '' }: { field: SnapshotField; value: unknown; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[]; readOnly?: boolean; reportID?: string; disciplineCode?: string }) {
+    const isLocked = readOnly;
     if ((value === undefined || value === null || value === '') && !SELF_EMPTY_WIDGETS.has(field.widget)) return <span className="text-sm italic text-muted-foreground">Not provided</span>;
     if (field.widget === 'evidence-list' && Array.isArray(value)) return <EvidenceList paths={value.map(String)} context={context} />;
     // Hai widget co HANH VI cua D1. Chung khong tu giu state - state nhom nam
@@ -145,10 +172,10 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
     // Nhan ca `field.key` vi `formSchemaJson` duoc chup vao tung discipline luc
     // phan tich: report chay truoc thay doi nay mang widget cu trong snapshot.
     if (field.widget === 'ai-suggest' || field.key === 'team.roster') {
-        return <AiSuggestWidget roster={Array.isArray(value) ? value as RosterRow[] : []} />;
+        return <AiSuggestWidget roster={Array.isArray(value) ? value as RosterRow[] : []} readOnly={isLocked} />;
     }
     if (field.widget === 'decision-table' || field.key === 'team.assignedRoster') {
-        return <DecisionTableWidget />;
+        return <DecisionTableWidget readOnly={isLocked} />;
     }
 
     // ── Widget cua D2 ────────────────────────────────────────────────────────
@@ -162,17 +189,20 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
             statement={value}
             override={getPath(data, 'problem.statementOverride')}
             disciplineID={disciplineID}
-            readOnly={readOnly}
+            readOnly={isLocked}
         />;
     }
     if (field.widget === 'w2h-cell') {
-        return <W2hCellWidget label={field.label || humanize(field.key)} value={value} />;
+        return <W2hCellWidget label={field.label || humanize(field.key)} value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={isLocked} />;
     }
-    if (field.widget === 'is-box') return <IsBoxWidget value={value} />;
-    if (field.widget === 'isnot-box') return <IsNotBoxWidget value={value} />;
+    if (field.widget === 'is-box') return <IsBoxWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={isLocked} />;
+    if (field.widget === 'isnot-box') return <IsNotBoxWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={isLocked} />;
+    if (field.widget === 'isnot-basis' || field.key === 'problem.isIsNotBasis') {
+        return <IsNotBasisWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={isLocked} />;
+    }
     // D4/D3 — ba widget nay phai dung TRUOC nhanh Array chung ben duoi, neu khong
     // `ObjectTable` nuot het va lai ve ra bang phang nhu cu.
-    if (field.widget === 'why-chain') return <WhyChainWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={readOnly} />;
+    if (field.widget === 'why-chain') return <WhyChainWidget value={value} disciplineID={disciplineID} fieldKey={field.key} readOnly={isLocked} />;
     if (field.widget === 'ishikawa-grid') {
         return (
             <IshikawaGridWidget
@@ -181,11 +211,11 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
                 disciplineID={disciplineID}
                 savedFindings={getPath(data, 'ishikawaCustomFindings')}
                 savedRootCategory={getPath(data, 'selectedRootCategory')}
-                readOnly={readOnly}
+                readOnly={isLocked}
             />
         );
     }
-    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} readOnly={readOnly} />;
+    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} readOnly={isLocked} reportID={reportID} disciplineCode={disciplineCode} />;
     if (field.widget === 'ai-draft') return <AiDraftWidget value={value} />;
     if (field.widget === 'fmea-link') return <FmeaLinkWidget value={value} />;
     // Cổng đóng case là sự thật về CẢ report, nên nó đọc trạng thái duyệt của các
@@ -204,15 +234,37 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
     return <span className="break-words whitespace-pre-wrap text-sm leading-relaxed">{String(value)}</span>;
 }
 
-function FieldBlock({ field, value, violations, context, disciplineID, data, siblings, readOnly = false }: { field: SnapshotField; value: unknown; violations: Violation[]; context: Record<string, unknown> | null; disciplineID: string; data: Record<string, unknown>; siblings: Discipline8D[]; readOnly?: boolean }) {
+export function FieldBlock({
+    field,
+    value,
+    violations,
+    context,
+    disciplineID,
+    data,
+    siblings,
+    readOnly = false,
+    reportID = '',
+    disciplineCode = '',
+}: {
+    field: SnapshotField;
+    value: unknown;
+    violations: Violation[];
+    context: Record<string, unknown> | null;
+    disciplineID: string;
+    data: Record<string, unknown>;
+    siblings: Discipline8D[];
+    readOnly?: boolean;
+    reportID?: string;
+    disciplineCode?: string;
+}) {
     const hasError = violations.some((item) => item.severity === 'error');
     const hasWarning = violations.some((item) => item.severity === 'warning');
-    const isSelfLabelled = SELF_LABELLED_WIDGETS.has(field.widget);
+    const isSelfLabelled = SELF_LABELLED_WIDGETS.has(field.widget) || SELF_LABELLED_WIDGETS.has(field.key);
 
     return (
         <div className={cn(
-            'min-w-0 overflow-hidden rounded-xl',
-            isSelfLabelled ? 'p-0' : 'p-3.5 border border-border/70 bg-card shadow-xs',
+            'min-w-0 overflow-hidden rounded-xl transition-all',
+            isSelfLabelled ? 'p-0' : 'p-3.5 border bg-card shadow-xs border-border/70',
             COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))],
             ROW_SPANS[field.rowSpan ?? 1],
             field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4',
@@ -220,22 +272,38 @@ function FieldBlock({ field, value, violations, context, disciplineID, data, sib
             hasWarning && !hasError && 'border border-warning/40 bg-warning-bg/30',
         )}>
             {!isSelfLabelled && (
-                <div className="mb-2 pb-1.5 border-b border-border/50 flex min-w-0 items-center justify-between gap-2 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
-                    <span className="min-w-0 break-words">{field.label || humanize(field.key)}</span>
-                    <div className="flex items-center gap-1">
+                <div className="mb-2.5 pb-1.5 border-b border-border/60 flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0 break-words text-xs font-bold uppercase tracking-wider text-foreground/90">
+                        {field.label || humanize(field.key)}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
                         {hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
                         {hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}
                     </div>
                 </div>
             )}
             <div className="min-w-0 overflow-hidden">
-                <FieldValue field={field} value={value} context={context} disciplineID={disciplineID} data={data} siblings={siblings} readOnly={readOnly} />
+                <FieldValue
+                    field={field}
+                    value={value}
+                    context={context}
+                    disciplineID={disciplineID}
+                    data={data}
+                    siblings={siblings}
+                    readOnly={readOnly}
+                    reportID={reportID}
+                    disciplineCode={disciplineCode}
+                />
             </div>
-            {violations.map((item) => (
-                <span key={item.ruleId} className={cn('mt-2 block break-words border-t pt-2 text-xs leading-relaxed', item.severity === 'error' ? 'border-destructive/20 text-destructive' : 'border-warning/20 text-warning')}>
-                    {item.message}
-                </span>
-            ))}
+            {violations.length > 0 && (
+                <div className="mt-2 space-y-1">
+                    {violations.map((violation, index) => (
+                        <div key={index} className={cn('text-xs', violation.severity === 'error' ? 'text-destructive' : 'text-warning')}>
+                            {violation.message}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -393,29 +461,98 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
     const visibleGroups = groups;
     const violations = validation?.violations ?? [];
     const isCompleted = reviewStatusOf(discipline) === 'Approved';
+
+    const W2H_SET = new Set<string>(W2H_FIELD_KEYS);
+    const IS_NOT_SET = new Set<string>(IS_NOT_FIELD_KEYS);
+
+    const isD1 = discipline.code === 'D1';
+    const hasD1Roster = isD1 && (fieldMap.has('team.roster') || Boolean(getPath(data, 'team.roster')));
+    const hasD1AssignedRoster = isD1 && (fieldMap.has('team.assignedRoster') || Boolean(getPath(data, 'team.assignedRoster')));
+
+    const d1OtherGroups = isD1
+        ? visibleGroups.map((g) => ({
+            ...g,
+            fieldKeys: g.fieldKeys.filter((k) => k !== 'team.roster' && k !== 'team.assignedRoster'),
+        })).filter((g) => g.fieldKeys.length > 0)
+        : visibleGroups;
+
     return (
         <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')} readOnly={isCompleted}>
             <div className="min-w-0 space-y-3">
-                <Accordion type="multiple" defaultValue={visibleGroups.map((item) => item.id)} className="space-y-3">
-                    {visibleGroups.map((group) => (
-                        <AccordionItem key={group.id} value={group.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm">
-                            <AccordionTrigger className="min-w-0 px-4 py-3 hover:no-underline">
-                                <span className="break-words text-left text-sm font-semibold">{group.label}</span>
-                            </AccordionTrigger>
-                            <AccordionContent className="border-t px-4 py-4">
-                                <div className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">
+                {hasD1Roster && (
+                    <AiSuggestWidget
+                        roster={getPath(data, 'team.roster') as RosterRow[]}
+                        readOnly={isCompleted}
+                    />
+                )}
+
+                {hasD1AssignedRoster && (
+                    <DecisionTableWidget
+                        readOnly={isCompleted}
+                    />
+                )}
+
+                {d1OtherGroups.length > 0 && (
+                    <div className="space-y-4">
+                        {d1OtherGroups.map((group) => {
+                            const renderedComposite = new Set<string>();
+
+                            return (
+                                <div key={group.id} className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">
                                     {group.fieldKeys.map((key) => {
                                         const field = fieldMap.get(key);
                                         if (!field || field.visible === false || isExcludedField(discipline.code, key, field.label)) return null;
+
+                                        if (discipline.code === 'D2' && W2H_SET.has(key)) {
+                                            if (renderedComposite.has('5W2H')) return null;
+                                            renderedComposite.add('5W2H');
+                                            return (
+                                                <W2hSectionWidget
+                                                    key="5W2H_SECTION"
+                                                    data={data}
+                                                    disciplineID={discipline.ID}
+                                                    readOnly={isCompleted}
+                                                />
+                                            );
+                                        }
+
+                                        if (discipline.code === 'D2' && IS_NOT_SET.has(key)) {
+                                            if (renderedComposite.has('IS_NOT')) return null;
+                                            renderedComposite.add('IS_NOT');
+                                            return (
+                                                <IsIsNotSectionWidget
+                                                    key="IS_NOT_SECTION"
+                                                    data={data}
+                                                    disciplineID={discipline.ID}
+                                                    readOnly={isCompleted}
+                                                />
+                                            );
+                                        }
+
                                         const fieldViolations = violations.filter((item) => item.path === `data.${key}` || item.path === key);
-                                        return <FieldBlock key={key} field={field} value={getPath(data, key)} violations={fieldViolations} context={context} disciplineID={discipline.ID} data={data} siblings={siblings} readOnly={isCompleted} />;
+
+                                        return (
+                                            <FieldBlock
+                                                key={key}
+                                                field={field}
+                                                value={getPath(data, key)}
+                                                violations={fieldViolations}
+                                                context={context}
+                                                disciplineID={discipline.ID}
+                                                data={data}
+                                                siblings={siblings}
+                                                readOnly={isCompleted}
+                                                reportID={(discipline as any).report_ID || (discipline as any).reportID || ''}
+                                                disciplineCode={discipline.code}
+                                            />
+                                        );
                                     })}
                                 </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    ))}
-                </Accordion>
-            </div>
-        </TeamRosterProvider>
-    );
+                            );
+                        })}
+                    </div>
+                )}
+        </div>
+    </TeamRosterProvider>
+);
 }

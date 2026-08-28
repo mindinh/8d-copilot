@@ -122,7 +122,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100001",
+      "partnerId": "100001",
       "partnerName": "Heli Weber",
       "functionTitle": "Quality Engineer",
       "partnerRole": "8D Team Leader",
@@ -131,7 +131,7 @@
       "phone": "+49 89 2018 1001"
     },
     {
-      "partnerId": "BP-100067",
+      "partnerId": "100067",
       "partnerName": "Marek Nowak",
       "functionTitle": "Surface Treatment Specialist",
       "partnerRole": "8D Team Member",
@@ -140,7 +140,7 @@
       "phone": "+48 22 123 1067"
     },
     {
-      "partnerId": "BP-100147",
+      "partnerId": "100147",
       "partnerName": "Lena Hoffmann",
       "functionTitle": "Metrology Specialist",
       "partnerRole": "8D Team Member",
@@ -149,7 +149,7 @@
       "phone": "+49 89 2018 1147"
     },
     {
-      "partnerId": "BP-100011",
+      "partnerId": "100011",
       "partnerName": "Quyen La",
       "functionTitle": "Quality Technician",
       "partnerRole": "8D Team Member",

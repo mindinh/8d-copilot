@@ -1435,7 +1435,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048577",
-        "partner_id": "BP-100001",
+        "partner_id": "100001",
         "partner_name": "Heli Weber",
         "function_title": "Quality Engineer",
         "partner_role": "8D Team Leader",
@@ -1443,7 +1443,7 @@
       },
       {
         "notification_id": "8D-10048577",
-        "partner_id": "BP-100023",
+        "partner_id": "100023",
         "partner_name": "Luis Moreno",
         "function_title": "Foundry Process Engineer",
         "partner_role": "8D Team Member",
@@ -1451,7 +1451,7 @@
       },
       {
         "notification_id": "8D-10048577",
-        "partner_id": "BP-100031",
+        "partner_id": "100031",
         "partner_name": "Sara Klein",
         "function_title": "Supplier Quality Engineer",
         "partner_role": "8D Team Member",
@@ -1672,21 +1672,21 @@
       "_cardinality": "3 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100001",
+          "partner_id": "100001",
           "partner_name": "Heli Weber",
           "function_title": "Quality Engineer",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100023",
+          "partner_id": "100023",
           "partner_name": "Luis Moreno",
           "function_title": "Foundry Process Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100031",
+          "partner_id": "100031",
           "partner_name": "Sara Klein",
           "function_title": "Supplier Quality Engineer",
           "partner_role": "8D Team Member",

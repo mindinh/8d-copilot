@@ -166,8 +166,7 @@ const D1_FORM_SCHEMA = JSON.stringify({ fields: [
     // Chin field con lai VAN duoc AI sinh va van bi luat grounding cua D1 kiem
     // tra - chung chi khong nam trong group nao, nen roi vao panel "Available
     // Fields" cua Form Editor. Ai muon hien them thi keo vao group; khong ai
-    // phai sua code de doi bo cuc mot buoc 8D.
-    group('d1-ai-result', 'AI-generated team recommendation', ['team.roster', 'team.assignedRoster'], '100', 10),
+    group('d1-decision-table', 'Decision Table', ['team.assignedRoster'], '100', 10),
 ] }, null, 2);
 
 const D2_FORM_SCHEMA = JSON.stringify({ fields: [

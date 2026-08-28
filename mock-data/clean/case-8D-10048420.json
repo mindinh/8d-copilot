@@ -122,7 +122,7 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "BP-100014",
+      "partnerId": "100014",
       "partnerName": "Karl Wagner",
       "functionTitle": "Maintenance Planner",
       "partnerRole": "8D Team Leader",
@@ -131,7 +131,7 @@
       "phone": "+49 89 2018 1014"
     },
     {
-      "partnerId": "BP-100012",
+      "partnerId": "100012",
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Engineer",
       "partnerRole": "8D Team Member",
@@ -140,7 +140,7 @@
       "phone": "+49 89 2018 1012"
     },
     {
-      "partnerId": "BP-100061",
+      "partnerId": "100061",
       "partnerName": "Anh Pham",
       "functionTitle": "Tooling Engineer",
       "partnerRole": "8D Team Member",

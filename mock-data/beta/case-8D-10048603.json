@@ -1442,7 +1442,7 @@
     "team_assignments": [
       {
         "notification_id": "8D-10048603",
-        "partner_id": "BP-100011",
+        "partner_id": "100011",
         "partner_name": "Quyen La",
         "function_title": "Quality Technician",
         "partner_role": "8D Team Leader",
@@ -1450,7 +1450,7 @@
       },
       {
         "notification_id": "8D-10048603",
-        "partner_id": "BP-100012",
+        "partner_id": "100012",
         "partner_name": "Minh Dinh",
         "function_title": "Production Engineer",
         "partner_role": "8D Team Member",
@@ -1458,7 +1458,7 @@
       },
       {
         "notification_id": "8D-10048603",
-        "partner_id": "BP-100045",
+        "partner_id": "100045",
         "partner_name": "Ingo Braun",
         "function_title": "Manufacturing Engineer",
         "partner_role": "8D Team Member",
@@ -1466,7 +1466,7 @@
       },
       {
         "notification_id": "8D-10048603",
-        "partner_id": "BP-100052",
+        "partner_id": "100052",
         "partner_name": "Petra Vogel",
         "function_title": "Document Control Officer",
         "partner_role": "8D Team Member",
@@ -1693,28 +1693,28 @@
       "_cardinality": "4 rows (allowed 2-4)",
       "rows": [
         {
-          "partner_id": "BP-100011",
+          "partner_id": "100011",
           "partner_name": "Quyen La",
           "function_title": "Quality Technician",
           "partner_role": "8D Team Leader",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100012",
+          "partner_id": "100012",
           "partner_name": "Minh Dinh",
           "function_title": "Production Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100045",
+          "partner_id": "100045",
           "partner_name": "Ingo Braun",
           "function_title": "Manufacturing Engineer",
           "partner_role": "8D Team Member",
           "source": "Backfilled from case record"
         },
         {
-          "partner_id": "BP-100052",
+          "partner_id": "100052",
           "partner_name": "Petra Vogel",
           "function_title": "Document Control Officer",
           "partner_role": "8D Team Member",
