@@ -257,8 +257,7 @@ export function TeamRosterProvider({ disciplineID, caseContext, savedRoster, rea
         setSaving(true);
         setSaveError(null);
         saveTeamRoster(disciplineID, toSave)
-            .then((res) => {
-                const count = Array.isArray(res.saved) ? res.saved.length : toSave.length;
+            .then((count) => {
                 setSavedLabel(`${count} member${count === 1 ? '' : 's'}`);
                 setDirty(false);
             })

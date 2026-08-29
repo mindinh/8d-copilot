@@ -34,11 +34,36 @@ function draft(code: string, over: Partial<DisciplineDraft> = {}): DisciplineDra
     };
 }
 
+/**
+ * `data.rootCause` đầy đủ đúng như một model ngoan sẽ trả — chép từ context.
+ * D4 nào thiếu phần này sẽ bị backfill sửa và GHI repairs, nên các test
+ * "không báo chữa gì" phải xuất phát từ một D4 đã đủ ruột.
+ */
+function d4Data(ctx: ReturnType<typeof mapCase>) {
+    return {
+        rootCause: {
+            statement: ctx.rootCause
+                ? `${ctx.rootCause.category}: ${ctx.rootCause.description}`
+                : 'Hypothesis statement long enough for the D4 contract.',
+            fiveWhy: ctx.fiveWhy.map((r) => ({
+                step: r.stepNo, why: r.question, answer: r.answer, evidence: r.evidenceCitation,
+            })),
+            ishikawaBoard: ctx.ishikawa.map((r) => ({
+                category: r.category, finding: r.description, isRootCause: r.isRootCause, source: 'recorded',
+            })),
+            evidenceGaps: [],
+        },
+    };
+}
+
 function fullResult(over: Partial<EightDResult> = {}): EightDResult {
     return {
         internalSummary: 'Internal summary.',
         customerSummary: null,
-        disciplines: DISCIPLINE_CODES.map((c) => draft(c, c === 'D6' ? { dataBacked: false } : {})),
+        disciplines: DISCIPLINE_CODES.map((c) => draft(
+            c,
+            c === 'D6' ? { dataBacked: false } : c === 'D4' ? { data: d4Data(ctxQ3) } : {},
+        )),
         ...over,
     };
 }
@@ -101,7 +126,9 @@ describe('postProcess — discipline thiếu hoặc thừa', () => {
     it('trả đủ 8 placeholder khi model trả mảng rỗng', () => {
         const { result, repairs } = postProcess(fullResult({ disciplines: [] }), ctxQ3);
         expect(result.disciplines).toHaveLength(8);
-        expect(repairs).toHaveLength(8);
+        // 8 placeholder + các dòng backfill D4 (placeholder D4 cũng được chép
+        // lại 5-Why/Ishikawa đã ghi — xem describe backfill bên dưới).
+        expect(repairs.filter((x) => /chèn placeholder/.test(x))).toHaveLength(8);
     });
 });
 
@@ -370,5 +397,176 @@ describe('postProcess — phạm vi từng bước', () => {
     it('phạm vi rỗng cũng là hành vi cũ, không phải kết quả rỗng', () => {
         const { result } = postProcess(fullResult(), ctxQ3, undefined, undefined, undefined, undefined, []);
         expect(result.disciplines).toHaveLength(DISCIPLINE_CODES.length);
+    });
+});
+
+/**
+ * Backfill D4 tất định.
+ *
+ * D4 là bước cả báo cáo bị chấm theo, và chuỗi 5-Why, bảng Ishikawa, root cause
+ * đã xác nhận ĐỀU nằm sẵn trong CaseContext. Model (nhất là model nhỏ chạy
+ * nhanh) thỉnh thoảng bỏ sót — code phải chép lại được thay vì chấp nhận một
+ * D4 khuyết.
+ */
+describe('postProcess — backfill D4 từ CaseContext', () => {
+    const rc = (result: EightDResult) =>
+        (result.disciplines.find((d) => d.code === 'D4')!.data as any).rootCause;
+
+    it('model bỏ trống data: chép lại 5-Why, dựng đủ bảng 6M, đánh cờ root cause', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data: {} } : d));
+        const { result, repairs } = postProcess(r, ctxQ3);
+
+        const root = rc(result);
+        expect(root.fiveWhy).toHaveLength(ctxQ3.fiveWhy.length);
+        expect(root.fiveWhy.every((row: any) => String(row.answer).trim().length > 0)).toBe(true);
+        expect(root.ishikawaBoard).toHaveLength(6);
+        expect(root.ishikawaBoard.filter((row: any) => row.isRootCause)).toHaveLength(1);
+        expect(String(root.statement).trim()).not.toBe('');
+        expect(repairs.some((x) => /D4: rootCause\.fiveWhy trống/.test(x))).toBe(true);
+    });
+
+    it('row 5-Why thiếu answer thì điền lại từ bản ghi, giữ nguyên phần model viết', () => {
+        const data = d4Data(ctxQ3);
+        (data.rootCause.fiveWhy[0] as any).answer = '';
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data } : d));
+        const { result, repairs } = postProcess(r, ctxQ3);
+
+        const root = rc(result);
+        expect(root.fiveWhy[0].answer).toBe(ctxQ3.fiveWhy[0].answer);
+        expect(repairs.some((x) => /thiếu answer/.test(x))).toBe(true);
+    });
+
+    it('nhiều nhánh cùng mang cờ root cause thì chỉ giữ nhánh đã ghi', () => {
+        const data = d4Data(ctxQ3);
+        data.rootCause.ishikawaBoard = data.rootCause.ishikawaBoard.map((row) => ({ ...row, isRootCause: true }));
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data } : d));
+        const { result, repairs } = postProcess(r, ctxQ3);
+
+        const marked = rc(result).ishikawaBoard.filter((row: any) => row.isRootCause);
+        expect(marked).toHaveLength(1);
+        expect(marked[0].category).toBe(ctxQ3.rootCause!.category);
+        expect(repairs.some((x) => /cùng mang cờ root cause/.test(x))).toBe(true);
+    });
+
+    it('case chưa điều tra: dựng khung 6M not assessed, KHÔNG bịa root cause', () => {
+        const blankCtx = { ...ctxQ3, fiveWhy: [], ishikawa: [], rootCause: null };
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data: {} } : d));
+        const { result } = postProcess(r, blankCtx as typeof ctxQ3);
+
+        const root = rc(result);
+        expect(root.ishikawaBoard).toHaveLength(6);
+        expect(root.ishikawaBoard.every((row: any) => row.source === 'proposed' && row.finding === 'not assessed')).toBe(true);
+        expect(root.ishikawaBoard.some((row: any) => row.isRootCause)).toBe(false);
+        expect(root.fiveWhy).toBeUndefined();
+    });
+
+    it('D4 đã đủ ruột thì backfill không đụng vào và không báo chữa gì', () => {
+        const { repairs } = postProcess(fullResult(), ctxQ3);
+        expect(repairs.filter((x) => x.startsWith('D4:'))).toEqual([]);
+    });
+});
+
+/**
+ * Case CHƯA có điều tra: D4 dựng từ chẩn đoán độc lập.
+ *
+ * Pipeline có sẵn một lượt gọi CHUYÊN root cause (chẩn đoán mù) — nó tự dựng
+ * 5-Why, tự chọn nhánh 6M, tự loại năm nhánh kia kèm lý do. Với case trống,
+ * D4 phải là phép chiếu của kết quả đó chứ không trông chờ model viết báo cáo
+ * "nghĩ lại" từ đầu.
+ */
+describe('postProcess — D4 dựng từ chẩn đoán độc lập khi case chưa điều tra', () => {
+    const blankCtx = { ...ctxQ3, fiveWhy: [], ishikawa: [], rootCause: null } as typeof ctxQ3;
+    const rc = (result: EightDResult) =>
+        (result.disciplines.find((d) => d.code === 'D4')!.data as any).rootCause;
+
+    function fakeIndependent() {
+        return {
+            finding: {
+                rootCauseCategory: 'Machine',
+                rootCauseStatement: 'Worn clamp pad on fixture #2 allowed 0.2 mm part shift during milling.',
+                derivedFiveWhy: [
+                    { stepNo: 1, question: 'Why was the hole position out of tolerance?', answer: 'The part shifted during milling.', evidence: 'inspections#1' },
+                    { stepNo: 2, question: 'Why did the part shift?', answer: 'Fixture #2 clamp pad is worn 0.2 mm.', evidence: 'blind evidence: fixture finding' },
+                ],
+                ruledOut: [
+                    { category: 'Man', reason: 'Defect is shift-independent.' },
+                    { category: 'Method', reason: 'Parameters unchanged since PPAP.' },
+                    { category: 'Material', reason: 'Batch certified within spec.' },
+                    { category: 'Measurement', reason: 'Gauge R&R 8%.' },
+                    { category: 'Environment', reason: 'Temperature logged stable.' },
+                ],
+                runnerUpCategory: null,
+                runnerUpReason: null,
+                confidence: 0.8,
+                evidenceGaps: ['PM log for fixture #2'],
+            },
+            verdict: { recordedCategory: null, aiCategory: 'Machine', agrees: false, aiStepCount: 2, recordedStepCount: 0 },
+            leaks: [],
+        };
+    }
+
+    it('data trống: chuỗi 5-Why, bảng 6M và cờ root cause đều chiếu từ finding', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data: {} } : d));
+        const { result, repairs } = postProcess(r, blankCtx, undefined, fakeIndependent());
+
+        const root = rc(result);
+        expect(root.fiveWhy).toHaveLength(2);
+        expect(root.fiveWhy.every((row: any) => String(row.answer).trim().length > 0)).toBe(true);
+        expect(root.ishikawaBoard).toHaveLength(6);
+        const machine = root.ishikawaBoard.find((row: any) => row.category === 'Machine');
+        expect(machine.isRootCause).toBe(true);
+        expect(machine.source).toBe('proposed');
+        expect(machine.finding).toContain('clamp pad');
+        const man = root.ishikawaBoard.find((row: any) => row.category === 'Man');
+        expect(man.finding).toBe('Defect is shift-independent.');
+        expect(String(root.statement)).toContain('hypothesis');
+        expect(root.evidenceGaps).toEqual(['PM log for fixture #2']);
+        expect(repairs.some((x) => /chẩn đoán độc lập/.test(x))).toBe(true);
+        // Dùng finding thì phải trích dẫn nó — luật grounding của D4.
+        expect(result.disciplines.find((d) => d.code === 'D4')!.sources).toContain('independent');
+    });
+
+    it('chuỗi model khuyết answer bị thay NGUYÊN KHỐI bằng chuỗi finding, không vá lai', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4'
+            ? { ...d, data: { rootCause: { fiveWhy: [{ step: 1, why: 'Why did it fail?', answer: '' }] } } }
+            : d));
+        const { result, repairs } = postProcess(r, blankCtx, undefined, fakeIndependent());
+
+        const root = rc(result);
+        expect(root.fiveWhy).toHaveLength(2);
+        expect(root.fiveWhy[0].why).toBe('Why was the hole position out of tolerance?');
+        expect(repairs.some((x) => /khuyết answer.*chẩn đoán độc lập/.test(x))).toBe(true);
+    });
+
+    it('chuỗi model ĐỦ answer thì được giữ nguyên — finding không đè output tốt', () => {
+        const ownChain = [
+            { step: 1, why: 'Why out of tolerance?', answer: 'Part shifted.', evidence: 'inspections#1' },
+        ];
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4'
+            ? { ...d, data: { rootCause: { statement: 'Model statement long enough for the contract.', fiveWhy: ownChain } } }
+            : d));
+        const { result } = postProcess(r, blankCtx, undefined, fakeIndependent());
+        expect(rc(result).fiveWhy).toHaveLength(1);
+        expect(rc(result).fiveWhy[0].answer).toBe('Part shifted.');
+    });
+
+    it('bản ghi vẫn thắng finding khi case ĐÃ có điều tra', () => {
+        const r = fullResult();
+        r.disciplines = r.disciplines.map((d) => (d.code === 'D4' ? { ...d, data: {} } : d));
+        const { result } = postProcess(r, ctxQ3, undefined, fakeIndependent());
+
+        const root = rc(result);
+        expect(root.fiveWhy).toHaveLength(ctxQ3.fiveWhy.length);
+        const marked = root.ishikawaBoard.filter((row: any) => row.isRootCause);
+        expect(marked).toHaveLength(1);
+        expect(marked[0].category).toBe(ctxQ3.rootCause!.category);
+        expect(marked[0].source).toBe('recorded');
     });
 });

@@ -221,26 +221,24 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     have. Do not improvise a different shape for that situation; follow this one,
     and follow it the same way every time:
 
-      - Open rootCause.statement by saying in one sentence that no root cause is
-        recorded and no investigation was performed. Then say, in the SAME
-        statement, that what follows is a starting hypothesis to be tested, not a
-        finding. Never end on the bare denial: a reader who stops at the first
-        sentence must still know the rest of the discipline is a proposal.
+      - In rootCause.statement, state the root cause hypothesis directly, concisely,
+        and without preamble or multi-sentence paragraphs (e.g.
+        "Root cause (hypothesis): Undefined or missing milling process specification (Method).").
+        Never end on the bare denial; state the leading hypothesis directly. Do not write long disclaimers or audit plans here.
 
       - The 5-Why chain is about THE DEFECT, always. Never write a chain about
         why the investigation was not done, why records are missing, or how the
-        process failed - that is a different problem from the one this 8D is
-        raised for, and it makes the report useless to the engineer who has to
-        fix the part. Start from the observed symptom and walk down the plausible
-        technical causes. Where a step cannot be answered from evidence, put the
-        candidate causes in the answer and name, in evidence, the specific record
-        or measurement that would settle it.
+        process failed. Keep questions short & crisp and answers direct & concise
+        (max 1 short sentence per step, stating the direct cause).
+        Start from the observed symptom and walk down the plausible technical causes.
+        Where a step cannot be answered from evidence, put the candidate causes in the
+        answer concisely and cite the record in evidence.
 
       - Each Ishikawa branch gets a VERDICT, not an investigation plan. Say what
-        that branch tells you and stop: "shift-independent", "gauge R&R 8%",
-        "fixture #2 clamp worn 0.2 mm", "no PM log". A reader scans six cells to
-        see which one stands out - six cells each listing the evidence you would
-        need to collect tells them nothing and hides the one that matters.
+        that branch tells you in 1 short phrase or sentence and stop: "shift-independent",
+        "gauge R&R 8%", "fixture #2 clamp worn 0.2 mm", "no PM log", "not assessed".
+        A reader scans six cells to see which one stands out - never write multi-sentence
+        paragraphs or audit plans in 6M cells.
         Where a branch is ruled out, say what ruled it out. Where nothing is
         known, "not assessed" is the whole answer.
         The evidence still to be gathered goes ONCE in rootCause.evidenceGaps,

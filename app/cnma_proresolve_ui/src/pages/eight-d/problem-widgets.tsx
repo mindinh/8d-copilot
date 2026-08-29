@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Button, Textarea, cn } from '@cnma/react-ui';
 import {
     Calendar,
-    Check,
     CheckCircle2,
     FileText,
     Hash,

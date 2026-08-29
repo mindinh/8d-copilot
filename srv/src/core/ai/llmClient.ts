@@ -153,19 +153,50 @@ function resolveThinkingBudget(
   return fallback;
 }
 
+/**
+ * Ngưỡng thinking budget tối thiểu của Anthropic. Dưới mức này thì extended
+ * thinking không bật được — budget 0 hay 256 với Claude đều là no-op.
+ */
+const CLAUDE_MIN_THINKING_BUDGET = 1024;
+
+/**
+ * Bỏ thinking budget vô nghĩa TRƯỚC khi nó tới CDK.
+ *
+ * CDK cứ thấy `thinkingBudget` là gắn `thinking_budget` vào params cho model
+ * Claude — KỂ CẢ khi budget là 0 — rồi `applyVendorCompat` thấy có
+ * `thinking_budget` là xoá `temperature` (Anthropic cấm temperature đi kèm
+ * extended thinking). Hệ quả đo được: mọi lượt `stepAnalyze` khai
+ * `temperature: 0.2, thinkingBudget: 0` thực chất chạy Haiku ở temperature
+ * mặc định 1.0 — đây chính là nguồn bất định làm D4 lúc ra ishikawa lúc không.
+ *
+ * Budget dưới ngưỡng 1024 của Anthropic không bao giờ bật được thinking, nên bỏ
+ * nó đi không mất gì mà lấy lại được temperature. Budget hợp lệ (>= 1024) vẫn
+ * truyền nguyên — khi đó temperature bị xoá là ĐÚNG luật của Anthropic.
+ * Gemini/GPT không bị đụng: với Gemini 2.5, budget 0 có nghĩa thật (tắt thinking).
+ */
+export function effectiveThinkingBudget(model: string, budget: number | undefined): number | undefined {
+  if (budget === undefined) return undefined;
+  const isClaude = /claude|anthropic/i.test(model);
+  if (isClaude && budget < CLAUDE_MIN_THINKING_BUDGET) return undefined;
+  return budget;
+}
+
 async function buildConfig(options: LlmCallOptions): Promise<AIConfig> {
   const { activity, aiAgentConfig, thinkingBudget: fallbackBudget, ...rest } = options;
   if (!activity) throw new Error('llmClient: bắt buộc phải truyền options.activity');
 
   // Thinking budget cũng theo thứ tự: lời gọi → cấu hình chung → giá trị dự phòng.
   const globalCfg = await getGlobalModelConfig();
-  const thinkingBudget =
+  const resolvedBudget =
     resolveThinkingBudget(activity, aiAgentConfig, undefined) ??
     resolveThinkingBudget(activity, globalCfg, fallbackBudget);
 
+  const model = rest.model ?? (await resolveModel(activity, aiAgentConfig));
+  const thinkingBudget = effectiveThinkingBudget(model, resolvedBudget);
+
   return {
     ...rest,
-    model: rest.model ?? (await resolveModel(activity, aiAgentConfig)),
+    model,
     ...(thinkingBudget !== undefined && { thinkingBudget }),
   };
 }

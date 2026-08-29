@@ -3,9 +3,7 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn,
 } from '@cnma/react-ui';
 import { AlertCircle, AlertTriangle, CheckCircle2, Link2 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import {
-    listTaskEvidence,
     reviewStatusOf,
     type Discipline8D,
 } from '@/services/eightd-service';
@@ -24,7 +22,7 @@ import {
     W2hSectionWidget,
 } from './problem-widgets';
 import { ActionCardsWidget, AiDraftWidget, IshikawaGridWidget, WhyChainWidget } from './cause-widgets';
-import { assignedFieldFor, normalizeTasks } from '../../../../../shared/action-task';
+import { assignedFieldFor } from '../../../../../shared/action-task';
 import { ClosureGateWidget, FmeaLinkWidget } from './closure-widgets';
 
 interface SnapshotField { key: string; label: string; widget: string; visible?: boolean; colSpan?: number; rowSpan?: number }
