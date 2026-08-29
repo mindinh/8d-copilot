@@ -12,11 +12,13 @@ import { toast } from 'sonner';
 import {
     reviewDiscipline,
     reviewStatusOf,
+    saveDisciplineField,
     setDisciplineWorkState,
     type Discipline8D,
     type ReviewDecision,
     type ReviewStatus,
 } from '@/services/eightd-service';
+import { normalizeActionStatus } from '../../../../../shared/action-task';
 
 /**
  * Duyệt từng bước 8D.
@@ -93,11 +95,24 @@ export function ClosureGateBar({ disciplines }: { disciplines: Discipline8D[] })
     );
 }
 
+function parseJsonSafe(val: unknown): Record<string, any> | null {
+    if (!val) return null;
+    if (typeof val === 'object') return val as Record<string, any>;
+    try {
+        const parsed = JSON.parse(String(val));
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
 /** Ô quyết định và trạng thái nằm dưới nội dung của một bước. */
 export function DisciplineReviewBox({
     discipline,
+    siblings,
 }: {
     discipline: Discipline8D;
+    siblings?: Discipline8D[];
     liveFormSchemaJson?: string | null;
 }) {
     const queryClient = useQueryClient();
@@ -125,15 +140,93 @@ export function DisciplineReviewBox({
     const handleStatusChange = async (value: 'NotStarted' | 'InProgress' | 'Completed') => {
         if (value === currentStatus) return;
 
+        const parsed = parseJsonSafe(discipline.resultJson);
+
+        // 1. Validation Logic
+        if (value === 'Completed') {
+            if (discipline.code === 'D5') {
+                const assigned = parsed?.corrective?.assignedActions || parsed?.assignedActions;
+                const actions = parsed?.corrective?.actions;
+                const hasActions = (Array.isArray(assigned) && assigned.length > 0) || (Array.isArray(actions) && actions.length > 0);
+                if (!hasActions) {
+                    toast.error('Cannot complete D5: Please add or accept at least one corrective action before completing this step.');
+                    return;
+                }
+            } else if (discipline.code === 'D7') {
+                const assigned = parsed?.preventive?.assignedActions || parsed?.assignedActions;
+                const actions = parsed?.preventive?.actions;
+                const fmea = parsed?.preventive?.fmea;
+                const hasPreventive = (Array.isArray(assigned) && assigned.length > 0) || (Array.isArray(actions) && actions.length > 0) || fmea?.fmeaId;
+                if (!hasPreventive) {
+                    toast.error('Cannot complete D7: Please define at least one preventive action or link an FMEA item before completing this step.');
+                    return;
+                }
+            }
+        }
+
         try {
             if (value === 'Completed') {
+                // Nếu là bước D6: Toàn bộ task ở D3, D5, D7 được chuyển thành 'Done'
+                if (discipline.code === 'D6') {
+                    const allDiscs = siblings || [];
+                    for (const d of allDiscs) {
+                        if (['D3', 'D5', 'D7'].includes(d.code)) {
+                            const parsedD = parseJsonSafe(d.resultJson);
+                            const keyPrefix = d.code === 'D3' ? 'containment' : d.code === 'D5' ? 'corrective' : 'preventive';
+                            const assignedField = `${keyPrefix}.assignedActions`;
+                            const currentTasks = parsedD?.[keyPrefix]?.assignedActions || parsedD?.assignedActions;
+                            if (Array.isArray(currentTasks) && currentTasks.length > 0) {
+                                const updatedTasks = currentTasks.map((t: any) => ({
+                                    ...t,
+                                    status: 'Done',
+                                }));
+                                await saveDisciplineField(d.ID, assignedField, updatedTasks);
+                            }
+                        }
+                    }
+                } else if (['D3', 'D5', 'D7'].includes(discipline.code)) {
+                    // Khi các bước D3, D5, D7 hoàn thành: chuyển task chưa Verified -> Done
+                    const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
+                    const assignedField = `${keyPrefix}.assignedActions`;
+                    const currentTasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions;
+                    if (Array.isArray(currentTasks) && currentTasks.length > 0) {
+                        const updatedTasks = currentTasks.map((t: any) => ({
+                            ...t,
+                            status: normalizeActionStatus(t.status) === 'Verified' ? 'Verified' : 'Done',
+                        }));
+                        await saveDisciplineField(discipline.ID, assignedField, updatedTasks);
+                    }
+                }
+
                 submit.mutate({ decision: 'approve' });
+            } else if (value === 'InProgress') {
+                if (isApproved) {
+                    await reviewDiscipline(discipline.ID, 'reopen');
+                }
+                await setDisciplineWorkState(discipline.ID, value);
+
+                // Tự động đồng bộ task khi bước chuyển InProgress: chuyển Planned -> In Progress
+                if (['D3', 'D5', 'D7'].includes(discipline.code)) {
+                    const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
+                    const assignedField = `${keyPrefix}.assignedActions`;
+                    const currentTasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions;
+                    if (Array.isArray(currentTasks) && currentTasks.length > 0) {
+                        const updatedTasks = currentTasks.map((t: any) => ({
+                            ...t,
+                            status: normalizeActionStatus(t.status) === 'Planned' ? 'In Progress' : t.status,
+                        }));
+                        await saveDisciplineField(discipline.ID, assignedField, updatedTasks);
+                    }
+                }
+
+                toast.success(`Status: In process`);
+                void queryClient.invalidateQueries({ queryKey: ['8d'] });
             } else {
                 if (isApproved) {
                     await reviewDiscipline(discipline.ID, 'reopen');
                 }
                 await setDisciplineWorkState(discipline.ID, value);
-                toast.success(`Status: ${value === 'InProgress' ? 'In process' : 'Not started'}`);
+                toast.success(`Status: Not started`);
                 void queryClient.invalidateQueries({ queryKey: ['8d'] });
             }
         } catch (err: any) {

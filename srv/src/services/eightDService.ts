@@ -586,13 +586,14 @@ export function registerEightDHandlers(srv: any): void {
             return req.error(404, `Discipline ${disciplineCode} not found for report ${reportID}.`);
         }
 
-        if (discipline.reviewStatus === 'Approved') {
+        const isActionStep = ['D3', 'D5', 'D7'].includes(String(disciplineCode));
+        if (discipline.reviewStatus === 'Approved' && !isActionStep) {
             return req.error(400, `Discipline ${disciplineCode} has been completed and locked.`);
         }
 
         const task = findTaskInResultJson(discipline.resultJson, taskId);
-        if (!task || task.status !== 'Done') {
-            return req.error(400, 'Evidence can only be uploaded for tasks with status Done.');
+        if (!task || (task.status !== 'Done' && task.status !== 'Verified')) {
+            return req.error(400, 'Evidence can only be uploaded for tasks with status Done or Verified.');
         }
 
         req.data.uploadedBy = req.user?.id || 'anonymous';
@@ -617,7 +618,8 @@ export function registerEightDHandlers(srv: any): void {
             const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
                 .columns('ID', 'reviewStatus')
                 .where({ report_ID: row.reportID, code: row.disciplineCode });
-            if (discipline && discipline.reviewStatus === 'Approved') {
+            const isActionStep = ['D3', 'D5', 'D7'].includes(String(row.disciplineCode));
+            if (discipline && discipline.reviewStatus === 'Approved' && !isActionStep) {
                 return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
             }
         }

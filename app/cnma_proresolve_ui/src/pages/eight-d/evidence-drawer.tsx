@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+    Badge,
+    Button,
     Dialog,
     DialogContent,
     DialogDescription,
@@ -7,54 +9,124 @@ import {
     DialogTitle,
     cn,
 } from '@cnma/react-ui';
-import { Search, TriangleAlert } from 'lucide-react';
+import { Check, Copy, Database, Search, TriangleAlert } from 'lucide-react';
+import { toast } from 'sonner';
 import { resolveEvidencePath } from '../../../../../shared/evidence-path';
 
 /**
- * Bấm vào một nguồn để xem đúng mẩu dữ liệu đứng sau nó.
- *
- * ── Vì sao cần ──
- * Mọi discipline đều liệt kê nguồn dạng `fiveWhy#2`, `ishikawa.Machine`. Với
- * người viết code thì đó là đường dẫn; với kỹ sư chất lượng đang ngồi audit thì
- * đó là một chuỗi ký tự vô nghĩa. Chừng nào chưa bấm ra được giá trị thật thì
- * "mọi khẳng định đều truy được về dữ liệu" vẫn chỉ là một lời hứa in trên màn
- * hình — thứ khách SAP nghe nhiều rồi.
- *
- * Không gọi API: `caseContext` đã nằm sẵn trên report, và `shared/evidence-path`
- * là ĐÚNG bộ luật backend dùng để loại đường dẫn không giải được — nên thứ hiện
- * ở đây khớp với thứ backend đã kiểm.
+ * Renders resolved evidence value: plain string/number, formatted JSON, or structured key-value table.
  */
-
-/** Hiện giá trị đã giải: chuỗi/số để trần, object thì format JSON cho đọc được. */
 function EvidenceValue({ value }: { value: unknown }) {
+    const [copied, setCopied] = useState(false);
+
     if (value === null) return <span className="italic text-muted-foreground">null</span>;
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        return <span className="break-words">{String(value)}</span>;
+        return <span className="break-words font-mono text-sm font-medium">{String(value)}</span>;
     }
-    const record = value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : null;
 
-    // Object phẳng hiện thành bảng khoá/giá trị — dễ đọc hơn hẳn JSON thô, và
-    // phần lớn bằng chứng ở đây đều là object phẳng.
-    if (record && Object.values(record).every((v) => v === null || typeof v !== 'object')) {
+    const handleCopy = () => {
+        navigator.clipboard.writeText(JSON.stringify(value, null, 2));
+        setCopied(true);
+        toast.success('Evidence data copied to clipboard.');
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    // Array of objects: Render cleanly structured cards
+    if (Array.isArray(value)) {
         return (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                {Object.entries(record).map(([k, v]) => (
-                    <div key={k} className="contents">
-                        <dt className="font-mono text-xs text-muted-foreground">{k}</dt>
-                        <dd className="break-words text-xs">
-                            {v === null || v === '' ? <span className="italic text-muted-foreground">empty</span> : String(v)}
-                        </dd>
-                    </div>
-                ))}
-            </dl>
+            <div className="space-y-2">
+                <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Record List ({value.length} items)
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={handleCopy}
+                    >
+                        {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                        {copied ? 'Copied' : 'Copy JSON'}
+                    </Button>
+                </div>
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {value.map((item, idx) => (
+                        <div key={idx} className="rounded-lg border bg-muted/25 p-3 text-xs space-y-1">
+                            <span className="inline-block rounded bg-primary/10 px-1.5 py-0.5 font-mono font-bold text-primary text-[10px] mb-1">
+                                #{idx + 1}
+                            </span>
+                            {item && typeof item === 'object' ? (
+                                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                    {Object.entries(item).map(([k, v]) => (
+                                        <div key={k} className="contents">
+                                            <dt className="font-mono text-muted-foreground font-medium">{k}:</dt>
+                                            <dd className="break-words font-mono text-foreground">
+                                                {v === null || v === '' ? <span className="italic text-muted-foreground">empty</span> : (typeof v === 'object' ? JSON.stringify(v) : String(v))}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            ) : (
+                                <p className="font-mono">{String(item)}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
         );
     }
+
+    const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
+    // Flat object rendered as key/value table
+    if (record && Object.values(record).every((v) => v === null || typeof v !== 'object')) {
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Record Attributes
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={handleCopy}
+                    >
+                        {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                        {copied ? 'Copied' : 'Copy JSON'}
+                    </Button>
+                </div>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 py-1">
+                    {Object.entries(record).map(([k, v]) => (
+                        <div key={k} className="contents">
+                            <dt className="font-mono text-xs font-medium text-muted-foreground">{k}</dt>
+                            <dd className="break-words font-mono text-xs text-foreground">
+                                {v === null || v === '' ? <span className="italic text-muted-foreground">empty</span> : String(v)}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
+        );
+    }
+
     return (
-        <pre className="max-h-80 overflow-auto rounded bg-muted/60 p-3 text-xs leading-relaxed">
-            {JSON.stringify(value, null, 2)}
-        </pre>
+        <div className="space-y-2">
+            <div className="flex items-center justify-end">
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                    onClick={handleCopy}
+                >
+                    {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                    {copied ? 'Copied' : 'Copy JSON'}
+                </Button>
+            </div>
+            <pre className="max-h-80 overflow-auto rounded bg-muted/60 p-3 font-mono text-xs leading-relaxed">
+                {JSON.stringify(value, null, 2)}
+            </pre>
+        </div>
     );
 }
 
@@ -83,10 +155,17 @@ export function EvidenceDrawer({
         <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
             <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl md:max-w-3xl overflow-hidden">
                 <DialogHeader>
-                    <DialogTitle className="font-mono text-base break-all">{path}</DialogTitle>
-                    <DialogDescription>
-                        The exact record this discipline cites, read from the case context captured
-                        at analysis time.
+                    <div className="flex items-center gap-2 mb-1">
+                        <Database className="w-4 h-4 text-primary shrink-0" />
+                        <DialogTitle className="font-mono text-sm sm:text-base break-all">{path}</DialogTitle>
+                        {resolved?.found && (
+                            <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30">
+                                Verified Fact
+                            </Badge>
+                        )}
+                    </div>
+                    <DialogDescription className="text-xs">
+                        Raw evidence record extracted directly from SAP QM at case analysis time.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -101,15 +180,13 @@ export function EvidenceDrawer({
                     <p className="flex items-start gap-2 rounded border border-warning/40 bg-warning/[0.06] px-3 py-2 text-xs">
                         <TriangleAlert className="mt-px h-4 w-4 shrink-0 text-warning" />
                         <span>
-                            {/* Nói thẳng vì sao. Một trích dẫn không giải được là thông tin
-                                thật về chất lượng báo cáo, không phải sự cố cần giấu. */}
-                            <strong className="font-semibold">Not resolvable.</strong> {resolved.reason}
+                            <strong className="font-semibold">Path cannot be resolved in snapshot:</strong> {resolved.reason}
                         </span>
                     </p>
                 )}
 
                 {resolved?.found && (
-                    <div className="min-w-0 rounded border bg-card px-4 py-3 text-sm">
+                    <div className="min-w-0 rounded-xl border bg-card/60 p-4 text-sm shadow-xs">
                         <EvidenceValue value={resolved.value} />
                     </div>
                 )}
@@ -119,10 +196,7 @@ export function EvidenceDrawer({
 }
 
 /**
- * Danh sách chip nguồn, bấm được.
- *
- * Dùng `<button>` chứ không phải `<code>` có onClick: bàn phím tab tới được và
- * trình đọc màn hình biết đây là hành động.
+ * Clickable source chips list.
  */
 export function SourceChips({
     sources,
@@ -144,7 +218,7 @@ export function SourceChips({
                         type="button"
                         onClick={() => setOpen(source)}
                         title="Show the record behind this source"
-                        className="group inline-flex max-w-full items-center gap-1 break-all rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                        className="group inline-flex max-w-full items-center gap-1 break-all rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer"
                     >
                         <Search className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
                         {source}

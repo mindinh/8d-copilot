@@ -399,7 +399,10 @@ export async function saveDisciplineFieldValue(
         .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
-    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+    const isApproved = normalizeStatus((row as any).reviewStatus) === 'Approved';
+    const isTaskActionUpdate = fieldKey.endsWith('.assignedActions') || fieldKey === 'assignedActions';
+
+    if (isApproved && !isTaskActionUpdate) {
         throw Object.assign(
             new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
             { code: 400 },
@@ -437,14 +440,20 @@ export async function saveDisciplineFieldValue(
     }
     cursor[parts[parts.length - 1]] = value;
 
-    // Tự động chuyển NotStarted -> InProgress khi có thao tác sửa thật
-    const currentWorkState = String((row as any).workState ?? 'NotStarted');
-    const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
+    if (!isApproved) {
+        // Tự động chuyển NotStarted -> InProgress khi có thao tác sửa thật
+        const currentWorkState = String((row as any).workState ?? 'NotStarted');
+        const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
 
-    await UPDATE(DISCIPLINES).set({
-        resultJson: JSON.stringify(data),
-        workState: nextWorkState,
-    }).where({ ID: disciplineID });
+        await UPDATE(DISCIPLINES).set({
+            resultJson: JSON.stringify(data),
+            workState: nextWorkState,
+        }).where({ ID: disciplineID });
+    } else {
+        await UPDATE(DISCIPLINES).set({
+            resultJson: JSON.stringify(data),
+        }).where({ ID: disciplineID });
+    }
 
     cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
 }
@@ -744,7 +753,8 @@ export async function createTaskEvidence(params: {
         throw Object.assign(new Error(`Discipline ${disciplineCode} not found for report ${reportID}.`), { code: 404 });
     }
 
-    if (normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+    const isActionStep = ['D3', 'D5', 'D7'].includes(String(disciplineCode));
+    if (normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
         throw Object.assign(
             new Error(`Discipline ${disciplineCode} has been completed and locked. Reopen the step to make changes.`),
             { code: 400 },
@@ -752,9 +762,9 @@ export async function createTaskEvidence(params: {
     }
 
     const task = findTaskInResultJson((discipline as any).resultJson, taskId);
-    if (!task || task.status !== 'Done') {
+    if (!task || (task.status !== 'Done' && task.status !== 'Verified')) {
         throw Object.assign(
-            new Error('Evidence can only be uploaded for tasks with status Done.'),
+            new Error('Evidence can only be uploaded for tasks with status Done or Verified.'),
             { code: 400 },
         );
     }
@@ -803,7 +813,8 @@ export async function deleteTaskEvidence(evidenceID: string): Promise<{ deleted:
     const discipline = await SELECT.one.from(DISCIPLINES)
         .columns('ID', 'code', 'reviewStatus')
         .where({ report_ID: (row as any).reportID, code: (row as any).disciplineCode });
-    if (discipline && normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+    const isActionStep = ['D3', 'D5', 'D7'].includes(String((row as any).disciplineCode));
+    if (discipline && normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
         throw Object.assign(
             new Error(`Discipline ${(row as any).disciplineCode} has been completed and locked. Reopen the step to make changes.`),
             { code: 400 },

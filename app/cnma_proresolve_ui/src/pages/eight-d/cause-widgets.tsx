@@ -27,6 +27,7 @@ import {
     taskFromAction,
     type ActionTask,
 } from '../../../../../shared/action-task';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Các widget cho D4 (Root Cause) và các bước hành động (D3, D5, D6, D7).
@@ -172,6 +173,10 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                             <p className="break-words text-sm font-semibold text-foreground">
                                                 {row.question ?? row.why ?? '—'}
                                             </p>
+                                            <AiProvenanceInfo
+                                                fieldKey={`fiveWhy#${index + 1}`}
+                                                label={`5-Why Step #${index + 1}`}
+                                            />
                                             {isRoot && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive border border-destructive/20">
                                                     <Star className="h-3 w-3 fill-current" />
@@ -393,7 +398,25 @@ export function IshikawaGridWidget({
                     >
                         <div>
                             <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                    <AiProvenanceInfo
+                                        fieldKey={`ishikawa.${category}`}
+                                        label={`Ishikawa ${category}`}
+                                        caseContext={root}
+                                        customReasoning={
+                                            text
+                                                ? [
+                                                    isRoot ? 'Assessment: Validated primary root cause branch.' : 'Assessment: Evaluated contributing factor.',
+                                                    `Observed finding: "${text}"${metric ? ` (Metric: ${metric})` : ''}.`,
+                                                ]
+                                                : [
+                                                    'Assessment: Not assessed (No findings).',
+                                                    `Observation: Neither SAP QM source telemetry nor AI root-cause investigation identified contributing factors under [${category}] for this defect.`,
+                                                ]
+                                        }
+                                    />
+                                </div>
                                 {!isEditingThis && !readOnly && (
                                     <button
                                         type="button"
@@ -560,7 +583,14 @@ export function ActionCardsWidget({
                                 key={index}
                                 className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
                             >
-                                <p className="break-words text-[13px] font-medium">{text}</p>
+                                <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                                    <p className="break-words text-[13px] font-medium">{text}</p>
+                                    <AiProvenanceInfo
+                                        fieldKey={fieldKey || 'actions'}
+                                        label={`Action #${index + 1}`}
+                                        customReasoning={[`Đề xuất hành động: ${text}`]}
+                                    />
+                                </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                     {isAccepted(row, tasks) ? (
                                         <span className="whitespace-nowrap text-[11px] font-medium text-success">
@@ -675,14 +705,14 @@ export function AiDraftWidget({
             setEditing(false);
 
             if (reanalyze && effectiveReportID) {
-                toast.info('Bắt đầu phân tích lại các bước sau D4 (D5, D6, D7, D8)...');
+                toast.info('Starting re-analysis of downstream steps (D5, D6, D7, D8)...');
                 await reanalyzeDownstream(effectiveReportID, 'D5');
-                toast.success('Đã xếp lịch phân tích lại các bước D5-D8.');
+                toast.success('Scheduled re-analysis of steps D5-D8.');
             }
 
             await queryClient.invalidateQueries({ queryKey: ['8d'] });
         } catch (e: any) {
-            toast.error(e?.response?.data?.error?.message || e.message || 'Lỗi khi lưu nguyên nhân gốc.');
+            toast.error(e?.response?.data?.error?.message || e.message || 'Error saving root cause.');
         } finally {
             setSaving(false);
         }
@@ -698,6 +728,10 @@ export function AiDraftWidget({
                     <span className="text-xs font-bold uppercase tracking-wide text-foreground">
                         {disciplineID ? 'Root Cause Conclusion (D4)' : 'AI Draft'}
                     </span>
+                    <AiProvenanceInfo
+                        fieldKey={fieldKey || 'rootCause.statement'}
+                        label="Root Cause Conclusion (D4)"
+                    />
                 </div>
                 {!readOnly && disciplineID && !editing && (
                     <Button
@@ -707,7 +741,7 @@ export function AiDraftWidget({
                         onClick={handleStartEdit}
                     >
                         <Edit3 className="h-3.5 w-3.5" />
-                        Chỉnh sửa
+                        Edit
                     </Button>
                 )}
             </div>
@@ -718,13 +752,13 @@ export function AiDraftWidget({
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         rows={3}
-                        placeholder="Nhập kết luận nguyên nhân gốc (ngắn gọn, đúng trọng tâm)..."
+                        placeholder="Enter concise root cause conclusion..."
                         className="text-[13px] leading-relaxed resize-y bg-background font-normal"
                         autoFocus
                     />
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] text-muted-foreground">
-                            {draft.length} ký tự
+                            {draft.length} characters
                         </span>
                         <div className="flex items-center gap-2">
                             <Button
@@ -734,7 +768,7 @@ export function AiDraftWidget({
                                 onClick={handleCancel}
                                 disabled={saving}
                             >
-                                Hủy
+                                Cancel
                             </Button>
                             <Button
                                 size="sm"
@@ -743,7 +777,7 @@ export function AiDraftWidget({
                                 onClick={handleRequestSave}
                                 disabled={saving || !draft.trim()}
                             >
-                                Lưu thay đổi
+                                Save Changes
                             </Button>
                         </div>
                     </div>
@@ -769,29 +803,29 @@ export function AiDraftWidget({
                         <div className="flex items-center gap-2 text-warning mb-1">
                             <AlertTriangle className="h-5 w-5 shrink-0" />
                             <DialogTitle className="text-base font-bold text-foreground">
-                                Xác nhận thay đổi Root Cause
+                                Confirm Root Cause Modification
                             </DialogTitle>
                         </div>
                         <DialogDescription className="text-xs text-muted-foreground leading-relaxed pt-1">
-                            Thay đổi nguyên nhân gốc (Root Cause) ở bước D4 sẽ tác động trực tiếp đến các bước hành động và phòng ngừa tiếp theo:
+                            Modifying the Root Cause in D4 impacts subsequent action and prevention steps:
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs">
                         <div className="font-semibold text-warning-foreground flex items-center gap-1.5">
                             <RefreshCw className="h-3.5 w-3.5" />
-                            Các bước phụ thuộc sẽ được chạy lại:
+                            Downstream dependencies to be updated:
                         </div>
                         <ul className="list-disc list-inside space-y-1 text-muted-foreground pl-1">
-                            <li><strong className="text-foreground">D5 (Corrective Actions):</strong> Khắc phục theo nguyên nhân mới.</li>
-                            <li><strong className="text-foreground">D6 (Verification Plan):</strong> Nghiệm thu và kiểm tra hiệu quả.</li>
-                            <li><strong className="text-foreground">D7 (Preventive Actions):</strong> Ngăn ngừa tái phát và cập nhật FMEA.</li>
-                            <li><strong className="text-foreground">D8 (Closure & Lessons):</strong> Tổng kết và công nhận nhóm.</li>
+                            <li><strong className="text-foreground">D5 (Corrective Actions):</strong> Realignment with new root cause.</li>
+                            <li><strong className="text-foreground">D6 (Verification Plan):</strong> Validation against new mechanism.</li>
+                            <li><strong className="text-foreground">D7 (Preventive Actions):</strong> Recurrence prevention and FMEA link.</li>
+                            <li><strong className="text-foreground">D8 (Closure & Lessons):</strong> Summary and team closure gates.</li>
                         </ul>
                     </div>
 
                     <div className="text-xs text-muted-foreground">
-                        Hệ thống sẽ lưu nguyên nhân gốc mới và tự động kích hoạt AI phân tích lại từ bước D5 trở đi.
+                        The system will save the new root cause and automatically re-analyze from D5 onward.
                     </div>
 
                     <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
@@ -802,7 +836,7 @@ export function AiDraftWidget({
                             disabled={saving}
                             className="text-xs"
                         >
-                            Hủy
+                            Cancel
                         </Button>
                         <Button
                             variant="secondary"
@@ -811,7 +845,7 @@ export function AiDraftWidget({
                             disabled={saving}
                             className="text-xs"
                         >
-                            Chỉ lưu D4
+                            Save D4 Only
                         </Button>
                         <Button
                             variant="default"
@@ -823,12 +857,12 @@ export function AiDraftWidget({
                             {saving ? (
                                 <>
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    Đang xử lý...
+                                    Processing...
                                 </>
                             ) : (
                                 <>
                                     <Sparkles className="h-3.5 w-3.5" />
-                                    Lưu & Chạy lại D5-D8
+                                    Save & Reanalyze D5-D8
                                 </>
                             )}
                         </Button>

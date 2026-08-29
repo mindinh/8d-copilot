@@ -19,7 +19,7 @@ import {
     cn,
 } from '@cnma/react-ui';
 import { Clock, Edit2, Eye, FileText, Paperclip, Plus, Sparkles, Tag, Trash2, User } from 'lucide-react';
-import { TASK_STATUSES, type ActionTask } from '../../../../../shared/action-task';
+import { TASK_STATUSES, normalizeActionStatus, type ActionTask } from '../../../../../shared/action-task';
 import { listTaskEvidence } from '@/services/eightd-service';
 import { TaskEvidenceSection } from './task-evidence';
 
@@ -36,22 +36,27 @@ import { TaskEvidenceSection } from './task-evidence';
  */
 
 const STATUS_TONE: Record<string, string> = {
-    'Not started': 'border-border text-muted-foreground',
-    'In progress': 'border-info/40 bg-info/10 text-info',
-    Blocked: 'border-destructive/40 bg-destructive/10 text-destructive',
-    Done: 'border-success/40 bg-success/10 text-success',
+    'Planned': 'border-slate-300 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700',
+    'Not started': 'border-slate-300 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700',
+    'In Progress': 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
+    'In progress': 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
+    'Implemented': 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800',
+    'Done': 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800',
+    'Verified': 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
+    'Blocked': 'border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
 };
 
 function StatusChip({ status }: { status: string }) {
+    const norm = normalizeActionStatus(status);
     return (
         <span
-            title={status}
+            title={norm}
             className={cn(
                 'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]',
-                STATUS_TONE[status] ?? STATUS_TONE['Not started'],
+                STATUS_TONE[norm] ?? STATUS_TONE['Planned'],
             )}
         >
-            {status}
+            {norm}
         </span>
     );
 }

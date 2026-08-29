@@ -5,6 +5,7 @@ import {
     getPartnerDirectory, saveTeamRoster,
     type AssignedTeamRow, type PartnerDirectoryEntry,
 } from '@/services/eightd-service';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Nhom 8D cua D1, tach thanh HAI field doc lap tren Form Editor:
@@ -433,6 +434,11 @@ export function AiSuggestWidget({
                     <span className="text-xs sm:text-[13px] font-bold tracking-tight text-foreground">
                         AI Suggested Team Composition
                     </span>
+                    <AiProvenanceInfo
+                        fieldKey="team.roster"
+                        label="AI Suggested Team Composition"
+                        caseContext={ctx.caseContext}
+                    />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     {!isLocked && pending.length > 0 && (

@@ -33,6 +33,7 @@ import { ReportStatusBadge } from './status-badge';
 import { PrecedentPanel } from './precedent-panel';
 import { DisciplineReviewBox } from './review-controls';
 import { ActionChecklist, parseCaseActions } from './action-checklist';
+import { CaseProvenanceProvider } from './ai-provenance-info';
 import { CaseStepper } from './case-stepper';
 import { AuditTrailPanel } from './audit-trail-panel';
 
@@ -211,7 +212,8 @@ export function EightDDetailPage() {
             )}
 
             {/* ── Main Navigation Tabs ── */}
-            <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'disciplines' | 'summary')} className="w-full space-y-6">
+            <CaseProvenanceProvider caseContext={report.caseContext} precedentsJson={report.precedentsJson} reportID={id}>
+                <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'disciplines' | 'summary')} className="w-full space-y-6">
                 <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/60 p-1 rounded-xl border border-border/80 h-10 shadow-xs">
                     <TabsTrigger
                         value="disciplines"
@@ -260,14 +262,17 @@ export function EightDDetailPage() {
                                         <div key={selected.ID} className="min-w-0 space-y-4">
                                             <DisciplineReviewBox
                                                 discipline={selected}
+                                                siblings={disciplines}
                                                 liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null}
                                             />
 
-                                            {selected.code === 'D6' && <ActionChecklist actions={caseActions} />}
-
-                                            {selected.formSchemaJson && selected.resultJson
-                                                ? <SchemaDisciplineCard discipline={selected} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null} siblings={disciplines} reportID={id} />
-                                                : <DisciplineCard discipline={selected} caseContext={report.caseContext} />}
+                                            {selected.code === 'D6' ? (
+                                                <ActionChecklist actions={caseActions} disciplines={disciplines} />
+                                            ) : (
+                                                (selected.formSchemaJson || stepPrompts.byCode[selected.code]?.formSchemaJson)
+                                                    ? <SchemaDisciplineCard discipline={selected} caseContext={report.caseContext} precedentsJson={report.precedentsJson} liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null} siblings={disciplines} reportID={id} />
+                                                    : <DisciplineCard discipline={selected} caseContext={report.caseContext} precedentsJson={report.precedentsJson} />
+                                            )}
                                         </div>
                                     );
                                 }
@@ -415,6 +420,7 @@ export function EightDDetailPage() {
                     )}
                 </TabsContent>
             </Tabs>
+        </CaseProvenanceProvider>
 
             {/* ── JSON gốc ── */}
             <Dialog open={showPayload} onOpenChange={setShowPayload}>

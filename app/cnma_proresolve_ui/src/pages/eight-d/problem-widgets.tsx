@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
 import { Markdown } from './markdown';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Cac widget cua D2 (Describe the problem), dung theo mockup HTML.
@@ -139,6 +140,10 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                         <span className="text-[14px] font-bold tracking-tight text-foreground">
                             {current ? 'Problem Description (Engineer Override)' : 'AI Drafted Problem Description'}
                         </span>
+                        <AiProvenanceInfo
+                            fieldKey="problem.statement"
+                            label="Problem Description"
+                        />
                     </div>
                     {current && (
                         <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
@@ -301,6 +306,10 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
                     <span className="text-[13px] font-semibold uppercase tracking-wider text-foreground/90 truncate">
                         {meta.title}
                     </span>
+                    <AiProvenanceInfo
+                        fieldKey={fieldKey || `problem.${meta.title.toLowerCase()}`}
+                        label={`5W2H: ${meta.title}`}
+                    />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                     {!readOnly && disciplineID && fieldKey && !editing && (
@@ -432,6 +441,10 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                     )}>
                         {heading || (isTone ? 'Is' : 'Is Not')} — {isTone ? 'Affected Scope & Condition' : 'Excluded Scope & Condition'}
                     </h4>
+                    <AiProvenanceInfo
+                        fieldKey={fieldKey || (isTone ? 'problem.is' : 'problem.isNot')}
+                        label={isTone ? 'Is Scope' : 'Is-Not Scope'}
+                    />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                     {!readOnly && disciplineID && fieldKey && !editing && (
@@ -566,6 +579,10 @@ export function IsNotBasisWidget({
                     <span className="text-[13px] font-semibold uppercase tracking-wider text-foreground/90">
                         Is / Is-Not Comparison Basis & Reasoning
                     </span>
+                    <AiProvenanceInfo
+                        fieldKey={fieldKey || 'problem.isIsNotBasis'}
+                        label="Is / Is-Not Comparison Basis"
+                    />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                     {!readOnly && disciplineID && fieldKey && !editing && (

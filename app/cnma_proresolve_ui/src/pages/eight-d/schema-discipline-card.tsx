@@ -24,6 +24,7 @@ import {
 import { ActionCardsWidget, AiDraftWidget, IshikawaGridWidget, WhyChainWidget } from './cause-widgets';
 import { assignedFieldFor } from '../../../../../shared/action-task';
 import { ClosureGateWidget, FmeaLinkWidget } from './closure-widgets';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 interface SnapshotField { key: string; label: string; widget: string; visible?: boolean; colSpan?: number; rowSpan?: number }
 interface SnapshotGroup { id: string; label: string; fieldKeys: string[]; order?: number }
@@ -243,6 +244,7 @@ export function FieldBlock({
     readOnly = false,
     reportID = '',
     disciplineCode = '',
+    precedentsJson = null,
 }: {
     field: SnapshotField;
     value: unknown;
@@ -254,10 +256,12 @@ export function FieldBlock({
     readOnly?: boolean;
     reportID?: string;
     disciplineCode?: string;
+    precedentsJson?: string | null;
 }) {
     const hasError = violations.some((item) => item.severity === 'error');
     const hasWarning = violations.some((item) => item.severity === 'warning');
     const isSelfLabelled = SELF_LABELLED_WIDGETS.has(field.widget) || SELF_LABELLED_WIDGETS.has(field.key);
+    const currentDiscipline = siblings.find((s) => s.ID === disciplineID) ?? null;
 
     return (
         <div className={cn(
@@ -271,9 +275,18 @@ export function FieldBlock({
         )}>
             {!isSelfLabelled && (
                 <div className="mb-2.5 pb-1.5 border-b border-border/60 flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 break-words text-xs font-bold uppercase tracking-wider text-foreground/90">
-                        {field.label || humanize(field.key)}
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="min-w-0 break-words text-xs font-bold uppercase tracking-wider text-foreground/90">
+                            {field.label || humanize(field.key)}
+                        </span>
+                        <AiProvenanceInfo
+                            fieldKey={field.key}
+                            label={field.label || humanize(field.key)}
+                            caseContext={context}
+                            precedentsJson={precedentsJson}
+                            discipline={currentDiscipline}
+                        />
+                    </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {hasError && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
                         {hasWarning && !hasError && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />}
@@ -407,9 +420,10 @@ function isExcludedField(code: string, key: string, label?: string): boolean {
     return false;
 }
 
-export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJson, siblings = [], reportID = '' }: {
+export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, liveFormSchemaJson, siblings = [], reportID = '' }: {
     discipline: Discipline8D;
     caseContext?: string;
+    precedentsJson?: string | null;
     siblings?: Discipline8D[];
     reportID?: string;
     /**
@@ -438,10 +452,10 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
             })),
         }
         : parseObject<SnapshotSchema>(discipline.formSchemaJson);
-    const data = parseObject<Record<string, unknown>>(discipline.resultJson);
+    const data = parseObject<Record<string, unknown>>(discipline.resultJson) ?? {};
     const context = parseObject<Record<string, unknown>>(caseContext);
     const validation = parseObject<ValidationSnapshot>(discipline.validationJson);
-    if (!schema || !data) return null;
+    if (!schema) return null;
     const fieldMap = new Map(schema.fields.map((field) => [field.key, field]));
     const groups = [...(schema.groups ?? [])].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
     // KHONG co fallback "khong group thi hien het field".
@@ -536,6 +550,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, liveFormSchemaJs
                                                 readOnly={isCompleted}
                                                 reportID={reportID || (discipline as any).report_ID || (discipline as any).reportID || ''}
                                                 disciplineCode={discipline.code}
+                                                precedentsJson={precedentsJson}
                                             />
                                         );
                                     })}
