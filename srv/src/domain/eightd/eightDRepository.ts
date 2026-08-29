@@ -641,7 +641,7 @@ export async function reviewDiscipline(
                             if (status !== 'Done' && status !== 'Verified') {
                                 const taskName = t?.name || t?.actionText || t?.action || 'Task';
                                 throw Object.assign(
-                                    new Error(`Cannot complete D6: Task "${taskName}" in ${s.code} is still ${status}. All action tasks in D3, D5, and D7 must be completed (Done or Verified) first.`),
+                                    new Error(`There are tasks in ${s.code} still not complete.`),
                                     { code: 400 },
                                 );
                             }

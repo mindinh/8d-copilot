@@ -169,13 +169,8 @@ export function DisciplineReviewBox({
                 }
 
                 if (uncompletedTasks.length > 0) {
-                    const summary = uncompletedTasks.slice(0, 2).map((t) => `[${t.step}] ${t.text} (${t.status})`).join(', ');
-                    toast.error(
-                        `Cannot complete D6: ${uncompletedTasks.length} task(s) in D3/D5/D7 are not completed.`,
-                        {
-                            description: `All action tasks must be 'Done' or 'Verified' first. Pending: ${summary}${uncompletedTasks.length > 2 ? '...' : ''}`,
-                        },
-                    );
+                    const affectedSteps = Array.from(new Set(uncompletedTasks.map((t) => t.step))).join(', ');
+                    toast.error(`There are tasks in ${affectedSteps} still not complete.`);
                     return;
                 }
             } else if (discipline.code === 'D5') {
