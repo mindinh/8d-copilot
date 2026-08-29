@@ -18,7 +18,7 @@ import {
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { CheckSquare, Clock, Edit2, Eye, FileText, Paperclip, Plus, Sparkles, Tag, Trash2, User } from 'lucide-react';
+import { CheckSquare, Clock, Edit2, Eye, FileText, Paperclip, Sparkles, Tag, User } from 'lucide-react';
 import { TASK_STATUSES, normalizeActionStatus, type ActionTask } from '../../../../../shared/action-task';
 import { listTaskEvidence } from '@/services/eightd-service';
 import { TaskEvidenceSection } from './task-evidence';
