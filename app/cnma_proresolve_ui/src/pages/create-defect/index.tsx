@@ -1,6 +1,8 @@
-import { useState, useMemo, useRef, type ChangeEvent } from 'react';
+import { useState, useMemo, useRef, useEffect, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { fillPlaceholderOnTab } from '@/hooks/use-placeholder-autofill';
+import { useUserInfo } from '@/hooks/use-user-info';
 import {
     Badge,
     Button,
@@ -42,7 +44,7 @@ import {
     UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { eightDService } from '@/services/eightd-service';
+import { eightDService, getPartnerDirectory, type PartnerDirectoryEntry } from '@/services/eightd-service';
 
 function generateRandomId(): string {
     const randomNum = Math.floor(10000000 + Math.random() * 90000000);
@@ -66,7 +68,21 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
     const [importError, setImportError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
 
-    // Form state
+    const isLocal = typeof window !== 'undefined' && (
+        (import.meta as any).env?.DEV ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+    );
+
+    const { userInfo } = useUserInfo();
+    const currentUserName = isLocal ? 'admin' : (userInfo?.displayName || userInfo?.name || 'admin');
+
+    const { data: partnerDirectory = [] } = useQuery<PartnerDirectoryEntry[]>({
+        queryKey: ['partnerDirectory'],
+        queryFn: getPartnerDirectory,
+        staleTime: 5 * 60 * 1000,
+    });
+
     const [notificationId, setNotificationId] = useState(() => generateRandomId());
     const [origin, setOrigin] = useState('Q3 - Internal Defect');
     const [symptomShortText, setSymptomShortText] = useState('');
@@ -89,9 +105,40 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
         { characteristic: '', measuredValue: '', specValue: '' },
     ]);
 
+    const [reportedBy, setReportedBy] = useState('');
+    const [coordinator, setCoordinator] = useState('');
+    const [department, setDepartment] = useState('');
+
     const [complaintReference, setComplaintReference] = useState('');
     const [customerPlantContact, setCustomerPlantContact] = useState('');
     const [slaResponseDue, setSlaResponseDue] = useState('');
+
+    useEffect(() => {
+        if (!reportedBy && currentUserName) {
+            setReportedBy(currentUserName);
+        }
+    }, [currentUserName, reportedBy]);
+
+    const reportedByOptions = useMemo(() => {
+        const list: { value: string; label: string }[] = [];
+        if (currentUserName) {
+            list.push({
+                value: currentUserName,
+                label: isLocal ? 'admin' : `${currentUserName}${userInfo.isAdmin ? ' (Admin)' : ''}`,
+            });
+        }
+        for (const p of partnerDirectory) {
+            if (p.partnerName && p.partnerName !== currentUserName) {
+                const cleanId = p.partnerId.replace(/^BP-/i, '');
+                const title = p.functionTitle ? ` (${p.functionTitle})` : '';
+                list.push({
+                    value: p.partnerName,
+                    label: `${cleanId} — ${p.partnerName}${title}`,
+                });
+            }
+        }
+        return list;
+    }, [currentUserName, partnerDirectory, isLocal, userInfo.isAdmin]);
 
     // Inspection row controls
     const addInspection = () => {
@@ -203,6 +250,17 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                 }
             }
 
+            // Responsibility
+            const resp = data.responsibility || data.header || note || {};
+            const nextReportedBy = resp.reported_by || resp.reportedBy || data.reported_by || data.reportedBy;
+            if (nextReportedBy) setReportedBy(String(nextReportedBy).trim());
+
+            const nextCoord = resp.coordinator || resp.notification_coordinator || resp.notificationCoordinator || data.coordinator;
+            if (nextCoord) setCoordinator(String(nextCoord).trim());
+
+            const nextDept = resp.department || resp.responsible_department || resp.responsibleDepartment || data.department;
+            if (nextDept) setDepartment(String(nextDept).trim());
+
             // Customer Reference
             const nextCompRef = custRef.complaint_reference || custRef.complaintReference;
             if (nextCompRef && !String(nextCompRef).startsWith('N/A')) {
@@ -289,6 +347,11 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                     measuredValue: i.measuredValue.trim(),
                     specValue: i.specValue.trim(),
                 })),
+            responsibility: {
+                reportedBy: reportedBy.trim() || currentUserName || null,
+                coordinator: coordinator.trim() || null,
+                department: department.trim() || null,
+            },
             causesIshikawa: [],
             fiveWhyChain: [],
             actions: [],
@@ -321,6 +384,10 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
         defectCode,
         defectText,
         inspections,
+        reportedBy,
+        coordinator,
+        department,
+        currentUserName,
         complaintReference,
         customerPlantContact,
         slaResponseDue,
@@ -603,7 +670,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 value={notificationId}
                                 onChange={(e) => setNotificationId(e.target.value)}
                                 className="font-mono text-xs"
-                                placeholder="8D-10049001"
+                                placeholder="e.g. 8D-10049001"
                                 required
                             />
                         </div>
@@ -641,7 +708,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={symptomShortText}
                                 onChange={(e) => setSymptomShortText(e.target.value)}
-                                placeholder="Operator stopped the line - rough edge felt on flange after milling"
+                                placeholder="e.g. Operator stopped the line - rough edge felt on flange after milling"
                                 className="text-xs"
                                 required
                             />
@@ -679,7 +746,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={materialId}
                                 onChange={(e) => setMaterialId(e.target.value)}
-                                placeholder="MAT-10247"
+                                placeholder="e.g. MAT-10247"
                                 className="font-mono text-xs"
                             />
                         </div>
@@ -690,7 +757,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={materialDesc}
                                 onChange={(e) => setMaterialDesc(e.target.value)}
-                                placeholder="Bracket Housing X240"
+                                placeholder="e.g. Bracket Housing X240"
                                 className="text-xs"
                             />
                         </div>
@@ -701,7 +768,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={materialGroup}
                                 onChange={(e) => setMaterialGroup(e.target.value)}
-                                placeholder="MG-HOUSING"
+                                placeholder="e.g. MG-HOUSING"
                                 className="font-mono text-xs"
                             />
                         </div>
@@ -712,7 +779,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={batchId}
                                 onChange={(e) => setBatchId(e.target.value)}
-                                placeholder="B-55901"
+                                placeholder="e.g. B-55901"
                                 className="font-mono text-xs"
                             />
                         </div>
@@ -723,7 +790,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={workCenterId}
                                 onChange={(e) => setWorkCenterId(e.target.value)}
-                                placeholder="WC-MILL-07"
+                                placeholder="e.g. WC-MILL-07"
                                 className="font-mono text-xs"
                             />
                         </div>
@@ -734,7 +801,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             <Input
                                 value={workCenterDesc}
                                 onChange={(e) => setWorkCenterDesc(e.target.value)}
-                                placeholder="CNC Milling Line 7"
+                                placeholder="e.g. CNC Milling Line 7"
                                 className="text-xs"
                             />
                         </div>
@@ -761,7 +828,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 <Input
                                     value={defectCode}
                                     onChange={(e) => setDefectCode(e.target.value)}
-                                    placeholder="DEF-0489"
+                                    placeholder="e.g. DEF-0489"
                                     className="font-mono text-xs"
                                 />
                             </div>
@@ -770,7 +837,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 <Input
                                     value={defectText}
                                     onChange={(e) => setDefectText(e.target.value)}
-                                    placeholder="Flange edge burr above limit"
+                                    placeholder="e.g. Flange edge burr above limit"
                                     className="text-xs"
                                 />
                             </div>
@@ -779,8 +846,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                         {/* Inspection Measurements Table */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5 text-primary" />
+                                <Label className="text-xs font-semibold">
                                     Inspection Characteristics & Measured Values (D2 Evidence)
                                 </Label>
                                 <Button
@@ -800,19 +866,19 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                         <Input
                                             value={insp.characteristic}
                                             onChange={(e) => updateInspection(idx, 'characteristic', e.target.value)}
-                                            placeholder="Characteristic (e.g. Burr height at flange edge)"
+                                            placeholder="e.g. Burr height at flange edge"
                                             className="flex-[2] text-xs"
                                         />
                                         <Input
                                             value={insp.measuredValue}
                                             onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
-                                            placeholder="Measured (0.26mm)"
+                                            placeholder="e.g. 0.26mm"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         <Input
                                             value={insp.specValue}
                                             onChange={(e) => updateInspection(idx, 'specValue', e.target.value)}
-                                            placeholder="Spec (max 0.10mm)"
+                                            placeholder="e.g. max 0.10mm"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         {inspections.length > 1 && (
@@ -833,14 +899,75 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                     </CardContent>
                 </Card>
 
-                {/* 4. Customer Reference (Q1 Complaint fields) */}
+                {/* 4. Responsibility */}
+                <Card className="shadow-sm">
+                    <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
+                        <div className="flex items-center gap-2">
+                            <UserCheck className="w-4 h-4 text-primary" />
+                            <CardTitle className="text-sm font-bold">4. Responsibility</CardTitle>
+                        </div>
+                        <CardDescription className="text-xs">
+                            Who found it and who coordinates the notification. The 8D team itself is not decided here — D1 proposes it from the people who solved comparable defects.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Reported By */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold">Reported By</Label>
+                                {(reportedBy === currentUserName || (!reportedBy && currentUserName)) && (
+                                    <span className="text-[10px] font-mono text-muted-foreground font-medium px-1.5 py-0.5 rounded bg-muted">
+                                        you
+                                    </span>
+                                )}
+                            </div>
+                            <Select value={reportedBy || currentUserName} onValueChange={setReportedBy}>
+                                <SelectTrigger className="h-8 text-[12.5px] w-full">
+                                    <SelectValue placeholder="— select reporter —" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-60">
+                                    {reportedByOptions.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Notification Coordinator */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Notification Coordinator</Label>
+                            <Input
+                                value={coordinator}
+                                onChange={(e) => setCoordinator(e.target.value)}
+                                placeholder="e.g. Minh Dinh"
+                                className="text-xs font-mono"
+                            />
+                        </div>
+
+                        {/* Responsible Department */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Responsible Department</Label>
+                            <Input
+                                value={department}
+                                onChange={(e) => setDepartment(e.target.value)}
+                                placeholder="e.g. Quality Assurance"
+                                className="text-xs font-mono"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 5. Customer Reference (Q1 Complaint fields) */}
                 {origin.startsWith('Q1') && (
                     <Card className="shadow-sm border-destructive/30 bg-destructive/5">
                         <CardHeader className="bg-destructive/10 pb-3 border-b border-destructive/20">
                             <div className="flex items-center gap-2">
                                 <UserCheck className="w-4 h-4 text-destructive" />
                                 <CardTitle className="text-sm font-bold text-destructive">
-                                    4. Customer Complaint Reference (Q1 Fields)
+                                    5. Customer Complaint Reference (Q1 Fields)
                                 </CardTitle>
                             </div>
                             <CardDescription className="text-xs text-destructive/80">
@@ -854,7 +981,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 <Input
                                     value={complaintReference}
                                     onChange={(e) => setComplaintReference(e.target.value)}
-                                    placeholder="CC-2026-1188"
+                                    placeholder="e.g. CC-2026-1188"
                                     className="font-mono text-xs bg-card"
                                 />
                             </div>
@@ -863,7 +990,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 <Input
                                     value={customerPlantContact}
                                     onChange={(e) => setCustomerPlantContact(e.target.value)}
-                                    placeholder="Vestbeck Motors - Plant 2"
+                                    placeholder="e.g. Vestbeck Motors - Plant 2"
                                     className="text-xs bg-card"
                                 />
                             </div>

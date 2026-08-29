@@ -59,6 +59,12 @@ const SELF_LABELLED_WIDGETS = new Set([
     'problem-statement',
     'problem.statement',
     'statement',
+    'action-cards',
+    'containment.actions',
+    'corrective.actions',
+    'preventive.actions',
+    'verification.actions',
+    'actions',
 ]);
 
 /**
@@ -230,7 +236,7 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
         return <div className="flex flex-wrap gap-1.5">{value.map((item, index) => <Badge key={`${String(item)}-${index}`} variant="outline" className="max-w-full whitespace-normal break-words">{String(item)}</Badge>)}</div>;
     }
     if (typeof value === 'object') return <pre className="max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{JSON.stringify(value, null, 2)}</pre>;
-    return <span className="break-words whitespace-pre-wrap text-sm leading-relaxed">{String(value)}</span>;
+    return <span className="break-words whitespace-pre-wrap text-[13.5px] font-normal leading-relaxed">{String(value)}</span>;
 }
 
 export function FieldBlock({
@@ -276,7 +282,7 @@ export function FieldBlock({
             {!isSelfLabelled && (
                 <div className="mb-2.5 pb-1.5 border-b border-border/60 flex min-w-0 items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="min-w-0 break-words text-xs font-bold uppercase tracking-wider text-foreground/90">
+                        <span className="min-w-0 break-words text-[14px] font-bold uppercase tracking-wider text-foreground/90">
                             {field.label || humanize(field.key)}
                         </span>
                         <AiProvenanceInfo
@@ -467,6 +473,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
     const visibleGroups = groups;
     const violations = validation?.violations ?? [];
     const isCompleted = reviewStatusOf(discipline) === 'Approved';
+    const isReadOnly = isCompleted || discipline.workState !== 'InProgress';
 
     const W2H_SET = new Set<string>(W2H_FIELD_KEYS);
     const IS_NOT_SET = new Set<string>(IS_NOT_FIELD_KEYS);
@@ -483,18 +490,18 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
         : visibleGroups;
 
     return (
-        <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')} readOnly={isCompleted}>
+        <TeamRosterProvider disciplineID={discipline.ID} caseContext={context} savedRoster={getPath(data, 'team.assignedRoster')} readOnly={isReadOnly}>
             <div className="min-w-0 space-y-3">
                 {hasD1Roster && (
                     <AiSuggestWidget
                         roster={getPath(data, 'team.roster') as RosterRow[]}
-                        readOnly={isCompleted}
+                        readOnly={isReadOnly}
                     />
                 )}
 
                 {hasD1AssignedRoster && (
                     <DecisionTableWidget
-                        readOnly={isCompleted}
+                        readOnly={isReadOnly}
                     />
                 )}
 
@@ -517,7 +524,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
                                                     key="5W2H_SECTION"
                                                     data={data}
                                                     disciplineID={discipline.ID}
-                                                    readOnly={isCompleted}
+                                                    readOnly={isReadOnly}
                                                 />
                                             );
                                         }
@@ -530,7 +537,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
                                                     key="IS_NOT_SECTION"
                                                     data={data}
                                                     disciplineID={discipline.ID}
-                                                    readOnly={isCompleted}
+                                                    readOnly={isReadOnly}
                                                 />
                                             );
                                         }
@@ -547,7 +554,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
                                                 disciplineID={discipline.ID}
                                                 data={data}
                                                 siblings={siblings}
-                                                readOnly={isCompleted}
+                                                readOnly={isReadOnly}
                                                 reportID={reportID || (discipline as any).report_ID || (discipline as any).reportID || ''}
                                                 disciplineCode={discipline.code}
                                                 precedentsJson={precedentsJson}

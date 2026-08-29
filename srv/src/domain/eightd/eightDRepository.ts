@@ -302,12 +302,18 @@ export async function saveAssignedTeam(
     roster: AssignedTeamRow[],
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson', 'reviewStatus')
+        .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
     if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
         throw Object.assign(
             new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
+    if ((row as any).workState !== 'InProgress') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} is not in process (current status: ${(row as any).workState ?? 'NotStarted'}). Switch status to 'In process' to edit.`),
             { code: 400 },
         );
     }
@@ -408,6 +414,12 @@ export async function saveDisciplineFieldValue(
             { code: 400 },
         );
     }
+    if ((row as any).workState !== 'InProgress') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} is not in process (current status: ${(row as any).workState ?? 'NotStarted'}). Switch status to 'In process' to edit.`),
+            { code: 400 },
+        );
+    }
 
     const allowed = HUMAN_WRITABLE_FIELDS[String(row.code)];
     if (!allowed?.has(fieldKey)) {
@@ -476,6 +488,12 @@ export async function confirmDisciplineField(
             { code: 400 },
         );
     }
+    if ((row as any).workState !== 'InProgress') {
+        throw Object.assign(
+            new Error(`Discipline ${row.code} is not in process (current status: ${(row as any).workState ?? 'NotStarted'}). Switch status to 'In process' to confirm fields.`),
+            { code: 400 },
+        );
+    }
 
     if (confirmed) {
         // CỔNG CHẶN SERVER: Kiểm tra bằng chứng hoàn thành (evidence) cho các task đã Done
@@ -521,13 +539,8 @@ export async function confirmDisciplineField(
     }
     const nextConfirmed = [...set];
 
-    // Tự động chuyển NotStarted -> InProgress khi có thao tác confirm đầu tiên
-    const currentWorkState = String((row as any).workState ?? 'NotStarted');
-    const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
-
     await UPDATE(DISCIPLINES).set({
         confirmedFieldsJson: JSON.stringify(nextConfirmed),
-        workState: nextWorkState,
     }).where({ ID: disciplineID });
 
     cds.log('eightd-repo').info(
@@ -747,7 +760,7 @@ export async function createTaskEvidence(params: {
     }
 
     const discipline = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'reviewStatus', 'resultJson')
+        .columns('ID', 'code', 'reviewStatus', 'resultJson', 'workState')
         .where({ report_ID: reportID, code: disciplineCode });
     if (!discipline) {
         throw Object.assign(new Error(`Discipline ${disciplineCode} not found for report ${reportID}.`), { code: 404 });
@@ -757,6 +770,12 @@ export async function createTaskEvidence(params: {
     if (normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
         throw Object.assign(
             new Error(`Discipline ${disciplineCode} has been completed and locked. Reopen the step to make changes.`),
+            { code: 400 },
+        );
+    }
+    if ((discipline as any).workState !== 'InProgress') {
+        throw Object.assign(
+            new Error(`Discipline ${disciplineCode} is not in process. Switch status to 'In process' to upload evidence.`),
             { code: 400 },
         );
     }
@@ -811,14 +830,21 @@ export async function deleteTaskEvidence(evidenceID: string): Promise<{ deleted:
     }
 
     const discipline = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'reviewStatus')
-        .where({ report_ID: (row as any).reportID, code: (row as any).disciplineCode });
-    const isActionStep = ['D3', 'D5', 'D7'].includes(String((row as any).disciplineCode));
-    if (discipline && normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
-        throw Object.assign(
-            new Error(`Discipline ${(row as any).disciplineCode} has been completed and locked. Reopen the step to make changes.`),
-            { code: 400 },
-        );
+        .columns('ID', 'code', 'reviewStatus', 'workState')
+    if (discipline) {
+        const isActionStep = ['D3', 'D5', 'D7'].includes(String((row as any).disciplineCode));
+        if (normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
+            throw Object.assign(
+                new Error(`Discipline ${(row as any).disciplineCode} has been completed and locked. Reopen the step to make changes.`),
+                { code: 400 },
+            );
+        }
+        if ((discipline as any).workState !== 'InProgress') {
+            throw Object.assign(
+                new Error(`Discipline ${(row as any).disciplineCode} is not in process. Switch status to 'In process' to delete evidence.`),
+                { code: 400 },
+            );
+        }
     }
 
     await DELETE.from(TASK_EVIDENCES).where({ ID: evidenceID });

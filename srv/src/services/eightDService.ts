@@ -580,7 +580,7 @@ export function registerEightDHandlers(srv: any): void {
         }
 
         const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
-            .columns('ID', 'code', 'reviewStatus', 'resultJson')
+            .columns('ID', 'code', 'reviewStatus', 'resultJson', 'workState')
             .where({ report_ID: reportID, code: disciplineCode });
         if (!discipline) {
             return req.error(404, `Discipline ${disciplineCode} not found for report ${reportID}.`);
@@ -589,6 +589,10 @@ export function registerEightDHandlers(srv: any): void {
         const isActionStep = ['D3', 'D5', 'D7'].includes(String(disciplineCode));
         if (discipline.reviewStatus === 'Approved' && !isActionStep) {
             return req.error(400, `Discipline ${disciplineCode} has been completed and locked.`);
+        }
+
+        if (discipline.workState !== 'InProgress') {
+            return req.error(400, `Discipline ${disciplineCode} is not in process. Switch status to 'In process' to upload evidence.`);
         }
 
         const task = findTaskInResultJson(discipline.resultJson, taskId);
@@ -616,11 +620,15 @@ export function registerEightDHandlers(srv: any): void {
             .where({ ID: id });
         if (row) {
             const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
-                .columns('ID', 'reviewStatus')
-                .where({ report_ID: row.reportID, code: row.disciplineCode });
-            const isActionStep = ['D3', 'D5', 'D7'].includes(String(row.disciplineCode));
-            if (discipline && discipline.reviewStatus === 'Approved' && !isActionStep) {
-                return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
+                .columns('ID', 'reviewStatus', 'workState')
+            if (discipline) {
+                const isActionStep = ['D3', 'D5', 'D7'].includes(String(row.disciplineCode));
+                if (discipline.reviewStatus === 'Approved' && !isActionStep) {
+                    return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
+                }
+                if (discipline.workState !== 'InProgress') {
+                    return req.error(400, `Discipline ${row.disciplineCode} is not in process. Switch status to 'In process' to delete evidence.`);
+                }
             }
         }
     });

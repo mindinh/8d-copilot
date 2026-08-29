@@ -253,8 +253,8 @@ export function DisciplineReviewBox({
                     ) : (
                         <p className="mt-0.5 text-xs text-muted-foreground">
                             {currentStatus === 'InProgress'
-                                ? 'Discipline investigation and actions are currently in progress'
-                                : 'Discipline work has not been started yet'}
+                                ? 'In process — editing and confirmation enabled'
+                                : 'Not started (read-only) — switch status to "In process" to edit'}
                         </p>
                     )}
                 </div>
