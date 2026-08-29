@@ -73,15 +73,18 @@ export function getMergedCaseActions(
     caseContext: string | null | undefined,
     disciplines?: Discipline8D[],
 ): CaseActions {
-    const directActions = parseCaseActions(caseContext) || {};
     const result: CaseActions = {
-        containment: [...(directActions.containment || [])],
-        corrective: [...(directActions.corrective || [])],
-        preventive: [...(directActions.preventive || [])],
+        containment: [],
+        corrective: [],
+        preventive: [],
     };
 
     if (disciplines && disciplines.length > 0) {
         for (const d of disciplines) {
+            // Chỉ khi nào step D3, D5, D7 ở trạng thái InProgress hoặc Approved thì mới đưa task vào D6
+            const isStepActive = d.workState === 'InProgress' || d.reviewStatus === 'Approved';
+            if (!isStepActive) continue;
+
             const parsed = parseJsonSafe(d.resultJson);
             if (!parsed) continue;
 
@@ -156,6 +159,11 @@ export function getMergedCaseActions(
                 }
             }
         }
+    } else if (caseContext) {
+        const directActions = parseCaseActions(caseContext) || {};
+        result.containment = directActions.containment || [];
+        result.corrective = directActions.corrective || [];
+        result.preventive = directActions.preventive || [];
     }
 
     return result;
@@ -182,9 +190,19 @@ export function ActionChecklist({
 
     const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
-    // Nếu chưa có task hoặc action nào được tạo ở D5 / D3 / D7: Để trống hoàn toàn, không hiển thị warning!
+    // Khi các bước D3, D5, D7 chưa InProgress hoặc chưa có action nào: Hiện hướng dẫn trực quan
     if (total === 0) {
-        return null;
+        return (
+            <Card className="p-6 text-center border-dashed bg-muted/20">
+                <div className="flex flex-col items-center justify-center gap-2">
+                    <CircleDashed className="w-8 h-8 text-muted-foreground/60" />
+                    <p className="text-sm font-semibold text-foreground">No active actions in D3, D5, or D7 yet</p>
+                    <p className="text-xs text-muted-foreground max-w-md">
+                        Action tasks will automatically appear here for verification once containment (D3), corrective (D5), or preventive (D7) steps are switched to <strong className="text-foreground">In process</strong>.
+                    </p>
+                </div>
+            </Card>
+        );
     }
 
     const handleTaskStatusChange = async (

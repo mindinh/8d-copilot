@@ -28,7 +28,7 @@ import {
 import {
     parseConfirmedFields,
 } from './fieldConfirm';
-import { assignedFieldFor, normalizeTasks } from '../../../../shared/action-task';
+import { assignedFieldFor, normalizeActionStatus, normalizeTasks } from '../../../../shared/action-task';
 import { getPath } from './runtimeConfig';
 
 const REPORTS = 'cnma.proresolve.Reports';
@@ -622,6 +622,34 @@ export async function reviewDiscipline(
     let nextWorkState = String((row as any).workState ?? 'NotStarted');
 
     if (toStatus === 'Approved') {
+        if (String(row.code ?? '') === 'D6') {
+            const siblings = await SELECT.from(DISCIPLINES)
+                .columns('code', 'resultJson')
+                .where({ report_ID: reportID });
+
+            for (const s of siblings) {
+                if (['D3', 'D5', 'D7'].includes(String(s.code))) {
+                    let parsed: any = {};
+                    try {
+                        parsed = JSON.parse(String(s.resultJson ?? '{}'));
+                    } catch { /* empty */ }
+                    const keyPrefix = s.code === 'D3' ? 'containment' : s.code === 'D5' ? 'corrective' : 'preventive';
+                    const tasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions || [];
+                    if (Array.isArray(tasks) && tasks.length > 0) {
+                        for (const t of tasks) {
+                            const status = normalizeActionStatus(t?.status);
+                            if (status !== 'Done' && status !== 'Verified') {
+                                const taskName = t?.name || t?.actionText || t?.action || 'Task';
+                                throw Object.assign(
+                                    new Error(`Cannot complete D6: Task "${taskName}" in ${s.code} is still ${status}. All action tasks in D3, D5, and D7 must be completed (Done or Verified) first.`),
+                                    { code: 400 },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         nextWorkState = 'Completed';
     } else if (toStatus === 'Draft') {
         nextWorkState = 'InProgress';

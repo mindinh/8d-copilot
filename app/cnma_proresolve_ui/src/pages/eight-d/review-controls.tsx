@@ -144,7 +144,41 @@ export function DisciplineReviewBox({
 
         // 1. Validation Logic
         if (value === 'Completed') {
-            if (discipline.code === 'D5') {
+            if (discipline.code === 'D6') {
+                const allDiscs = siblings || [];
+                const actionSteps = allDiscs.filter((d) => ['D3', 'D5', 'D7'].includes(d.code));
+
+                const uncompletedTasks: { step: string; text: string; status: string }[] = [];
+
+                for (const d of actionSteps) {
+                    const parsedD = parseJsonSafe(d.resultJson);
+                    const keyPrefix = d.code === 'D3' ? 'containment' : d.code === 'D5' ? 'corrective' : 'preventive';
+                    const currentTasks = parsedD?.[keyPrefix]?.assignedActions || parsedD?.assignedActions;
+                    if (Array.isArray(currentTasks) && currentTasks.length > 0) {
+                        for (const t of currentTasks) {
+                            const normStatus = normalizeActionStatus(t?.status);
+                            if (normStatus !== 'Done' && normStatus !== 'Verified') {
+                                uncompletedTasks.push({
+                                    step: d.code,
+                                    text: t?.name || t?.actionText || t?.action || 'Task',
+                                    status: normStatus || 'Planned',
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (uncompletedTasks.length > 0) {
+                    const summary = uncompletedTasks.slice(0, 2).map((t) => `[${t.step}] ${t.text} (${t.status})`).join(', ');
+                    toast.error(
+                        `Cannot complete D6: ${uncompletedTasks.length} task(s) in D3/D5/D7 are not completed.`,
+                        {
+                            description: `All action tasks must be 'Done' or 'Verified' first. Pending: ${summary}${uncompletedTasks.length > 2 ? '...' : ''}`,
+                        },
+                    );
+                    return;
+                }
+            } else if (discipline.code === 'D5') {
                 const assigned = parsed?.corrective?.assignedActions || parsed?.assignedActions;
                 const actions = parsed?.corrective?.actions;
                 const hasActions = (Array.isArray(assigned) && assigned.length > 0) || (Array.isArray(actions) && actions.length > 0);
@@ -166,25 +200,7 @@ export function DisciplineReviewBox({
 
         try {
             if (value === 'Completed') {
-                // Nếu là bước D6: Toàn bộ task ở D3, D5, D7 được chuyển thành 'Done'
-                if (discipline.code === 'D6') {
-                    const allDiscs = siblings || [];
-                    for (const d of allDiscs) {
-                        if (['D3', 'D5', 'D7'].includes(d.code)) {
-                            const parsedD = parseJsonSafe(d.resultJson);
-                            const keyPrefix = d.code === 'D3' ? 'containment' : d.code === 'D5' ? 'corrective' : 'preventive';
-                            const assignedField = `${keyPrefix}.assignedActions`;
-                            const currentTasks = parsedD?.[keyPrefix]?.assignedActions || parsedD?.assignedActions;
-                            if (Array.isArray(currentTasks) && currentTasks.length > 0) {
-                                const updatedTasks = currentTasks.map((t: any) => ({
-                                    ...t,
-                                    status: 'Done',
-                                }));
-                                await saveDisciplineField(d.ID, assignedField, updatedTasks);
-                            }
-                        }
-                    }
-                } else if (['D3', 'D5', 'D7'].includes(discipline.code)) {
+                if (['D3', 'D5', 'D7'].includes(discipline.code)) {
                     // Khi các bước D3, D5, D7 hoàn thành: chuyển task chưa Verified -> Done
                     const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
                     const assignedField = `${keyPrefix}.assignedActions`;
