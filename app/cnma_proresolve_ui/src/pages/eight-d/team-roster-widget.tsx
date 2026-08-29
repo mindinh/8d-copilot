@@ -37,6 +37,7 @@ export interface RosterRow {
     assigned8DRole?: string;
     caseResponsibility?: string;
     selectionReason?: string;
+    servedOnCount?: number;
     sourceType?: string;
     sourcePath?: string;
     sourceCase?: string;
@@ -476,6 +477,11 @@ export function AiSuggestWidget({
                     <li key={`${row.name ?? 'row'}-${index}`} className="text-[12.5px] leading-relaxed">
                         <span className="font-medium text-foreground">{row.name || 'Unassigned'}</span>
                         {row.organizationalRole && <> ({row.organizationalRole})</>}
+                        {typeof row.servedOnCount === 'number' && row.servedOnCount > 0 && (
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
+                                served on {row.servedOnCount} similar case{row.servedOnCount > 1 ? 's' : ''}
+                            </span>
+                        )}
                         {row.caseResponsibility && (
                             <span className="text-muted-foreground"> — {row.caseResponsibility}</span>
                         )}

@@ -495,6 +495,14 @@ export function mapCase(raw: any): CaseContext {
     if (inspections.length && inspections.every((i) => i.outOfSpec === null)) {
         gaps.push('Inspection values could not be compared with the specification automatically.');
     }
+    const outOfSpecInspections = inspections.filter((i) => i.outOfSpec === true);
+    if (outOfSpecInspections.length > 1) {
+        const comparedChar = outOfSpecInspections[0].characteristic;
+        const uncomparedChars = outOfSpecInspections.slice(1).map((i) => i.characteristic).join(', ');
+        gaps.push(
+            `Is/Is-Not was computed for ${comparedChar}. ${uncomparedChars} is also out of specification and was not compared.`,
+        );
+    }
 
     // ── Ishikawa + root cause ──
     const ishikawa: IshikawaRow[] = rows(data, 'causes_ishikawa').map((r) => ({
