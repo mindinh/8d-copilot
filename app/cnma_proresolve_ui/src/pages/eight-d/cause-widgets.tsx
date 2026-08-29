@@ -6,7 +6,7 @@ import {
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { Star, Trash2 } from 'lucide-react';
+import { Check, Sparkles, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
@@ -539,54 +539,73 @@ export function ActionCardsWidget({
     const pending = actions.filter((row) => actionLabel(row) && !isAccepted(row, tasks));
 
     return (
-        <div className="space-y-3">
-            {actions.length === 0 ? (
-                <p className="text-sm italic text-muted-foreground">{emptyLabel}</p>
-            ) : (
-                <div className="space-y-2.5">
-                    {actions.map((row, index) => {
-                        const rawText = row.action ?? row.actionText ?? '';
-                        const text = cleanActionText(rawText);
-                        return (
-                            <div
-                                key={index}
-                                className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
+        <div className="space-y-4">
+            {/* Box 1: AI Suggested Actions */}
+            <div className="rounded-xl border p-4 shadow-xs transition-all border-primary/25 bg-primary/[0.03]">
+                <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/10">
+                    <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <Sparkles className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="text-[14px] font-bold tracking-tight text-foreground">
+                            AI Suggested Actions
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {!readOnly && pending.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => accept(pending)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:shadow active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                             >
-                                <p className="break-words text-[13px] font-medium">{text}</p>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                    {isAccepted(row, tasks) ? (
-                                        <span className="whitespace-nowrap text-[11px] font-medium text-success">
-                                            ✓ Added
-                                        </span>
-                                    ) : !readOnly ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => accept([row])}
-                                            className="whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
-                                        >
-                                            + Add
-                                        </button>
-                                    ) : null}
+                                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                <span>Accept all suggested ({pending.length})</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {actions.length === 0 ? (
+                    <p className="text-sm italic text-muted-foreground">{emptyLabel}</p>
+                ) : (
+                    <div className="space-y-2">
+                        {actions.map((row, index) => {
+                            const rawText = row.action ?? row.actionText ?? '';
+                            const text = cleanActionText(rawText);
+                            return (
+                                <div
+                                    key={index}
+                                    className="flex items-start justify-between gap-2.5 py-1 px-1 rounded-md transition-colors hover:bg-primary/[0.04]"
+                                >
+                                    <div className="flex items-start gap-2 min-w-0">
+                                        <span className="mt-2.5 h-1 w-1 rounded-full bg-foreground/90 shrink-0" />
+                                        <p className="break-words text-[13.5px] font-normal text-foreground leading-relaxed">{text}</p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0 ml-2 pt-0.5">
+                                        {isAccepted(row, tasks) ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success whitespace-nowrap">
+                                                <Check className="h-3 w-3" />
+                                                <span>Accepted</span>
+                                            </span>
+                                        ) : !readOnly ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => accept([row])}
+                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer whitespace-nowrap"
+                                            >
+                                                <Check className="h-3 w-3" />
+                                                <span>Accept</span>
+                                            </button>
+                                        ) : null}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
 
-            {!readOnly && pending.length > 1 && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px]"
-                        onClick={() => accept(pending)}
-                    >
-                        ✓ Accept all suggested ({pending.length})
-                    </Button>
-                </div>
-            )}
-
+            {/* Box 2: Assigned Tasks (Separate Standalone Box) */}
             <TaskTable
                 tasks={tasks}
                 onChange={persistTasks}

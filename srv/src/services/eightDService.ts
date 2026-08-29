@@ -495,7 +495,7 @@ export function registerEightDHandlers(srv: any): void {
         }
 
         const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
-            .columns('ID', 'code', 'reviewStatus', 'resultJson')
+            .columns('ID', 'code', 'reviewStatus', 'resultJson', 'workState')
             .where({ report_ID: reportID, code: disciplineCode });
         if (!discipline) {
             return req.error(404, `Discipline ${disciplineCode} not found for report ${reportID}.`);
@@ -503,6 +503,10 @@ export function registerEightDHandlers(srv: any): void {
 
         if (discipline.reviewStatus === 'Approved') {
             return req.error(400, `Discipline ${disciplineCode} has been completed and locked.`);
+        }
+
+        if (discipline.workState !== 'InProgress') {
+            return req.error(400, `Discipline ${disciplineCode} is not in process. Switch status to 'In process' to upload evidence.`);
         }
 
         const task = findTaskInResultJson(discipline.resultJson, taskId);
@@ -530,10 +534,15 @@ export function registerEightDHandlers(srv: any): void {
             .where({ ID: id });
         if (row) {
             const discipline = await SELECT.one.from('cnma.proresolve.Disciplines')
-                .columns('ID', 'reviewStatus')
+                .columns('ID', 'reviewStatus', 'workState')
                 .where({ report_ID: row.reportID, code: row.disciplineCode });
-            if (discipline && discipline.reviewStatus === 'Approved') {
-                return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
+            if (discipline) {
+                if (discipline.reviewStatus === 'Approved') {
+                    return req.error(400, `Discipline ${row.disciplineCode} has been completed and locked.`);
+                }
+                if (discipline.workState !== 'InProgress') {
+                    return req.error(400, `Discipline ${row.disciplineCode} is not in process. Switch status to 'In process' to delete evidence.`);
+                }
             }
         }
     });

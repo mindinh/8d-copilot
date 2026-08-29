@@ -32,7 +32,9 @@ export function fillPlaceholderOnTab(event: KeyboardEvent<HTMLElement>): void {
     if (target.disabled || target.readOnly) return;
     if (target.value !== '') return;
 
-    const text = target.placeholder.trim();
+    let text = target.placeholder.trim();
+    if (!text) return;
+    text = text.replace(/^e\.g\.\s*/i, '');
     if (!text) return;
 
     // Với những kiểu này, placeholder không phải là một giá trị hợp lệ để gán —
