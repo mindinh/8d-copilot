@@ -257,3 +257,18 @@ describe('luật trọng tâm trong STYLE', () => {
         expect(rules).not.toMatch(/Question under \d+ words/);
     });
 });
+
+describe('hướng dẫn D1 và D2 theo D1D2FIXPLAN', () => {
+    it('D2 guide không còn chứa câu cấm tự mâu thuẫn', () => {
+        expect(DEFAULT_DISCIPLINE_GUIDE.D2).not.toContain('Never draft Is / Is-Not yourself');
+        expect(DEFAULT_DISCIPLINE_GUIDE.D2).toContain('The IS and IS NOT values are COMPUTED by');
+        expect(DEFAULT_DISCIPLINE_GUIDE.D2).toContain('problem.isIsNotBasis');
+    });
+
+    it('D1 combinedPrompt mang chỉ dẫn servedOnCount và team.suggestionStatus', () => {
+        const d1 = DEFAULT_STEP_PROMPTS.find((p) => p.stepCode === 'D1')!;
+        expect(d1.combinedPrompt).toContain('servedOnCount');
+        expect(d1.combinedPrompt).toContain('team.suggestionStatus');
+        expect(d1.combinedPrompt).toContain('No team suggestion available; assign manually.');
+    });
+});

@@ -170,11 +170,18 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     Every box names the field it came from. A box with no source says so; it does
     not get a plausible value.
 
-    Is / Is-Not is a manual field on this screen. Use it only when it is already
-    filled in: quote what the defect IS, what a comparable situation it is NOT,
-    and point at the single difference between them, because that difference is
-    the lead. Never draft Is / Is-Not yourself - it needs a population of
-    comparable records this dataset does not carry.`,
+    Is / Is-Not narrows the root cause. The IS and IS NOT values are COMPUTED by
+    the system from the historical inspection lots: it groups them by equipment,
+    counts the nonconforming rate per group, and takes the sharpest contrast. You
+    do not choose them and you must not restate or alter them.
+
+    Your job is problem.isIsNotBasis. In one or two sentences explain why that
+    pair is the lead: name the lot IDs behind each side, and say plainly that both
+    groups share the same material and characteristic, so the equipment is the only
+    difference between them. That difference is the lead for D4.
+
+    When the system reports that no comparison was possible, do not invent one.
+    Leave the basis empty and let the status line speak for itself.`,
 
     D3: `Containment protects the customer and the line WHILE the cause is still
     unknown. Keep every containment action description simple, direct and concise

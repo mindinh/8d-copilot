@@ -948,6 +948,69 @@ async function generateReportProgressive(
     };
 }
 
+async function enrichFromDatabase(context: CaseContext): Promise<void> {
+    try {
+        if (!cds.db) return;
+
+        // 1. Fallback truy vấn lịch sử kiểm tra lô (InspectionLots) cho Is / Is-Not
+        if (!context.historicalInspectionLots || context.historicalInspectionLots.length === 0) {
+            const materialId = context.product.materialId;
+            const primaryChar = context.inspections.find((i) => i.outOfSpec)?.characteristic
+                || context.inspections[0]?.characteristic;
+            if (materialId && primaryChar) {
+                const { InspectionLots } = (cds.entities as any)('cnma.proresolve') ?? {};
+                if (InspectionLots) {
+                    const rows = await cds.run(
+                        SELECT.from(InspectionLots)
+                            .where({ materialId, characteristic: primaryChar })
+                            .orderBy('lotDate desc'),
+                    );
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        context.historicalInspectionLots = rows.map((r: any) => ({
+                            lotId: String(r.lotId ?? ''),
+                            materialId: String(r.materialId ?? ''),
+                            characteristic: String(r.characteristic ?? ''),
+                            equipment: r.equipment ? String(r.equipment) : null,
+                            measuredValue: r.measuredValue ? String(r.measuredValue) : null,
+                            conforming: Boolean(r.conforming),
+                            lotDate: r.lotDate ? String(r.lotDate) : null,
+                            plant: r.plant ? String(r.plant) : null,
+                        }));
+                        LOG.info(`[InspectionLots] Đã tải ${rows.length} lô kiểm tra lịch sử cho vật tư ${materialId}, đặc tính "${primaryChar}".`);
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback truy vấn sổ đăng ký FMEA (FmeaRegister) cho D7
+        if (!context.fmea && (context.product.workCenterId || context.product.materialId)) {
+            const { FmeaRegister } = (cds.entities as any)('cnma.proresolve') ?? {};
+            if (FmeaRegister) {
+                const query = SELECT.one.from(FmeaRegister);
+                if (context.product.workCenterId && context.product.materialId) {
+                    query.where`workCenterId = ${context.product.workCenterId} or materialId = ${context.product.materialId}`;
+                } else if (context.product.workCenterId) {
+                    query.where`workCenterId = ${context.product.workCenterId}`;
+                } else if (context.product.materialId) {
+                    query.where`materialId = ${context.product.materialId}`;
+                }
+                const row = await cds.run(query);
+                if (row) {
+                    context.fmea = {
+                        fmeaId: String(row.fmeaId ?? ''),
+                        description: String(row.description ?? ''),
+                        workCenterId: row.workCenterId ? String(row.workCenterId) : null,
+                        materialId: row.materialId ? String(row.materialId) : null,
+                    };
+                    LOG.info(`[FmeaRegister] Đã gán FMEA ${context.fmea.fmeaId} cho phân xưởng ${context.product.workCenterId}.`);
+                }
+            }
+        }
+    } catch (e: any) {
+        LOG.warn(`[enrichFromDatabase] Bổ trợ dữ liệu từ DB thất bại: ${e.message}`);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -986,6 +1049,9 @@ export async function analyze(
     // ── Facts ──
     const context = mapCase(raw);
     for (const w of warnings) context.gaps.push(`${w.constraintId}: ${w.message}`);
+
+    // Bổ trợ dữ liệu từ CDS database (lịch sử kiểm tra lô InspectionLots cho D2 & FmeaRegister cho D7)
+    await enrichFromDatabase(context);
 
     LOG.info(
         `Case ${context.notificationId} (${context.origin}) — ` +

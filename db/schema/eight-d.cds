@@ -45,6 +45,8 @@ entity Reports : cuid, managed {
      */
     quantityExtent    : String(60);
     teamSize          : Integer;
+    entryMode         : String(30);
+    inspectionLotId   : String(30);
 
     // ── Master data đã join sẵn ──────────────────────────────────────────────
     materialId        : String(30);
