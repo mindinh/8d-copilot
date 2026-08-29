@@ -8,9 +8,9 @@
   "scripts": {
     "start": "cds-serve",
     "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 < NUL",
+    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources < NUL",
     "dev:frontend": "node scripts/wait-backend.mjs && npm run dev --prefix app/cnma_proresolve_ui",
-    "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008",
+    "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources",
     "dev:all": "powershell -ExecutionPolicy Bypass -File .\\start-dev.ps1",
     "clean": "node -e \"['gen','mta_archives','ui_resources','app/ui_resources','.cnma_proresolve_mta_build_tmp'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch(e){}}); try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
     "build": "npm run bundle:library && cds build --production && npm run compile:srv",
@@ -80,11 +80,14 @@
       ]
     },
     "watch": {
-      "ignore": [
-        "app/**",
-        "*.md",
-        "resources/**",
-        "dist/**"
+      "exclude": [
+        "app",
+        "dist",
+        "gen",
+        "mock-data",
+        "docs",
+        "plans",
+        "resources"
       ]
     },
     "requires": {

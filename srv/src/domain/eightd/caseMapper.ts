@@ -245,6 +245,7 @@ function flattenNested(nested: Row): Row {
         lessons_learned: node('lessons_learned') ? [stamp(node('lessons_learned')!)] : [],
         is_is_not: node('is_is_not') ? [stamp(node('is_is_not')!)] : [],
         customer_reference: node('customer_reference') ? [stamp(node('customer_reference')!)] : [],
+        responsibility: node('responsibility') ? [stamp(node('responsibility')!)] : [],
         spc_process_data: [],
     };
 }
@@ -383,6 +384,13 @@ export function extractDeepCase(raw: any): Row | null {
         sla_response_due: cref.slaResponseDue ?? cref.sla_response_due,
     })] : [];
 
+    const resp = getObj(obj.responsibility ?? obj.responsibility_info);
+    const respList = resp ? [stamp({
+        reported_by: resp.reportedBy ?? resp.reported_by,
+        coordinator: resp.coordinator,
+        department: resp.department,
+    })] : [];
+
     const matId = material?.materialId ?? material?.material_id ?? obj.materialId ?? obj.material_id;
     const matDesc = material?.description ?? obj.materialDesc ?? obj.material_desc;
     const matGroup = material?.materialGroup ?? material?.material_group
@@ -419,6 +427,7 @@ export function extractDeepCase(raw: any): Row | null {
         lessons_learned: llList,
         is_is_not: iinList,
         customer_reference: crefList,
+        responsibility: respList,
         spc_process_data: [],
     };
 }
@@ -583,6 +592,14 @@ export function mapCase(raw: any): CaseContext {
         gaps.push('Customer complaint case but no usable customer reference data.');
     }
 
+    // ── Trách nhiệm & người báo cáo ──
+    const respRow = one(data, 'responsibility');
+    const responsibility = {
+        reportedBy: text(respRow?.reported_by ?? respRow?.reportedBy ?? note.reported_by ?? note.reportedBy),
+        coordinator: text(respRow?.coordinator ?? note.coordinator),
+        department: text(respRow?.department ?? note.department),
+    };
+
     return {
         notificationId: id(note.notification_id),
         origin,
@@ -623,6 +640,7 @@ export function mapCase(raw: any): CaseContext {
         copqEur,
         lessonsLearned,
         customer,
+        responsibility,
         unmapped: {},
         gaps,
     };

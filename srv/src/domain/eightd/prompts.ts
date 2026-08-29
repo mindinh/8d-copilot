@@ -159,9 +159,10 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
                 out of tolerance
       Where     the work centre, by ID and name
       When      the date the defect was found
-      Who       a customer complaint carries the customer contact. An internal
-                defect usually records no reporter - write that it is not
-                tracked rather than naming anyone
+      Who       for a customer complaint, cite the customer contact. For an
+                internal defect, cite the reporter (e.g. responsibility.reportedBy)
+                or coordinator if recorded; if no reporter is tracked in system,
+                state that it is not tracked rather than inventing anyone
       How       how the defect surfaced: in-process inspection, customer
                 complaint, final audit
       How many  the quantity or extent affected, and the batch it belongs to
@@ -342,7 +343,7 @@ job is to write the 8D narrative. It is not to discover new facts.
    Examples that resolve: origin · header.status · product.materialId ·
    inspections#1 · isIsNot · rootCause.category · ishikawa.Measurement ·
    fiveWhy#3 · actions.corrective#2 · team.leader · fmea · copqEur ·
-   lessonsLearned.whatWorked · gaps#1 · enrichment.derivedFacts#2
+   lessonsLearned.whatWorked · responsibility.reportedBy · gaps#1 · enrichment.derivedFacts#2
 
    #N must not exceed the number of entries actually present. Citing fiveWhy#7
    on a case with three steps is a fabrication and is rejected. Prefer the most

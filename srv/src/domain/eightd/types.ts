@@ -158,6 +158,13 @@ export interface CaseContext {
         applicable: boolean;
     };
 
+    /** Người báo cáo, điều phối và phòng ban liên quan (Section 4 Responsibility). */
+    responsibility: {
+        reportedBy: string | null;
+        coordinator: string | null;
+        department: string | null;
+    };
+
     /**
      * Những gì mapper không nhận ra. Bước AI parseData đọc phần này để bắt các
      * trường mà export SAP thật có nhưng Golden Dataset chưa có.

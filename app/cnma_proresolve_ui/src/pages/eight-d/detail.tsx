@@ -265,7 +265,7 @@ export function EightDDetailPage() {
 
                                             {selected.code === 'D6' && <ActionChecklist actions={caseActions} />}
 
-                                            {selected.formSchemaJson && selected.resultJson
+                                            {(selected.formSchemaJson || stepPrompts.byCode[selected.code]?.formSchemaJson) && selected.resultJson
                                                 ? <SchemaDisciplineCard discipline={selected} caseContext={report.caseContext} liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null} siblings={disciplines} />
                                                 : <DisciplineCard discipline={selected} caseContext={report.caseContext} />}
                                         </div>
