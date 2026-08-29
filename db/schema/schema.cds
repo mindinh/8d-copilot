@@ -24,6 +24,9 @@ using from './case-library';
 // ── Cấu hình chấm điểm tương đồng + prompt từng bước D ───────────────────────
 using from './retrieval-config';
 
+// ── Lịch sử kiểm tra lô & Sổ FMEA ──────────────────────────────────────────
+using from './inspection-lots';
+
 // ── Application Entities ──────────────────────────────────────────────────────
 entity SampleEntity : cuid, managed {
     name        : String(255);

@@ -22,6 +22,7 @@ import {
 } from './types';
 import { buildSourceVocabulary, checkSources } from './sourceVocabulary';
 import type { IndependentFinding } from './independentAnalysis';
+import { computeIsIsNot } from './isIsNot';
 
 function placeholder(code: DisciplineCode, index: number): DisciplineDraft {
     return {
@@ -278,6 +279,112 @@ function backfillRootCause(
     if (usedFinding && !d.sources.includes('independent')) d.sources.push('independent');
 }
 
+function backfillD1Suggestion(
+    d: DisciplineDraft,
+    context: CaseContext,
+    precedents: unknown,
+    repairs: string[],
+): void {
+    const data = (d.data ??= {});
+    const team: Record<string, unknown> =
+        data.team && typeof data.team === 'object' && !Array.isArray(data.team)
+            ? data.team as Record<string, unknown>
+            : {};
+
+    const hasCurrentTeam = Boolean(context.team.leader) || context.team.members.length > 0;
+    const hasPrecedentTeam = Array.isArray(precedents)
+        && precedents.some((item: any) => Array.isArray(item?.team) && item.team.length > 0);
+
+    const roster = Array.isArray(team.roster) ? team.roster : [];
+    const isUnassignedOnly = roster.length > 0 && roster.every((r: any) => r?.sourceType === 'unassigned' || r?.name === 'Unassigned');
+
+    if (!hasCurrentTeam && !hasPrecedentTeam) {
+        data.team = team;
+        team.selectionMethod = 'Roles only - assignment required';
+        team.suggestionStatus = 'No team suggestion available; assign manually.';
+        repairs.push('D1: không có dữ liệu đội ngũ khả dụng; hiển thị trạng thái gợi ý phân công thủ công.');
+    } else if (isUnassignedOnly) {
+        data.team = team;
+        team.selectionMethod = 'Roles only - assignment required';
+        team.suggestionStatus = 'No team suggestion available; assign manually.';
+        repairs.push('D1: không có dữ liệu đội ngũ khả dụng; hiển thị trạng thái gợi ý phân công thủ công.');
+    } else if (team.suggestionStatus) {
+        delete team.suggestionStatus;
+    }
+}
+
+function backfillD2IsIsNot(
+    d: DisciplineDraft,
+    context: CaseContext,
+    repairs: string[],
+): void {
+    const data = (d.data ??= {});
+    const problem: Record<string, unknown> =
+        data.problem && typeof data.problem === 'object' && !Array.isArray(data.problem)
+            ? data.problem as Record<string, unknown>
+            : {};
+    data.problem = problem;
+
+    // Entry mode / How box
+    if (!String(problem.how ?? '').trim()) {
+        if (context.header.entryMode === 'during-inspection' && context.header.inspectionLotId) {
+            problem.how = `Detected during in-process inspection (Lot: ${context.header.inspectionLotId})`;
+            repairs.push('D2: điền problem.how từ inspection lot đã ghi.');
+        } else if (context.header.entryMode === 'outside-inspection') {
+            problem.how = 'Detected outside standard inspection';
+            repairs.push('D2: điền problem.how theo ghi nhận ngoài quy trình kiểm tra.');
+        }
+    }
+
+    const primaryChar = context.inspections.find((i) => i.outOfSpec)?.characteristic || context.inspections[0]?.characteristic;
+
+    // Nếu có historicalInspectionLots -> tính theo R2.2.3
+    if (context.historicalInspectionLots && context.historicalInspectionLots.length > 0) {
+        const computed = computeIsIsNot(context.historicalInspectionLots, primaryChar);
+        if (computed.applicable) {
+            problem.is = computed.is;
+            problem.isNot = computed.isNot;
+            if (!String(problem.isIsNotBasis ?? '').trim() && computed.isIsNotBasis) {
+                problem.isIsNotBasis = computed.isIsNotBasis;
+            }
+            delete problem.isIsNotStatus;
+            if (!d.sources.includes('historicalInspectionLots')) {
+                d.sources.push('historicalInspectionLots');
+            }
+            if (Array.isArray(problem.sources) && !problem.sources.includes('historicalInspectionLots')) {
+                problem.sources.push('historicalInspectionLots');
+            }
+            repairs.push('D2: tính Is / Is-Not từ dữ liệu lô kiểm tra lịch sử (historicalInspectionLots).');
+        } else {
+            problem.is = [];
+            problem.isNot = [];
+            problem.isIsNotStatus = computed.reason;
+            problem.isIsNotBasis = '';
+            repairs.push(`D2: không đủ điều kiện so sánh Is / Is-Not (${computed.reason}).`);
+        }
+    } else if (context.isIsNot && (context.isIsNot.is || context.isIsNot.isNot)) {
+        // Fallback vào isIsNot có sẵn trong context
+        if (!Array.isArray(problem.is) || problem.is.length === 0) {
+            problem.is = context.isIsNot.is ? [context.isIsNot.is] : [];
+        }
+        if (!Array.isArray(problem.isNot) || problem.isNot.length === 0) {
+            problem.isNot = context.isIsNot.isNot ? [context.isIsNot.isNot] : [];
+        }
+        if (!String(problem.isIsNotBasis ?? '').trim() && context.isIsNot.notes) {
+            problem.isIsNotBasis = context.isIsNot.notes;
+        }
+        delete problem.isIsNotStatus;
+    } else {
+        // Hoàn toàn không có dữ liệu so sánh
+        problem.is = [];
+        problem.isNot = [];
+        problem.isIsNotStatus = primaryChar
+            ? 'Cannot compare — there is no measurement history for this part.'
+            : 'Not applicable — this defect has no measurable characteristic.';
+        problem.isIsNotBasis = '';
+    }
+}
+
 export function postProcess(
     result: EightDResult,
     context: CaseContext,
@@ -397,6 +504,12 @@ export function postProcess(
         return d;
     });
 
+    const d1 = disciplines.find((discipline) => discipline.code === 'D1');
+    if (d1) backfillD1Suggestion(d1, context, precedents, repairs);
+
+    const d2 = disciplines.find((discipline) => discipline.code === 'D2');
+    if (d2) backfillD2IsIsNot(d2, context, repairs);
+
     // D4 phải ra ĐỦ (statement, 5-Why có answer, bảng Ishikawa sáu nhánh, cờ
     // root cause) trên mọi lượt chạy — kể cả khi model bỏ sót, kể cả khi cả
     // discipline bị thay bằng placeholder. Dữ liệu đã ghi và chẩn đoán độc lập
@@ -422,7 +535,6 @@ export function postProcess(
     }
 
     const configuredConstraints: Partial<Record<DisciplineCode, string>> = typeof constraintsJson === 'string' ? { D1: constraintsJson } : (constraintsJson ?? {});
-    const d1 = disciplines.find((discipline) => discipline.code === 'D1');
     if (d1 && configuredConstraints.D1) {
         const hasCurrentTeam = Boolean(context.team.leader) || context.team.members.length > 0;
         const hasPrecedentTeam = Array.isArray(precedents)

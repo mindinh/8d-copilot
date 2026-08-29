@@ -20,6 +20,7 @@ import {
     type ActionRow,
     type CaseContext,
     type FiveWhyRow,
+    type HistoricalInspectionLot,
     type InspectionRow,
     type IshikawaRow,
     type TeamRow,
@@ -315,12 +316,26 @@ export function extractDeepCase(raw: any): Row | null {
         completion_date: obj.completionDate ?? obj.completion_date,
         found_date: obj.foundDate ?? obj.found_date,
         quantity_extent: obj.quantityExtent ?? obj.quantity_extent,
+        entry_mode: obj.entryMode ?? obj.entry_mode,
+        inspection_lot_id: obj.inspectionLotId ?? obj.inspection_lot_id,
     };
 
     const inspections = getArray(obj.inspections).map((r) => stamp({
         characteristic: r.characteristic,
         measured_value: r.measuredValue ?? r.measured_value,
         spec_value: r.specValue ?? r.spec_value,
+        equipment: r.equipment ?? r.fixture,
+    }));
+
+    const histLots = getArray(obj.historicalInspectionLots ?? obj.historical_inspection_lots).map((r) => stamp({
+        lot_id: r.lotId ?? r.lot_id,
+        material_id: r.materialId ?? r.material_id,
+        characteristic: r.characteristic,
+        equipment: r.equipment,
+        measured_value: r.measuredValue ?? r.measured_value,
+        conforming: r.conforming,
+        lot_date: r.lotDate ?? r.lot_date,
+        plant: r.plant,
     }));
 
     const ishikawa = getArray(obj.causesIshikawa ?? obj.causes_ishikawa ?? obj.ishikawa).map((r) => stamp({
@@ -428,6 +443,7 @@ export function extractDeepCase(raw: any): Row | null {
         is_is_not: iinList,
         customer_reference: crefList,
         responsibility: respList,
+        historical_inspection_lots: histLots,
         spc_process_data: [],
     };
 }
@@ -461,7 +477,19 @@ export function mapCase(raw: any): CaseContext {
         characteristic: String(r.characteristic ?? ''),
         measuredValue: String(r.measured_value ?? ''),
         specValue: String(r.spec_value ?? ''),
+        equipment: text(r.equipment),
         outOfSpec: evaluateOutOfSpec(r.measured_value, r.spec_value),
+    }));
+
+    const historicalLots: HistoricalInspectionLot[] = rows(data, 'historical_inspection_lots').map((r) => ({
+        lotId: String(r.lot_id ?? ''),
+        materialId: String(r.material_id ?? ''),
+        characteristic: String(r.characteristic ?? ''),
+        equipment: text(r.equipment),
+        measuredValue: text(r.measured_value),
+        conforming: Boolean(r.conforming),
+        lotDate: normalizeDate(r.lot_date),
+        plant: text(r.plant),
     }));
     if (!inspections.length) gaps.push('No inspection results — D2 cannot be quantified from measurements.');
     if (inspections.length && inspections.every((i) => i.outOfSpec === null)) {
@@ -611,6 +639,8 @@ export function mapCase(raw: any): CaseContext {
             completionDate: normalizeDate(note.completion_date),
             quantityExtent: String(note.quantity_extent ?? ''),
             teamSize: typeof note.team_size === 'number' ? note.team_size : null,
+            entryMode: text(note.entry_mode),
+            inspectionLotId: text(note.inspection_lot_id),
         },
         product: {
             materialId: id(note.material_id ?? material.material_id),
@@ -623,6 +653,7 @@ export function mapCase(raw: any): CaseContext {
             workCenterDesc: id(workCenter.description),
         },
         inspections,
+        historicalInspectionLots: historicalLots.length > 0 ? historicalLots : undefined,
         isIsNot,
         rootCause: rootRow
             ? {

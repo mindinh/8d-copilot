@@ -50,6 +50,7 @@ export interface InspectionRow {
     characteristic: string;
     measuredValue: string;
     specValue: string;
+    equipment?: string | null;
     /**
      * Có vượt spec không, suy ra bằng code từ hai chuỗi trên.
      *
@@ -58,6 +59,17 @@ export interface InspectionRow {
      * chứng cho D2 và D4.
      */
     outOfSpec: boolean | null;
+}
+
+export interface HistoricalInspectionLot {
+    lotId: string;
+    materialId: string;
+    characteristic: string;
+    equipment?: string | null;
+    measuredValue?: string | null;
+    conforming: boolean;
+    lotDate?: string | null;
+    plant?: string | null;
 }
 
 export interface IshikawaRow {
@@ -94,6 +106,8 @@ export interface CaseContext {
         completionDate: string | null;
         quantityExtent: string;
         teamSize: number | null;
+        entryMode?: string | null;
+        inspectionLotId?: string | null;
     };
 
     product: {
@@ -116,6 +130,9 @@ export interface CaseContext {
     };
 
     inspections: InspectionRow[];
+
+    /** Lịch sử kiểm tra theo lô — nguồn dân số để phân tích Is / Is-Not. */
+    historicalInspectionLots?: HistoricalInspectionLot[];
 
     isIsNot: { is: string; isNot: string; notes: string | null } | null;
 
@@ -142,7 +159,7 @@ export interface CaseContext {
         members: TeamRow[];
     };
 
-    fmea: { fmeaId: string; description: string } | null;
+    fmea: { fmeaId: string; description: string; workCenterId?: string | null; materialId?: string | null } | null;
     copqEur: number | null;
     lessonsLearned: { whatWorked: string; whatDidnt: string } | null;
 

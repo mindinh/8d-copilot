@@ -84,10 +84,12 @@ describe('widget đặc trưng của D2/D3/D4 phải đúng loại', () => {
     const byStepKey = new Map(widgetsInDefaults().map((u) => [`${u.step}:${u.key}`, u.widget]));
 
     it.each([
+        ['D1:team.suggestionStatus', 'callout'],
         ['D2:problem.what', 'w2h-cell'],
         ['D2:problem.extent', 'w2h-cell'],
         ['D2:problem.is', 'is-box'],
         ['D2:problem.isNot', 'isnot-box'],
+        ['D2:problem.isIsNotStatus', 'callout'],
         // `table` làm mọi dòng như nhau, đúng thứ hai bước này KHÔNG được phép.
         ['D3:containment.actions', 'action-cards'],
         ['D4:rootCause.fiveWhy', 'why-chain'],

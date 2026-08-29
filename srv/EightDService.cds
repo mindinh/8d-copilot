@@ -33,6 +33,12 @@ service EightDService {
     @readonly
     entity Disciplines as projection on ns.Disciplines;
 
+    @readonly
+    entity InspectionLots as projection on ns.InspectionLots;
+
+    @readonly
+    entity FmeaRegister as projection on ns.FmeaRegister;
+
     /**
      * Bằng chứng hoàn thành task (PDF evidence).
      *

@@ -101,8 +101,11 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
     const [defectCode, setDefectCode] = useState('');
     const [defectText, setDefectText] = useState('');
 
+    const [entryMode, setEntryMode] = useState<'during-inspection' | 'outside-inspection'>('during-inspection');
+    const [inspectionLotId, setInspectionLotId] = useState('');
+
     const [inspections, setInspections] = useState([
-        { characteristic: '', measuredValue: '', specValue: '' },
+        { characteristic: '', measuredValue: '', specValue: '', equipment: '' },
     ]);
 
     const [reportedBy, setReportedBy] = useState('');
@@ -144,13 +147,13 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
     const addInspection = () => {
         setInspections([
             ...inspections,
-            { characteristic: '', measuredValue: '', specValue: '' },
+            { characteristic: '', measuredValue: '', specValue: '', equipment: '' },
         ]);
     };
 
     const updateInspection = (
         index: number,
-        field: 'characteristic' | 'measuredValue' | 'specValue',
+        field: 'characteristic' | 'measuredValue' | 'specValue' | 'equipment',
         value: string,
     ) => {
         const updated = [...inspections];
@@ -237,13 +240,22 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
             const nextDefectText = defect.defect_text || defect.defectText || parsed.defectText;
             if (nextDefectText) setDefectText(String(nextDefectText).trim());
 
+            const nextEntryMode = note.entry_mode || note.entryMode || parsed.entryMode;
+            if (nextEntryMode) {
+                setEntryMode(String(nextEntryMode).includes('outside') ? 'outside-inspection' : 'during-inspection');
+            }
+
+            const nextLotId = note.inspection_lot_id || note.inspectionLotId || parsed.inspectionLotId;
+            if (nextLotId) setInspectionLotId(String(nextLotId).trim());
+
             // Inspections
             if (rawInspections.length > 0) {
                 const mappedInspections = rawInspections.map((ins: any) => ({
                     characteristic: String(ins.characteristic ?? '').trim(),
                     measuredValue: String(ins.measured_value ?? ins.measuredValue ?? '').trim(),
                     specValue: String(ins.spec_value ?? ins.specValue ?? '').trim(),
-                })).filter((i: any) => i.characteristic || i.measuredValue || i.specValue);
+                    equipment: String(ins.equipment ?? ins.fixture ?? ins.equipment_id ?? '').trim(),
+                })).filter((i: any) => i.characteristic || i.measuredValue || i.specValue || i.equipment);
 
                 if (mappedInspections.length > 0) {
                     setInspections(mappedInspections);
@@ -322,6 +334,8 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
             foundDate: foundDate || null,
             completionDate: null,
             quantityExtent: quantityExtent.trim() || null,
+            entryMode,
+            inspectionLotId: entryMode === 'during-inspection' ? (inspectionLotId.trim() || null) : null,
             teamSize: null,
             material: {
                 materialId: materialId.trim() || null,
@@ -346,6 +360,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                     characteristic: i.characteristic.trim(),
                     measuredValue: i.measuredValue.trim(),
                     specValue: i.specValue.trim(),
+                    equipment: i.equipment?.trim() || null,
                 })),
             responsibility: {
                 reportedBy: reportedBy.trim() || currentUserName || null,
@@ -375,6 +390,8 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
         status,
         foundDate,
         quantityExtent,
+        entryMode,
+        inspectionLotId,
         materialId,
         materialDesc,
         materialGroup,
@@ -724,6 +741,42 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 className="text-xs"
                             />
                         </div>
+
+                        {/* Discovery Mode / Entry Mode */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Discovery Mode</Label>
+                            <Select value={entryMode} onValueChange={(val: any) => setEntryMode(val)}>
+                                <SelectTrigger className="text-xs">
+                                    <SelectValue placeholder="Select mode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="during-inspection">Found during inspection (Path A)</SelectItem>
+                                    <SelectItem value="outside-inspection">Found outside inspection (Path B)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Inspection Lot ID */}
+                        {entryMode === 'during-inspection' ? (
+                            <div className="md:col-span-2 space-y-1.5">
+                                <Label className="text-xs font-semibold">Inspection Lot ID</Label>
+                                <Input
+                                    value={inspectionLotId}
+                                    onChange={(e) => setInspectionLotId(e.target.value)}
+                                    placeholder="e.g. 0100004921 (links to QM inspection history)"
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                        ) : (
+                            <div className="md:col-span-2 space-y-1.5">
+                                <Label className="text-xs font-semibold">Inspection Lot</Label>
+                                <Input
+                                    value="N/A (Found outside scheduled inspection)"
+                                    disabled
+                                    className="text-xs bg-muted/60 text-muted-foreground"
+                                />
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -846,15 +899,20 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                         {/* Inspection Measurements Table */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-semibold">
-                                    Inspection Characteristics & Measured Values (D2 Evidence)
-                                </Label>
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-semibold">
+                                        Inspection Characteristics & Measured Values (D2 Evidence)
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Tip: If this material has historical inspection lots across multiple equipments/fixtures, the system will automatically compute the Is / Is-Not comparison in D2.
+                                    </p>
+                                </div>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={addInspection}
-                                    className="h-7 text-xs gap-1"
+                                    className="h-7 text-xs gap-1 shrink-0"
                                 >
                                     <Plus className="w-3.5 h-3.5" /> Add Characteristic
                                 </Button>
@@ -866,19 +924,25 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                         <Input
                                             value={insp.characteristic}
                                             onChange={(e) => updateInspection(idx, 'characteristic', e.target.value)}
-                                            placeholder="e.g. Burr height at flange edge"
+                                            placeholder="Characteristic (e.g. Flange burr height)"
                                             className="flex-[2] text-xs"
                                         />
                                         <Input
                                             value={insp.measuredValue}
                                             onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
-                                            placeholder="e.g. 0.26mm"
+                                            placeholder="Measured (0.32 mm)"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         <Input
                                             value={insp.specValue}
                                             onChange={(e) => updateInspection(idx, 'specValue', e.target.value)}
-                                            placeholder="e.g. max 0.10mm"
+                                            placeholder="Spec (max 0.10 mm)"
+                                            className="flex-1 font-mono text-xs"
+                                        />
+                                        <Input
+                                            value={insp.equipment}
+                                            onChange={(e) => updateInspection(idx, 'equipment', e.target.value)}
+                                            placeholder="Equipment / Fixture (e.g. WC-MILL-07-F1)"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         {inspections.length > 1 && (
