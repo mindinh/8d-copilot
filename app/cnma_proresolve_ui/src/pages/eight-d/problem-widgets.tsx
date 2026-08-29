@@ -427,7 +427,7 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                         {isTone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                     </span>
                     <h4 className={cn(
-                        'text-[13px] font-semibold uppercase tracking-wider truncate',
+                        'text-[13px] font-semibold truncate',
                         isTone ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground/90',
                     )}>
                         {heading || (isTone ? 'Is' : 'Is Not')} — {isTone ? 'Affected Scope & Condition' : 'Excluded Scope & Condition'}
@@ -563,7 +563,7 @@ export function IsNotBasisWidget({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400">
                         <FileText className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-[13px] font-semibold uppercase tracking-wider text-foreground/90">
+                    <span className="text-[13px] font-semibold text-foreground/90">
                         Is / Is-Not Comparison Basis & Reasoning
                     </span>
                 </div>

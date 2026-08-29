@@ -1,0 +1,52 @@
+﻿{
+  "notificationId": "8D-2026-HAPPY-01",
+  "origin": "Q3 - Internal Defect",
+  "symptomShortText": "Operator in final test cell detected pneumatic pressure drop during helium leak tightness check on fuel regulator assembly",
+  "status": "In Process",
+  "foundDate": "2026-08-28",
+  "completionDate": null,
+  "quantityExtent": "145 units quarantined from batch B-88204",
+  "teamSize": null,
+  "material": {
+    "materialId": "MAT-88410",
+    "description": "High-Pressure Fuel Regulator Housing Valve",
+    "materialGroup": "MG-VALVES"
+  },
+  "batch": {
+    "batchId": "B-88204",
+    "materialId": "MAT-88410"
+  },
+  "defect": {
+    "defectCode": "DEF-0812",
+    "defectText": "Leak rate exceeding maximum helium tightness tolerance"
+  },
+  "workCenter": {
+    "workCenterId": "WC-TEST-03",
+    "description": "Automatic Leak Testing Cell #3"
+  },
+  "inspections": [
+    {
+      "characteristic": "Helium Leak Rate at 8.0 bar test pressure",
+      "measuredValue": "1.45 sccm",
+      "specValue": "max 0.20 sccm"
+    },
+    {
+      "characteristic": "O-ring sealing seat surface roughness (Ra)",
+      "measuredValue": "1.85 µm",
+      "specValue": "max 0.80 µm"
+    }
+  ],
+  "causesIshikawa": [],
+  "fiveWhyChain": [],
+  "actions": [],
+  "teamAssignments": [],
+  "isIsNot": null,
+  "fmeaLink": null,
+  "costCopq": null,
+  "lessonsLearned": null,
+  "customerReference": {
+    "complaintReference": "N/A - internal defect, no customer reference",
+    "customerPlantContact": "N/A",
+    "slaResponseDue": "N/A"
+  }
+}

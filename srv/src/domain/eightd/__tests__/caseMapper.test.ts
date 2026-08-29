@@ -202,4 +202,24 @@ describe('mapCase — phương án dự phòng và lỗi', () => {
             expect(e.code).toBe(400);
         }
     });
+
+    it('bóc đúng trường responsibility khi payload có section 4', () => {
+        const raw = {
+            notificationId: '8D-TEST-RESP-01',
+            origin: 'Q3 - Internal Defect',
+            symptomShortText: 'Test defect symptom',
+            status: 'In Process',
+            responsibility: {
+                reportedBy: 'Local Developer',
+                coordinator: 'Quality Admin',
+                department: 'QA Dept',
+            },
+        };
+        const ctx = mapCase(raw);
+        expect(ctx.responsibility).toEqual({
+            reportedBy: 'Local Developer',
+            coordinator: 'Quality Admin',
+            department: 'QA Dept',
+        });
+    });
 });

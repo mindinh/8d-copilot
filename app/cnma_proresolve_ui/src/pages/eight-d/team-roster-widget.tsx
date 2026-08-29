@@ -430,7 +430,7 @@ export function AiSuggestWidget({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-xs sm:text-[13px] font-bold tracking-tight text-foreground">
+                    <span className="text-[14px] font-bold tracking-tight text-foreground">
                         AI Suggested Team Composition
                     </span>
                 </div>
@@ -459,7 +459,7 @@ export function AiSuggestWidget({
             </div>
 
             {suggestedRoles.length > 0 && (
-                <p className="mb-2 mt-1 text-[13px] leading-relaxed">
+                <p className="mb-2 mt-1 text-[12.5px] leading-relaxed">
                     <span className="font-semibold text-foreground">Suggested roles:</span> {suggestedRoles.join(', ')}
                 </p>
             )}
@@ -527,7 +527,7 @@ export function DecisionTableWidget({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Users className="h-3.5 w-3.5" />
                     </span>
-                    <span className="min-w-0 break-words text-xs sm:text-[13px] font-bold tracking-tight text-foreground">
+                    <span className="min-w-0 break-words text-[14px] font-bold tracking-tight text-foreground">
                         Team Members
                     </span>
                 </div>
@@ -550,7 +550,7 @@ export function DecisionTableWidget({
                     <thead>
                         <tr>
                             {['', 'Partner', 'Partner Role', 'E-Mail Address', 'Telephone number', ''].map((label, index) => (
-                                <th key={index} className="border-b px-2.5 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                <th key={index} className="border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                     {label}
                                 </th>
                             ))}
@@ -559,7 +559,7 @@ export function DecisionTableWidget({
                     <tbody>
                         {ctx.rows.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-2.5 py-5 text-center text-[12.5px] text-muted-foreground">
+                                <td colSpan={6} className="px-2.5 py-5 text-center text-[13.5px] text-muted-foreground">
                                     No team members assigned yet.
                                 </td>
                             </tr>
@@ -580,7 +580,7 @@ export function DecisionTableWidget({
                                                 partnerId: value === UNASSIGNED ? '' : value,
                                             })}
                                         >
-                                            <SelectTrigger className={cn('h-8 max-w-[220px] text-[12.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}>
+                                            <SelectTrigger className={cn('h-8 max-w-[220px] text-[13.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}>
                                                 <SelectValue placeholder="— select partner —" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -603,7 +603,7 @@ export function DecisionTableWidget({
                                             value={row.partnerRole}
                                             onValueChange={(value) => ctx.patch(row.key, { partnerRole: value })}
                                         >
-                                            <SelectTrigger className={cn('h-8 max-w-[190px] text-[12.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className={cn('h-8 max-w-[190px] text-[13.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {PARTNER_ROLES.map((role) => (
                                                     <SelectItem key={role} value={role}>{role}</SelectItem>
@@ -611,10 +611,10 @@ export function DecisionTableWidget({
                                             </SelectContent>
                                         </Select>
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle text-[12.5px] text-muted-foreground">
+                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] text-muted-foreground">
                                         {partner?.email || '—'}
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle text-[12.5px] text-muted-foreground">
+                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] text-muted-foreground">
                                         {partner?.phone || '—'}
                                     </td>
                                     <td className="border-b px-2.5 py-2 text-right align-middle">
@@ -622,7 +622,7 @@ export function DecisionTableWidget({
                                             <button
                                                 type="button"
                                                 onClick={() => ctx.remove(row.key)}
-                                                className="rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+                                                className="rounded-md px-2.5 py-1.5 text-[13.5px] font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
                                             >
                                                 Remove
                                             </button>
