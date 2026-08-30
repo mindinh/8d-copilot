@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
     Workflow,
     ClipboardList,
+    Database,
     Menu,
     ChevronLeft,
     ChevronRight,
@@ -40,6 +41,7 @@ function useNavTree(): NavEntry[] {
     const { t } = useTranslation();
     return [
         { type: 'leaf', to: '/8d', icon: ClipboardList, label: '8D Reports' },
+        { type: 'leaf', to: '/master-data', icon: Database, label: 'Master Data' },
         { type: 'leaf', to: '/workflow', icon: Workflow, label: t('nav.workflow') },
     ];
 }

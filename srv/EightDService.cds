@@ -33,7 +33,9 @@ service EightDService {
     @readonly
     entity Disciplines as projection on ns.Disciplines;
 
-    @readonly
+    @restrict: [
+        { grant: ['READ', 'CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User', 'authenticated-user'] }
+    ]
     entity InspectionLots as projection on ns.InspectionLots;
 
     @readonly
@@ -86,7 +88,9 @@ service EightDService {
      * Ghi chỉ qua `seedCaseLibrary`: một dòng ghi tay sẽ không có `defectKeywords`
      * và `materialFamily` tính sẵn, nên nó lặng lẽ không bao giờ ăn điểm.
      */
-    @readonly
+    @restrict: [
+        { grant: ['READ', 'CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User', 'authenticated-user'] }
+    ]
     entity HistoricalCases as projection on ns.HistoricalCases;
 
     @readonly

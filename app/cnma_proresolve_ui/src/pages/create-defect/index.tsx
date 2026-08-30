@@ -323,49 +323,75 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
         }
     };
 
+function cleanInput(val?: string | null): string {
+    if (!val) return '';
+    let cleaned = val.trim();
+    // Bỏ placeholder dính vào do browser autofill/tab:
+    // VD: "Characteristic (e.g. Flange burr height)" -> "Flange burr height"
+    // VD: "Equipment / Fixture (e.g. WC-MILL-07-F1)" -> "WC-MILL-07-F1"
+    // VD: "Measured (0.32 mm)" -> "0.32 mm"
+    // VD: "Spec (max 0.10 mm)" -> "max 0.10 mm"
+    const egMatch = cleaned.match(/e\.g\.\s*([^)]+)/i);
+    if (
+        cleaned.startsWith('Characteristic')
+        || cleaned.startsWith('Equipment')
+        || cleaned.startsWith('Spec')
+        || cleaned.startsWith('Measured')
+    ) {
+        if (egMatch && egMatch[1]) {
+            cleaned = egMatch[1].trim();
+        }
+    }
+    // Bỏ "(links to QM inspection history)" hoặc "(links to ...)"
+    cleaned = cleaned.replace(/\(links to [^)]+\)/gi, '').trim();
+    // Bỏ tiền tố "e.g. " nếu bị dính
+    cleaned = cleaned.replace(/^e\.g\.\s*/i, '').trim();
+    return cleaned;
+}
+
     // Dynamic JSON payload construction
     const builtPayloadObject = useMemo(() => {
         const isQ1 = origin.startsWith('Q1');
         return {
-            notificationId: notificationId.trim() || '8D-DEMO-001',
+            notificationId: cleanInput(notificationId) || '8D-DEMO-001',
             origin,
-            symptomShortText: symptomShortText.trim(),
+            symptomShortText: cleanInput(symptomShortText),
             status,
             foundDate: foundDate || null,
             completionDate: null,
-            quantityExtent: quantityExtent.trim() || null,
+            quantityExtent: cleanInput(quantityExtent) || null,
             entryMode,
-            inspectionLotId: entryMode === 'during-inspection' ? (inspectionLotId.trim() || null) : null,
+            inspectionLotId: entryMode === 'during-inspection' ? (cleanInput(inspectionLotId) || null) : null,
             teamSize: null,
             material: {
-                materialId: materialId.trim() || null,
-                description: materialDesc.trim() || null,
-                materialGroup: materialGroup.trim() || null,
+                materialId: cleanInput(materialId) || null,
+                description: cleanInput(materialDesc) || null,
+                materialGroup: cleanInput(materialGroup) || null,
             },
             batch: {
-                batchId: batchId.trim() || null,
-                materialId: materialId.trim() || null,
+                batchId: cleanInput(batchId) || null,
+                materialId: cleanInput(materialId) || null,
             },
             defect: {
-                defectCode: defectCode.trim() || null,
-                defectText: defectText.trim() || null,
+                defectCode: cleanInput(defectCode) || null,
+                defectText: cleanInput(defectText) || null,
             },
             workCenter: {
-                workCenterId: workCenterId.trim() || null,
-                description: workCenterDesc.trim() || null,
+                workCenterId: cleanInput(workCenterId) || null,
+                description: cleanInput(workCenterDesc) || null,
             },
             inspections: inspections
-                .filter((i) => i.characteristic.trim())
+                .filter((i) => cleanInput(i.characteristic))
                 .map((i) => ({
-                    characteristic: i.characteristic.trim(),
-                    measuredValue: i.measuredValue.trim(),
-                    specValue: i.specValue.trim(),
-                    equipment: i.equipment?.trim() || null,
+                    characteristic: cleanInput(i.characteristic),
+                    measuredValue: cleanInput(i.measuredValue),
+                    specValue: cleanInput(i.specValue),
+                    equipment: cleanInput(i.equipment) || null,
                 })),
             responsibility: {
-                reportedBy: reportedBy.trim() || currentUserName || null,
-                coordinator: coordinator.trim() || null,
-                department: department.trim() || null,
+                reportedBy: cleanInput(reportedBy) || currentUserName || null,
+                coordinator: cleanInput(coordinator) || null,
+                department: cleanInput(department) || null,
             },
             causesIshikawa: [],
             fiveWhyChain: [],
@@ -763,7 +789,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                                 <Input
                                     value={inspectionLotId}
                                     onChange={(e) => setInspectionLotId(e.target.value)}
-                                    placeholder="e.g. 0100004921 (links to QM inspection history)"
+                                    placeholder="e.g. INS-80411"
                                     className="font-mono text-xs"
                                 />
                             </div>
@@ -919,30 +945,39 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated }: CreateDefe
                             </div>
 
                             <div className="space-y-2">
+                                {/* Column Headers */}
+                                <div className="flex items-center gap-2 px-1 text-[11.5px] font-semibold text-muted-foreground">
+                                    <div className="flex-[2]">Characteristic Name</div>
+                                    <div className="flex-1">Measured Value</div>
+                                    <div className="flex-1">Spec Limit</div>
+                                    <div className="flex-1">Equipment / Fixture</div>
+                                    {inspections.length > 1 && <div className="w-8 shrink-0" />}
+                                </div>
+
                                 {inspections.map((insp, idx) => (
                                     <div key={idx} className="flex items-center gap-2">
                                         <Input
                                             value={insp.characteristic}
                                             onChange={(e) => updateInspection(idx, 'characteristic', e.target.value)}
-                                            placeholder="Characteristic (e.g. Flange burr height)"
+                                            placeholder="e.g. Flange burr height"
                                             className="flex-[2] text-xs"
                                         />
                                         <Input
                                             value={insp.measuredValue}
                                             onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
-                                            placeholder="Measured (0.32 mm)"
+                                            placeholder="e.g. 0.32 mm"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         <Input
                                             value={insp.specValue}
                                             onChange={(e) => updateInspection(idx, 'specValue', e.target.value)}
-                                            placeholder="Spec (max 0.10 mm)"
+                                            placeholder="e.g. max 0.10 mm"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         <Input
                                             value={insp.equipment}
                                             onChange={(e) => updateInspection(idx, 'equipment', e.target.value)}
-                                            placeholder="Equipment / Fixture (e.g. WC-MILL-07-F1)"
+                                            placeholder="e.g. WC-MILL-07-F1"
                                             className="flex-1 font-mono text-xs"
                                         />
                                         {inspections.length > 1 && (

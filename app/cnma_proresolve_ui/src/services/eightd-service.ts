@@ -271,6 +271,9 @@ export interface Report8D {
     errorMessage: string | null;
 
     createdAt?: string;
+    createdBy?: string;
+    modifiedAt?: string;
+    modifiedBy?: string;
     disciplines?: Discipline8D[];
 }
 
@@ -278,6 +281,7 @@ export interface Report8D {
 const LIST_COLUMNS = [
     'ID', 'notificationId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
     'workCenterId', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
+    'createdBy', 'modifiedAt', 'modifiedBy',
     'tokensUsed', 'durationMs', 'errorMessage',
     'aiModelParse', 'aiModelAnalyze',
     // Cột chẩn đoán độc lập — nhẹ, và là thứ đáng nhìn nhất ở trang danh sách.

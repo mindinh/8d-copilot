@@ -325,8 +325,14 @@ export function FieldBlock({
     );
 }
 
-function isExcludedField(code: string, key: string, label?: string): boolean {
+function isExcludedField(code: string, key: string, label?: string, value?: unknown): boolean {
     const l = (label || '').toLowerCase();
+    if (code === 'D2' && (key === 'problem.isIsNotStatus' || key === 'isIsNotStatus')) {
+        if (!value || value === 'Not provided' || !String(value).trim()) return true;
+    }
+    if (code === 'D1' && (key === 'team.suggestionStatus' || key === 'suggestionStatus')) {
+        if (!value || value === 'Not provided' || !String(value).trim()) return true;
+    }
     if (code === 'D3' && (key === 'containment.gaps' || key === 'sources')) return true;
     if (code === 'D4' && (key === 'rootCause.evidenceGaps' || key === 'sources')) return true;
     if (code === 'D5') {
@@ -514,7 +520,7 @@ export function SchemaDisciplineCard({ discipline, caseContext, precedentsJson, 
                                 <div key={group.id} className="grid min-w-0 grid-flow-dense grid-cols-12 gap-4">
                                     {group.fieldKeys.map((key) => {
                                         const field = fieldMap.get(key);
-                                        if (!field || field.visible === false || isExcludedField(discipline.code, key, field.label)) return null;
+                                        if (!field || field.visible === false || isExcludedField(discipline.code, key, field.label, getPath(data, key))) return null;
 
                                         if (discipline.code === 'D2' && W2H_SET.has(key)) {
                                             if (renderedComposite.has('5W2H')) return null;

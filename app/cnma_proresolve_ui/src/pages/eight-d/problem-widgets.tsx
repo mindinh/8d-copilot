@@ -6,6 +6,7 @@ import {
     FileText,
     Hash,
     HelpCircle,
+    Layers,
     MapPin,
     Sparkles,
     TriangleAlert,
@@ -637,9 +638,74 @@ export function IsNotBasisWidget({
                 </div>
             ) : (
                 <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-foreground/90 font-normal">
-                    {current ? (
-                        <Markdown className="text-[12px]">{current}</Markdown>
-                    ) : (
+                    {current ? (() => {
+                        const parsed = parseStructuredBasis(current);
+                        if (parsed.characteristics.length === 0 && !parsed.conclusion) {
+                            return (
+                                <div className="rounded-lg bg-purple-500/[0.04] dark:bg-purple-500/[0.08] border border-purple-500/20 p-2.5">
+                                    <Markdown className="text-[12.5px] leading-relaxed">{current}</Markdown>
+                                </div>
+                            );
+                        }
+                        return (
+                            <div className="space-y-3 pt-0.5">
+                                {/* 1. By Characteristic Cards */}
+                                {parsed.characteristics.length > 0 && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                            <span>Phân tích đối chiếu theo đặc tính đo</span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {parsed.characteristics.map((c, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={cn(
+                                                        'rounded-lg border p-2.5 text-xs transition-all',
+                                                        c.isPrimary
+                                                            ? 'bg-purple-500/[0.04] dark:bg-purple-500/[0.08] border-purple-500/30'
+                                                            : 'bg-muted/40 dark:bg-muted/20 border-border/70'
+                                                    )}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-border/40">
+                                                        <div className="flex items-center gap-1.5 font-semibold text-foreground text-[12px]">
+                                                            <span className={cn('h-2 w-2 rounded-full', c.isPrimary ? 'bg-purple-600' : 'bg-amber-500')} />
+                                                            <span>{c.name}</span>
+                                                        </div>
+                                                        <span className={cn(
+                                                            'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                                                            c.isPrimary
+                                                                ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300'
+                                                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                                        )}>
+                                                            {c.badge}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-foreground/90 leading-relaxed text-[12px]">
+                                                        <Markdown className="text-[12px]">{c.details}</Markdown>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 2. Synthesis & Conclusion Card */}
+                                {parsed.conclusion && (
+                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.08] p-2.5 text-xs">
+                                        <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 mb-1 pb-1 border-b border-emerald-500/20 text-[11.5px]">
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Kết luận chung & Định hướng nguyên nhân gốc (Synthesis & Conclusion)</span>
+                                        </div>
+                                        <div className="text-foreground/90 leading-relaxed text-[12px]">
+                                            <Markdown className="text-[12px]">{parsed.conclusion}</Markdown>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })() : (
                         <p className="italic text-muted-foreground font-normal">
                             No Is / Is-Not comparison recorded in the case. Problem boundary is undefined; no comparable acceptable condition has been documented.
                         </p>
@@ -648,6 +714,123 @@ export function IsNotBasisWidget({
             )}
         </div>
     );
+}
+
+interface CharacteristicBasisItem {
+    name: string;
+    badge?: string;
+    details: string;
+    isPrimary?: boolean;
+}
+
+interface StructuredBasisResult {
+    characteristics: CharacteristicBasisItem[];
+    conclusion?: string;
+}
+
+function parseStructuredBasis(rawText: string): StructuredBasisResult {
+    const text = rawText.trim();
+    if (!text) return { characteristics: [] };
+
+    // 1. If text has explicit markdown sections (### or ##)
+    if (text.includes('###') || text.includes('##')) {
+        const sections = text.split(/(?=###?\s+)/);
+        const characteristics: CharacteristicBasisItem[] = [];
+        let conclusion = '';
+
+        for (const sec of sections) {
+            const lines = sec.trim().split('\n');
+            const header = lines[0].replace(/^###?\s+/, '').trim();
+            const body = lines.slice(1).join('\n').trim();
+
+            if (/conclusion|synthesis|kết luận|tổng hợp|lead/i.test(header)) {
+                conclusion = body || header;
+            } else {
+                const isPrimary = /primary|chính/i.test(header) || characteristics.length === 0;
+                characteristics.push({
+                    name: header.replace(/\(.*?\)/g, '').trim(),
+                    badge: isPrimary ? 'Primary Is/Is-Not Lead' : 'Secondary Observation (F6)',
+                    details: body || header,
+                    isPrimary,
+                });
+            }
+        }
+        if (characteristics.length > 0) {
+            return { characteristics, conclusion };
+        }
+    }
+
+    // 2. Split paragraph into sentences/clauses
+    // Note: Don't split inside decimal numbers (0.32, 12.84, etc.)
+    const sentences = text
+        .split(/(?<=[.!?])\s+(?=[A-Z0-9])|;\s+(?=[A-Z0-9])/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    const charMap = new Map<string, string[]>();
+    const conclusionParts: string[] = [];
+
+    for (const sent of sentences) {
+        const lower = sent.toLowerCase();
+        const isConclusion =
+            /both groups|sole variable|only variable|is the only variable|is the lead|difference between them|baseline consistency|kết luận|cô lập/i.test(lower);
+
+        if (isConclusion) {
+            conclusionParts.push(sent);
+        } else if (/flange\s*burr|burr/i.test(lower)) {
+            const list = charMap.get('Flange Burr Height') || [];
+            list.push(sent);
+            charMap.set('Flange Burr Height', list);
+        } else if (/pocket\s*depth|pocket/i.test(lower)) {
+            const list = charMap.get('Pocket Depth') || [];
+            list.push(sent);
+            charMap.set('Pocket Depth', list);
+        } else {
+            // Check if sentence specifies a characteristic name at start (e.g. "Dimension A: ...")
+            const matchColon = sent.match(/^([A-Za-z0-9\s-_]+?)\s*(?:comparison|analysis|inspection)?\s*:\s*(.+)$/i);
+            if (matchColon) {
+                const title = matchColon[1].trim();
+                const list = charMap.get(title) || [];
+                list.push(sent);
+                charMap.set(title, list);
+            } else {
+                if (charMap.size > 0) {
+                    const firstKey = Array.from(charMap.keys())[0];
+                    charMap.get(firstKey)!.push(sent);
+                } else {
+                    conclusionParts.push(sent);
+                }
+            }
+        }
+    }
+
+    const characteristics: CharacteristicBasisItem[] = [];
+    let isFirst = true;
+    for (const [name, items] of charMap.entries()) {
+        characteristics.push({
+            name,
+            badge: isFirst ? 'Primary Is/Is-Not Lead' : 'Secondary Out-of-Spec (F6 Warning)',
+            details: items.join(' '),
+            isPrimary: isFirst,
+        });
+        isFirst = false;
+    }
+
+    if (characteristics.length === 0 && conclusionParts.length > 0) {
+        return {
+            characteristics: [{
+                name: 'Inspection Data Analysis',
+                badge: 'Primary Lead',
+                details: conclusionParts.join(' '),
+                isPrimary: true,
+            }],
+        };
+    }
+
+    return {
+        characteristics,
+        conclusion: conclusionParts.join(' '),
+    };
 }
 
 function getPath(root: unknown, path: string): unknown {

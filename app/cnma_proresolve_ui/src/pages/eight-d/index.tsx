@@ -152,7 +152,54 @@ const REPORT_COLUMNS: DataTableColumn<Report8D>[] = [
         renderType: 'custom',
         render: (_v, row) => <CompletenessCell report={row} />,
     },
+    {
+        key: 'createdBy',
+        labelKey: 'Created By',
+        width: 160,
+        minWidth: 140,
+        renderType: 'custom',
+        render: (_v, row) => (
+            <div className="min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">
+                    {row.createdBy || 'System'}
+                </div>
+                <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                    {formatDateTime(row.createdAt)}
+                </div>
+            </div>
+        ),
+    },
+    {
+        key: 'modifiedBy',
+        labelKey: 'Last Updated By',
+        width: 160,
+        minWidth: 140,
+        renderType: 'custom',
+        render: (_v, row) => (
+            <div className="min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">
+                    {row.modifiedBy || row.createdBy || 'System'}
+                </div>
+                <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                    {formatDateTime(row.modifiedAt || row.createdAt)}
+                </div>
+            </div>
+        ),
+    },
 ];
+
+function formatDateTime(value?: string | null): string {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
 
 function RunningSpinner() {
     return (

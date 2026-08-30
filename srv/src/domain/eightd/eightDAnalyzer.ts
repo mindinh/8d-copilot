@@ -950,56 +950,57 @@ async function enrichFromDatabase(context: CaseContext): Promise<void> {
 
         // 1. Fallback truy vấn lịch sử kiểm tra lô (InspectionLots) cho Is / Is-Not
         if (!context.historicalInspectionLots || context.historicalInspectionLots.length === 0) {
-            const materialId = context.product.materialId;
-            const primaryChar = context.inspections.find((i) => i.outOfSpec)?.characteristic
-                || context.inspections[0]?.characteristic;
-            if (materialId && primaryChar) {
-                const { InspectionLots } = (cds.entities as any)('cnma.proresolve') ?? {};
-                if (InspectionLots) {
-                    const rows = await cds.run(
-                        SELECT.from(InspectionLots)
-                            .where({ materialId, characteristic: primaryChar })
-                            .orderBy('lotDate desc'),
-                    );
-                    if (Array.isArray(rows) && rows.length > 0) {
-                        context.historicalInspectionLots = rows.map((r: any) => ({
-                            lotId: String(r.lotId ?? ''),
-                            materialId: String(r.materialId ?? ''),
-                            characteristic: String(r.characteristic ?? ''),
-                            equipment: r.equipment ? String(r.equipment) : null,
-                            measuredValue: r.measuredValue ? String(r.measuredValue) : null,
-                            conforming: Boolean(r.conforming),
-                            lotDate: r.lotDate ? String(r.lotDate) : null,
-                            plant: r.plant ? String(r.plant) : null,
-                        }));
-                        LOG.info(`[InspectionLots] Đã tải ${rows.length} lô kiểm tra lịch sử cho vật tư ${materialId}, đặc tính "${primaryChar}".`);
-                    }
+            const materialId = context.product.materialId?.trim();
+            if (materialId) {
+                const rows = await cds.run(
+                    SELECT.from('cnma.proresolve.InspectionLots')
+                        .where`lower(materialId) = ${materialId.toLowerCase()}`
+                        .orderBy('lotDate desc'),
+                ).catch((err: any) => {
+                    LOG.warn(`[InspectionLots query] Không thể truy vấn bảng: ${err.message}`);
+                    return [];
+                });
+
+                if (Array.isArray(rows) && rows.length > 0) {
+                    context.historicalInspectionLots = rows.map((r: any) => ({
+                        lotId: String(r.lotId ?? ''),
+                        materialId: String(r.materialId ?? ''),
+                        characteristic: String(r.characteristic ?? ''),
+                        equipment: r.equipment ? String(r.equipment) : null,
+                        measuredValue: r.measuredValue ? String(r.measuredValue) : null,
+                        conforming: Boolean(r.conforming),
+                        lotDate: r.lotDate ? String(r.lotDate) : null,
+                        plant: r.plant ? String(r.plant) : null,
+                    }));
+                    LOG.info(`[InspectionLots] Đã tải ${rows.length} lô kiểm tra lịch sử cho vật tư ${materialId}.`);
                 }
             }
         }
 
         // 2. Fallback truy vấn sổ đăng ký FMEA (FmeaRegister) cho D7
         if (!context.fmea && (context.product.workCenterId || context.product.materialId)) {
-            const { FmeaRegister } = (cds.entities as any)('cnma.proresolve') ?? {};
-            if (FmeaRegister) {
-                const query = SELECT.one.from(FmeaRegister);
-                if (context.product.workCenterId && context.product.materialId) {
-                    query.where`workCenterId = ${context.product.workCenterId} or materialId = ${context.product.materialId}`;
-                } else if (context.product.workCenterId) {
-                    query.where`workCenterId = ${context.product.workCenterId}`;
-                } else if (context.product.materialId) {
-                    query.where`materialId = ${context.product.materialId}`;
-                }
-                const row = await cds.run(query);
-                if (row) {
-                    context.fmea = {
-                        fmeaId: String(row.fmeaId ?? ''),
-                        description: String(row.description ?? ''),
-                        workCenterId: row.workCenterId ? String(row.workCenterId) : null,
-                        materialId: row.materialId ? String(row.materialId) : null,
-                    };
-                    LOG.info(`[FmeaRegister] Đã gán FMEA ${context.fmea.fmeaId} cho phân xưởng ${context.product.workCenterId}.`);
-                }
+            const query = SELECT.one.from('cnma.proresolve.FmeaRegister');
+            const wcId = context.product.workCenterId?.trim();
+            const matId = context.product.materialId?.trim();
+            if (wcId && matId) {
+                query.where`workCenterId = ${wcId} or materialId = ${matId}`;
+            } else if (wcId) {
+                query.where`workCenterId = ${wcId}`;
+            } else if (matId) {
+                query.where`materialId = ${matId}`;
+            }
+            const row = await cds.run(query).catch((err: any) => {
+                LOG.warn(`[FmeaRegister query] Không thể truy vấn bảng: ${err.message}`);
+                return null;
+            });
+            if (row) {
+                context.fmea = {
+                    fmeaId: String(row.fmeaId ?? ''),
+                    description: String(row.description ?? ''),
+                    workCenterId: row.workCenterId ? String(row.workCenterId) : null,
+                    materialId: row.materialId ? String(row.materialId) : null,
+                };
+                LOG.info(`[FmeaRegister] Đã gán FMEA ${context.fmea.fmeaId} cho phân xưởng ${context.product.workCenterId}.`);
             }
         }
     } catch (e: any) {

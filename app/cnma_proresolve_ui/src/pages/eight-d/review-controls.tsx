@@ -256,11 +256,14 @@ export function DisciplineReviewBox({
                     </div>
 
                     {discipline.reviewedBy && discipline.reviewedAt && currentStatus === 'Completed' ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            Completed by <strong className="font-medium text-foreground">{discipline.reviewedBy}</strong>
-                            {' · '}
-                            {new Date(discipline.reviewedAt).toLocaleString()}
-                        </p>
+                        <div className="mt-1 flex flex-col min-w-0">
+                            <span className="text-xs font-medium text-foreground">
+                                Completed by <strong className="font-semibold text-foreground">{discipline.reviewedBy}</strong>
+                            </span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                                {new Date(discipline.reviewedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
                     ) : (
                         <p className="mt-0.5 text-xs text-muted-foreground">
                             {currentStatus === 'InProgress'

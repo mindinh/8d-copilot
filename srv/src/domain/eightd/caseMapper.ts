@@ -196,9 +196,28 @@ function one(src: Row, key: string): Row | null {
  * `null` cho ô trống — kể cả các biến thể người nhập gõ tay.
  * Giữ nguyên chuỗi 'N/A - ...' vì đó là giá trị có chủ đích.
  */
+export function cleanField(v: unknown): string {
+    let s = String(v ?? '').trim();
+    const egMatch = s.match(/e\.g\.\s*([^)]+)/i);
+    if (
+        s.startsWith('Characteristic')
+        || s.startsWith('Equipment')
+        || s.startsWith('Spec')
+        || s.startsWith('Measured')
+    ) {
+        if (egMatch && egMatch[1]) {
+            s = egMatch[1].trim();
+        }
+    }
+    s = s.replace(/\(links to [^)]+\)/gi, '').trim();
+    s = s.replace(/^e\.g\.\s*/i, '').trim();
+    return s;
+}
+
 function text(v: unknown): string | null {
     if (isBlankish(v)) return null;
-    return String(v).trim();
+    const s = cleanField(v);
+    return s.length > 0 ? s : null;
 }
 
 /**
@@ -473,13 +492,18 @@ export function mapCase(raw: any): CaseContext {
     const workCenter = one(data, 'work_centers') ?? {};
 
     // ── Đo đạc ──
-    const inspections: InspectionRow[] = rows(data, 'inspections').map((r) => ({
-        characteristic: String(r.characteristic ?? ''),
-        measuredValue: String(r.measured_value ?? ''),
-        specValue: String(r.spec_value ?? ''),
-        equipment: text(r.equipment),
-        outOfSpec: evaluateOutOfSpec(r.measured_value, r.spec_value),
-    }));
+    const inspections: InspectionRow[] = rows(data, 'inspections').map((r) => {
+        const char = cleanField(r.characteristic);
+        const measured = cleanField(r.measured_value ?? r.measuredValue);
+        const spec = cleanField(r.spec_value ?? r.specValue);
+        return {
+            characteristic: char,
+            measuredValue: measured,
+            specValue: spec,
+            equipment: text(r.equipment ?? r.fixture),
+            outOfSpec: evaluateOutOfSpec(measured, spec),
+        };
+    }).filter((i) => i.characteristic || i.measuredValue || i.specValue || i.equipment);
 
     const historicalLots: HistoricalInspectionLot[] = rows(data, 'historical_inspection_lots').map((r) => ({
         lotId: String(r.lot_id ?? ''),
