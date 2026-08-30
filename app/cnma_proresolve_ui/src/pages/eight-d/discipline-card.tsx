@@ -4,6 +4,7 @@ import { ChevronDown, TriangleAlert } from 'lucide-react';
 import { parseList, type Discipline8D } from '@/services/eightd-service';
 import { Markdown } from './markdown';
 import { SourceChips } from './evidence-drawer';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Một discipline trong dòng thời gian 8D.
@@ -26,14 +27,31 @@ function confidenceStyle(score: number): string {
 export function DisciplineCard({
     discipline,
     caseContext = null,
+    precedentsJson = null,
 }: {
     discipline: Discipline8D;
     /** CaseContext của report, để bấm vào nguồn là xem được bản ghi thật. */
     caseContext?: string | null | undefined;
+    precedentsJson?: string | null | undefined;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
 
-    const actionItems = parseList(discipline.actionItems);
+    let actionItems = parseList(discipline.actionItems);
+    if (actionItems.length === 0 && discipline.resultJson) {
+        try {
+            const data = JSON.parse(discipline.resultJson);
+            const actionsArr = data.containment?.actions || data.corrective?.actions || data.preventive?.actions;
+            if (Array.isArray(actionsArr) && actionsArr.length > 0) {
+                actionItems = actionsArr.map((a: any) => typeof a === 'string' ? a : (a.actionText || a.action || a.description || JSON.stringify(a)));
+            }
+            const rosterArr = data.team?.roster || data.team?.assignedRoster;
+            if (Array.isArray(rosterArr) && rosterArr.length > 0 && actionItems.length === 0) {
+                actionItems = rosterArr.map((r: any) => `${r.name || r.partnerId || 'Member'} - ${r.assigned8DRole || r.partnerRole || r.organizationalRole || '8D Team Member'}`);
+            }
+        } catch {
+            // ignore
+        }
+    }
     const sources = parseList(discipline.sources);
     const inferred = !discipline.dataBacked;
 
@@ -65,6 +83,13 @@ export function DisciplineCard({
                 <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm text-foreground">{discipline.title}</h3>
+
+                        <AiProvenanceInfo
+                            discipline={discipline}
+                            label={discipline.title}
+                            caseContext={caseContext}
+                            precedentsJson={precedentsJson}
+                        />
 
                         <Badge
                             variant="outline"

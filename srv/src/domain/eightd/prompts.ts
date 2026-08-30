@@ -175,10 +175,9 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     counts the nonconforming rate per group, and takes the sharpest contrast. You
     do not choose them and you must not restate or alter them.
 
-    Your job is problem.isIsNotBasis. In one or two sentences explain why that
-    pair is the lead: name the lot IDs behind each side, and say plainly that both
-    groups share the same material and characteristic, so the equipment is the only
-    difference between them. That difference is the lead for D4.
+    Your job is problem.isIsNotBasis. Format it with clean sections:
+      - Detail by characteristic: For each measured characteristic, state the lot IDs and measurements contrasting affected equipment vs conforming equipment.
+      - Synthesis & Conclusion: State plainly that both groups share the same material and process, isolating the equipment/fixture as the sole distinguishing variable for D4.
 
     When the system reports that no comparison was possible, do not invent one.
     Leave the basis empty and let the status line speak for itself.`,

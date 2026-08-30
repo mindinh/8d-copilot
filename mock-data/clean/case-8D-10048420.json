@@ -122,31 +122,25 @@
   ],
   "teamAssignments": [
     {
-      "partnerId": "100014",
+      "partnerId": "BP-100014",
       "partnerName": "Karl Wagner",
       "functionTitle": "Maintenance Planner",
       "partnerRole": "8D Team Leader",
-      "source": "Backfilled from case record",
-      "email": "thien.tu@proresolve-demo.com",
-      "phone": "+49 89 2018 1014"
+      "source": "Backfilled from case record"
     },
     {
-      "partnerId": "100012",
+      "partnerId": "BP-100012",
       "partnerName": "Minh Dinh",
       "functionTitle": "Production Engineer",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record",
-      "email": "minh.dinh@proresolve-demo.com",
-      "phone": "+49 89 2018 1012"
+      "source": "Backfilled from case record"
     },
     {
-      "partnerId": "100061",
+      "partnerId": "BP-100061",
       "partnerName": "Anh Pham",
       "functionTitle": "Tooling Engineer",
       "partnerRole": "8D Team Member",
-      "source": "Backfilled from case record",
-      "email": "anh.pham@proresolve-demo.com",
-      "phone": "+49 89 2018 1061"
+      "source": "Backfilled from case record"
     }
   ],
   "fmeaLink": {

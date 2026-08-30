@@ -73,6 +73,7 @@ import {
     PipelineError,
     type AnalyzeOutcome,
     type CaseContext,
+    type DisciplineCode,
     type DisciplineDraft,
     type EightDResult,
 } from './types';
@@ -477,6 +478,8 @@ async function generateReportProgressive(
     independent: IndependentAnalysis,
     perStep: PerStepPrecedents,
     onStepComplete?: StepCompleteCallback,
+    initialCompleted?: Map<string, DisciplineDraft>,
+    targetStepCodes: readonly DisciplineCode[] = STEP_CODES,
 ): Promise<{
     result: EightDResult;
     tokens: number;
@@ -489,13 +492,6 @@ async function generateReportProgressive(
     const repairs: string[] = [];
 
     // Cả tám bước, không phải D1–D4.
-    //
-    // Danh sách này từng bị viết cứng thành ['D1','D2','D3','D4'] từ hồi chỉ bốn
-    // bước đầu có Form Editor. Giờ StepPrompts trong DB có form cho cả tám (D5:5
-    // trường, D6:5, D7:6, D8:7), nhưng chúng chưa bao giờ được nạp — nên D5–D8
-    // không có contract trong prompt, không có validation, và `resultJson` của
-    // chúng luôn là `{}`. Lấy thẳng `STEP_CODES` để không còn hai danh sách phải
-    // nhớ đồng bộ.
     const configurableCodes = STEP_CODES;
     const configs = Object.fromEntries(await Promise.all(configurableCodes.map(async (code) => [code, await getStepPromptRuntimeConfig(code)] as const)));
     const effectiveConfigs = Object.fromEntries(configurableCodes.flatMap((code) => {
@@ -528,7 +524,7 @@ async function generateReportProgressive(
 
     const disciplineGuides = await getDisciplineGuide();
     /** Bước đã sinh xong, tra theo mã — thứ tự D1..D8 dựng lại ở cuối. */
-    const completed = new Map<string, DisciplineDraft>();
+    const completed = new Map<string, DisciplineDraft>(initialCompleted ? initialCompleted.entries() : []);
 
     /**
      * Xếp hàng các lượt ghi DB.
@@ -889,7 +885,7 @@ async function generateReportProgressive(
             return discipline ? [discipline] : [];
         });
 
-    const waves = planStepWaves(STEP_CODES);
+    const waves = planStepWaves(targetStepCodes);
     for (const [index, wave] of waves.entries()) {
         const preceding = orderedCompleted();
         const startedAt = Date.now();
@@ -954,56 +950,57 @@ async function enrichFromDatabase(context: CaseContext): Promise<void> {
 
         // 1. Fallback truy vấn lịch sử kiểm tra lô (InspectionLots) cho Is / Is-Not
         if (!context.historicalInspectionLots || context.historicalInspectionLots.length === 0) {
-            const materialId = context.product.materialId;
-            const primaryChar = context.inspections.find((i) => i.outOfSpec)?.characteristic
-                || context.inspections[0]?.characteristic;
-            if (materialId && primaryChar) {
-                const { InspectionLots } = (cds.entities as any)('cnma.proresolve') ?? {};
-                if (InspectionLots) {
-                    const rows = await cds.run(
-                        SELECT.from(InspectionLots)
-                            .where({ materialId, characteristic: primaryChar })
-                            .orderBy('lotDate desc'),
-                    );
-                    if (Array.isArray(rows) && rows.length > 0) {
-                        context.historicalInspectionLots = rows.map((r: any) => ({
-                            lotId: String(r.lotId ?? ''),
-                            materialId: String(r.materialId ?? ''),
-                            characteristic: String(r.characteristic ?? ''),
-                            equipment: r.equipment ? String(r.equipment) : null,
-                            measuredValue: r.measuredValue ? String(r.measuredValue) : null,
-                            conforming: Boolean(r.conforming),
-                            lotDate: r.lotDate ? String(r.lotDate) : null,
-                            plant: r.plant ? String(r.plant) : null,
-                        }));
-                        LOG.info(`[InspectionLots] Đã tải ${rows.length} lô kiểm tra lịch sử cho vật tư ${materialId}, đặc tính "${primaryChar}".`);
-                    }
+            const materialId = context.product.materialId?.trim();
+            if (materialId) {
+                const rows = await cds.run(
+                    SELECT.from('cnma.proresolve.InspectionLots')
+                        .where`lower(materialId) = ${materialId.toLowerCase()}`
+                        .orderBy('lotDate desc'),
+                ).catch((err: any) => {
+                    LOG.warn(`[InspectionLots query] Không thể truy vấn bảng: ${err.message}`);
+                    return [];
+                });
+
+                if (Array.isArray(rows) && rows.length > 0) {
+                    context.historicalInspectionLots = rows.map((r: any) => ({
+                        lotId: String(r.lotId ?? ''),
+                        materialId: String(r.materialId ?? ''),
+                        characteristic: String(r.characteristic ?? ''),
+                        equipment: r.equipment ? String(r.equipment) : null,
+                        measuredValue: r.measuredValue ? String(r.measuredValue) : null,
+                        conforming: Boolean(r.conforming),
+                        lotDate: r.lotDate ? String(r.lotDate) : null,
+                        plant: r.plant ? String(r.plant) : null,
+                    }));
+                    LOG.info(`[InspectionLots] Đã tải ${rows.length} lô kiểm tra lịch sử cho vật tư ${materialId}.`);
                 }
             }
         }
 
         // 2. Fallback truy vấn sổ đăng ký FMEA (FmeaRegister) cho D7
         if (!context.fmea && (context.product.workCenterId || context.product.materialId)) {
-            const { FmeaRegister } = (cds.entities as any)('cnma.proresolve') ?? {};
-            if (FmeaRegister) {
-                const query = SELECT.one.from(FmeaRegister);
-                if (context.product.workCenterId && context.product.materialId) {
-                    query.where`workCenterId = ${context.product.workCenterId} or materialId = ${context.product.materialId}`;
-                } else if (context.product.workCenterId) {
-                    query.where`workCenterId = ${context.product.workCenterId}`;
-                } else if (context.product.materialId) {
-                    query.where`materialId = ${context.product.materialId}`;
-                }
-                const row = await cds.run(query);
-                if (row) {
-                    context.fmea = {
-                        fmeaId: String(row.fmeaId ?? ''),
-                        description: String(row.description ?? ''),
-                        workCenterId: row.workCenterId ? String(row.workCenterId) : null,
-                        materialId: row.materialId ? String(row.materialId) : null,
-                    };
-                    LOG.info(`[FmeaRegister] Đã gán FMEA ${context.fmea.fmeaId} cho phân xưởng ${context.product.workCenterId}.`);
-                }
+            const query = SELECT.one.from('cnma.proresolve.FmeaRegister');
+            const wcId = context.product.workCenterId?.trim();
+            const matId = context.product.materialId?.trim();
+            if (wcId && matId) {
+                query.where`workCenterId = ${wcId} or materialId = ${matId}`;
+            } else if (wcId) {
+                query.where`workCenterId = ${wcId}`;
+            } else if (matId) {
+                query.where`materialId = ${matId}`;
+            }
+            const row = await cds.run(query).catch((err: any) => {
+                LOG.warn(`[FmeaRegister query] Không thể truy vấn bảng: ${err.message}`);
+                return null;
+            });
+            if (row) {
+                context.fmea = {
+                    fmeaId: String(row.fmeaId ?? ''),
+                    description: String(row.description ?? ''),
+                    workCenterId: row.workCenterId ? String(row.workCenterId) : null,
+                    materialId: row.materialId ? String(row.materialId) : null,
+                };
+                LOG.info(`[FmeaRegister] Đã gán FMEA ${context.fmea.fmeaId} cho phân xưởng ${context.product.workCenterId}.`);
             }
         }
     } catch (e: any) {
@@ -1088,6 +1085,99 @@ export async function analyze(
     } = onStepComplete
         ? await phase('analyze', () => generateReportProgressive(context, enrichment, independent, perStep, onStepComplete))
         : await phase('analyze', () => generateReport(context, enrichment, independent, perStep));
+
+    const [parseModel, analyzeModel] = await Promise.all([
+        resolveModel(ACTIVITY_PARSE),
+        resolveModel(ACTIVITY_ANALYZE),
+    ]);
+
+    const runtime = Object.fromEntries(result.disciplines.flatMap((discipline) => {
+        const config = runtimeConfigs[discipline.code];
+        if (!config?.formSchema) return [];
+        const violations = validateFlexibleResult(discipline, config, runtimeInputs[discipline.code] ?? {});
+        return [[discipline.code, {
+            resultJson: JSON.stringify(discipline.data ?? {}),
+            formSchemaJson: JSON.stringify(config.formSchema),
+            validationJson: JSON.stringify({ version: 1, violations, inputDiagnostics: inputDiagnostics[discipline.code] ?? [], repairs }),
+            configVersion: config.configVersion,
+        }]];
+    }));
+
+    return {
+        context,
+        result,
+        independent,
+        models: { parse: parseModel, analyze: analyzeModel },
+        precedents: perStep,
+        tokensUsed: parseTokens + diagnoseTokens + analyzeTokens,
+        durationMs: Date.now() - started,
+        repairs,
+        runtime,
+    };
+}
+
+/**
+ * Phân tích lại các bước downstream (D5..D8) dựa trên các bước trước đó (D1..D4) đã có và đã sửa.
+ */
+export async function analyzeDownstreamReport(
+    raw: unknown,
+    existingDisciplines: Array<{ code: string; title?: string; summary?: string; content?: string; actionItems?: string; sources?: string; confidence?: number; dataBacked?: boolean; resultJson?: string }>,
+    fromStep: DisciplineCode = 'D5',
+    onStepComplete?: StepCompleteCallback,
+): Promise<AnalyzeOutcome> {
+    const started = Date.now();
+    const fromIndex = STEP_CODES.indexOf(fromStep);
+    const downstreamCodes: readonly DisciplineCode[] = fromIndex >= 0 ? STEP_CODES.slice(fromIndex) : (['D5', 'D6', 'D7', 'D8'] as const);
+    const priorCodes: readonly DisciplineCode[] = fromIndex >= 0 ? STEP_CODES.slice(0, fromIndex) : (['D1', 'D2', 'D3', 'D4'] as const);
+
+    const initialCompleted = new Map<string, DisciplineDraft>();
+    for (const row of existingDisciplines) {
+        if ((priorCodes as readonly string[]).includes(row.code)) {
+            const code = row.code as DisciplineCode;
+            let data = {};
+            try { data = JSON.parse(row.resultJson || '{}'); } catch { }
+            initialCompleted.set(code, {
+                code,
+                sequence: STEP_CODES.indexOf(code) + 1,
+                title: row.title ?? DISCIPLINE_TITLES[code] ?? '',
+                summary: row.summary ?? '',
+                content: row.content ?? '',
+                actionItems: typeof row.actionItems === 'string' ? JSON.parse(row.actionItems || '[]') : (Array.isArray(row.actionItems) ? row.actionItems : []),
+                sources: typeof row.sources === 'string' ? JSON.parse(row.sources || '[]') : (Array.isArray(row.sources) ? row.sources : []),
+                confidence: typeof row.confidence === 'number' ? row.confidence : 0.8,
+                dataBacked: typeof row.dataBacked === 'boolean' ? row.dataBacked : true,
+                data,
+            });
+        }
+    }
+
+    const context = mapCase(raw);
+    const [
+        { enrichment, tokens: parseTokens },
+        { analysis: independent, tokens: diagnoseTokens },
+        perStep,
+    ] = await Promise.all([
+        enrichContext(raw, context),
+        diagnoseIndependently(context),
+        findPrecedentsByStep(context, raw).catch(() => emptyPerStepPrecedents()),
+    ]);
+
+    const {
+        result,
+        tokens: analyzeTokens,
+        configs: runtimeConfigs,
+        inputs: runtimeInputs,
+        diagnostics: inputDiagnostics,
+        repairs,
+    } = await generateReportProgressive(
+        context,
+        enrichment,
+        independent,
+        perStep,
+        onStepComplete,
+        initialCompleted,
+        downstreamCodes,
+    );
 
     const [parseModel, analyzeModel] = await Promise.all([
         resolveModel(ACTIVITY_PARSE),

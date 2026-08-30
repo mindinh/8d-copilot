@@ -9,6 +9,7 @@ import {
     WorkflowPage,
     EightDListPage,
     EightDDetailPage,
+    MasterDataPage,
 } from '@/pages';
  
 // Sync React Router navigation with parent FLP shell URL
@@ -25,7 +26,6 @@ function InitialRouteNavigator() {
     useEffect(() => {
         if (hasNavigated.current) return;
         hasNavigated.current = true;
-
         const initialRoute = getInitialFLPRoute();
         if (initialRoute && initialRoute !== '/') {
             navigate(initialRoute, { replace: true });
@@ -48,6 +48,7 @@ export default function App() {
                             <Route path="/" element={<Navigate to="/8d" replace />} />
                             <Route path="/8d" element={<EightDListPage />} />
                             <Route path="/8d/:id" element={<EightDDetailPage />} />
+                            <Route path="/master-data" element={<MasterDataPage />} />
                             <Route path="/workflow" element={<WorkflowPage />} />
 
                             <Route path="*" element={<Navigate to="/8d" replace />} />

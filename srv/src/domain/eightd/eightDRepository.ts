@@ -18,7 +18,7 @@
  */
 
 import cds from '@sap/cds';
-import type { AnalyzeOutcome, CaseContext } from './types';
+import type { AnalyzeOutcome, CaseContext, DisciplineCode } from './types';
 import {
     evaluateClosureGate,
     normalizeStatus,
@@ -28,7 +28,7 @@ import {
 import {
     parseConfirmedFields,
 } from './fieldConfirm';
-import { assignedFieldFor, normalizeTasks } from '../../../../shared/action-task';
+import { assignedFieldFor, normalizeActionStatus, normalizeTasks } from '../../../../shared/action-task';
 import { getPath } from './runtimeConfig';
 
 const REPORTS = 'cnma.proresolve.Reports';
@@ -200,6 +200,32 @@ export async function saveResult(reportID: string, outcome: AnalyzeOutcome): Pro
     });
 }
 
+/** Ghi kết quả cho các bước downstream và cập nhật summary của report mà không xoá các bước trước. */
+export async function saveDownstreamResult(
+    reportID: string,
+    outcome: AnalyzeOutcome,
+    downstreamCodes: readonly DisciplineCode[],
+): Promise<void> {
+    const { result, models, tokensUsed, durationMs } = outcome;
+
+    for (const d of result.disciplines) {
+        if (downstreamCodes.includes(d.code)) {
+            await savePartialDiscipline(reportID, {
+                discipline: d,
+                runtime: outcome.runtime?.[d.code],
+            });
+        }
+    }
+
+    await finalizeReport(reportID, {
+        internalSummary: result.internalSummary,
+        customerSummary: result.customerSummary,
+        models,
+        tokensUsed,
+        durationMs,
+    });
+}
+
 /**
  * Đánh dấu thất bại.
  *
@@ -346,7 +372,18 @@ const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Obj
         'problem.isIsNotBasis',
     ]),
     D3: new Set(['containment.actions', 'containment.actionsOverride', 'containment.assignedActions', 'actionItems', 'actions']),
-    D4: new Set(['whyChain', 'ishikawaCustomFindings', 'selectedRootCategory', 'rootCause.whyChain', 'rootCause.ishikawa', 'rootCause.fiveWhy', 'rootCause.customFindings']),
+    D4: new Set([
+        'whyChain',
+        'ishikawaCustomFindings',
+        'selectedRootCategory',
+        'rootCause.whyChain',
+        'rootCause.ishikawa',
+        'rootCause.fiveWhy',
+        'rootCause.customFindings',
+        'rootCause.statement',
+        'rootCause.statementOverride',
+        'statement',
+    ]),
     D5: new Set(['corrective.actions', 'corrective.assignedActions', 'actionItems', 'actions']),
     D6: new Set(['verification.plan', 'verification.assignedActions', 'implementation.actions', 'implementation.assignedActions', 'actionItems', 'actions']),
     D7: new Set(['preventive.actions', 'preventive.assignedActions', 'preventive.fmea', 'prevention.actions', 'prevention.assignedActions', 'actionItems', 'actions']),
@@ -368,7 +405,10 @@ export async function saveDisciplineFieldValue(
         .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
-    if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
+    const isApproved = normalizeStatus((row as any).reviewStatus) === 'Approved';
+    const isTaskActionUpdate = fieldKey.endsWith('.assignedActions') || fieldKey === 'assignedActions';
+
+    if (isApproved && !isTaskActionUpdate) {
         throw Object.assign(
             new Error(`Discipline ${row.code} has been completed and locked. Reopen the step to make changes.`),
             { code: 400 },
@@ -412,9 +452,20 @@ export async function saveDisciplineFieldValue(
     }
     cursor[parts[parts.length - 1]] = value;
 
-    await UPDATE(DISCIPLINES).set({
-        resultJson: JSON.stringify(data),
-    }).where({ ID: disciplineID });
+    if (!isApproved) {
+        // Tự động chuyển NotStarted -> InProgress khi có thao tác sửa thật
+        const currentWorkState = String((row as any).workState ?? 'NotStarted');
+        const nextWorkState = currentWorkState === 'NotStarted' ? 'InProgress' : currentWorkState;
+
+        await UPDATE(DISCIPLINES).set({
+            resultJson: JSON.stringify(data),
+            workState: nextWorkState,
+        }).where({ ID: disciplineID });
+    } else {
+        await UPDATE(DISCIPLINES).set({
+            resultJson: JSON.stringify(data),
+        }).where({ ID: disciplineID });
+    }
 
     cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
 }
@@ -571,6 +622,34 @@ export async function reviewDiscipline(
     let nextWorkState = String((row as any).workState ?? 'NotStarted');
 
     if (toStatus === 'Approved') {
+        if (String(row.code ?? '') === 'D6') {
+            const siblings = await SELECT.from(DISCIPLINES)
+                .columns('code', 'resultJson')
+                .where({ report_ID: reportID });
+
+            for (const s of siblings) {
+                if (['D3', 'D5', 'D7'].includes(String(s.code))) {
+                    let parsed: any = {};
+                    try {
+                        parsed = JSON.parse(String(s.resultJson ?? '{}'));
+                    } catch { /* empty */ }
+                    const keyPrefix = s.code === 'D3' ? 'containment' : s.code === 'D5' ? 'corrective' : 'preventive';
+                    const tasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions || [];
+                    if (Array.isArray(tasks) && tasks.length > 0) {
+                        for (const t of tasks) {
+                            const status = normalizeActionStatus(t?.status);
+                            if (status !== 'Done' && status !== 'Verified') {
+                                const taskName = t?.name || t?.actionText || t?.action || 'Task';
+                                throw Object.assign(
+                                    new Error(`There are tasks in ${s.code} still not complete.`),
+                                    { code: 400 },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         nextWorkState = 'Completed';
     } else if (toStatus === 'Draft') {
         nextWorkState = 'InProgress';
@@ -715,7 +794,8 @@ export async function createTaskEvidence(params: {
         throw Object.assign(new Error(`Discipline ${disciplineCode} not found for report ${reportID}.`), { code: 404 });
     }
 
-    if (normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+    const isActionStep = ['D3', 'D5', 'D7'].includes(String(disciplineCode));
+    if (normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
         throw Object.assign(
             new Error(`Discipline ${disciplineCode} has been completed and locked. Reopen the step to make changes.`),
             { code: 400 },
@@ -729,9 +809,9 @@ export async function createTaskEvidence(params: {
     }
 
     const task = findTaskInResultJson((discipline as any).resultJson, taskId);
-    if (!task || task.status !== 'Done') {
+    if (!task || (task.status !== 'Done' && task.status !== 'Verified')) {
         throw Object.assign(
-            new Error('Evidence can only be uploaded for tasks with status Done.'),
+            new Error('Evidence can only be uploaded for tasks with status Done or Verified.'),
             { code: 400 },
         );
     }
@@ -779,9 +859,9 @@ export async function deleteTaskEvidence(evidenceID: string): Promise<{ deleted:
 
     const discipline = await SELECT.one.from(DISCIPLINES)
         .columns('ID', 'code', 'reviewStatus', 'workState')
-        .where({ report_ID: (row as any).reportID, code: (row as any).disciplineCode });
     if (discipline) {
-        if (normalizeStatus((discipline as any).reviewStatus) === 'Approved') {
+        const isActionStep = ['D3', 'D5', 'D7'].includes(String((row as any).disciplineCode));
+        if (normalizeStatus((discipline as any).reviewStatus) === 'Approved' && !isActionStep) {
             throw Object.assign(
                 new Error(`Discipline ${(row as any).disciplineCode} has been completed and locked. Reopen the step to make changes.`),
                 { code: 400 },

@@ -27,6 +27,7 @@ import {
     HISTORICAL_TEAM,
 } from './precedentRepository';
 import { clearRetrievalConfigCache } from './configRepository';
+import { DEFAULT_STEP_PROMPTS } from './defaults';
 
 const LOG = cds.log('library-seed');
 
@@ -307,6 +308,8 @@ async function ensureReportRecord(db: any, notificationId: string, ctx: any, raw
         },
     ];
 
+    const schemaByCode = new Map(DEFAULT_STEP_PROMPTS.map((p) => [p.stepCode, p.formSchemaJson]));
+
     await db.run(
         INSERT.into('cnma.proresolve.Disciplines').entries(
             disciplines.map((d) => ({
@@ -319,6 +322,7 @@ async function ensureReportRecord(db: any, notificationId: string, ctx: any, raw
                 content: d.summary,
                 aiGenerated: true,
                 resultJson: d.resultJson,
+                formSchemaJson: schemaByCode.get(d.code) ?? null,
             })),
         ),
     );

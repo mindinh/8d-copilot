@@ -1,6 +1,7 @@
 import { cn } from '@cnma/react-ui';
 import { Lock, LockOpen, Link2, Link2Off } from 'lucide-react';
 import { reviewStatusOf, type Discipline8D } from '@/services/eightd-service';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Widget cua D7 va D8.
@@ -39,7 +40,10 @@ export function FmeaLinkWidget({ value }: { value: unknown }) {
             <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/[0.06] p-3">
                 <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div className="min-w-0 text-[13px]">
-                    <p className="font-semibold text-warning">No FMEA entry linked</p>
+                    <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-warning">No FMEA entry linked</p>
+                        <AiProvenanceInfo fieldKey="preventive.fmea" label="FMEA Entry" />
+                    </div>
                     <p className="mt-0.5 break-words text-muted-foreground">
                         {row?.description
                             || 'Nothing stops this failure mode returning on another part or line until an FMEA entry is updated.'}
@@ -54,8 +58,11 @@ export function FmeaLinkWidget({ value }: { value: unknown }) {
             <div className="flex items-start gap-2">
                 <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
-                    <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                        FMEA
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                            FMEA
+                        </div>
+                        <AiProvenanceInfo fieldKey="preventive.fmea" label={`FMEA: ${id}`} />
                     </div>
                     <p className="break-words font-mono text-[13px] font-semibold">{id}</p>
                     {row?.description && (

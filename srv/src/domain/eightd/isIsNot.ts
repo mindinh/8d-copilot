@@ -109,7 +109,11 @@ export function computeIsIsNot(
         applicable: true,
         is: [`Defect occurs on ${worst.equipment} (${worstPercent}% non-conforming, lots: ${worstLots})`],
         isNot: [`Defect does not occur on ${best.equipment} (${bestPercent}% non-conforming, lots: ${bestLots})`],
-        isIsNotBasis: `Both equipment groups process the same material and inspect ${characteristic}. The contrast between ${worst.equipment} (${worstPercent}% non-conforming) and ${best.equipment} (${bestPercent}% non-conforming) isolates ${worst.equipment} as the primary lead.`,
+        isIsNotBasis: [
+            `- **Lead Isolation:** The contrast between **${worst.equipment}** (${worstPercent}% non-conforming) and **${best.equipment}** (${bestPercent}% non-conforming) isolates **${worst.equipment}** as the primary lead.`,
+            `- **Baseline Consistency:** Both equipment groups process the same material and inspect characteristic **${characteristic}**, confirming equipment/fixture is the sole distinguishing factor.`,
+            `- **Inspected Batches:** Evaluated ${worst.lots.length} lots from ${worst.equipment} (lots: ${worstLots}) against ${best.lots.length} lots from ${best.equipment} (lots: ${bestLots}).`,
+        ].join('\n'),
         lotIds: [...worst.lots.map((l) => l.lotId), ...best.lots.map((l) => l.lotId)],
     };
 }

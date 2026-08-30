@@ -91,9 +91,9 @@ describe('giải đường dẫn — chấp nhận', () => {
         expect(vocab.has('header.completionDate')).toBe(true);
     });
 
-    it('chấp nhận mảng rỗng', () => {
-        expect(ctx.gaps).toHaveLength(0);
+    it('chấp nhận mảng — gaps hoặc unmapped', () => {
         expect(vocab.has('gaps')).toBe(true);
+        expect(vocab.has('gaps#1')).toBe(true);
     });
 });
 

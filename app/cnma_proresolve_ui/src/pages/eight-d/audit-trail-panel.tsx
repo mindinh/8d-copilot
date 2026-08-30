@@ -81,10 +81,15 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
                             index === 0 ? 'border-l-primary' : 'border-l-border',
                         )}
                     >
-                        <div className="text-[11px] tabular-nums text-muted-foreground">
-                            {formatTime(event.at)} · {event.actor}
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[12.5px] font-semibold text-foreground truncate">
+                                {event.actor || 'System'}
+                            </span>
+                            <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {formatTime(event.at)}
+                            </span>
                         </div>
-                        <div className="mt-0.5 break-words text-[13px]">{describe(event)}</div>
+                        <div className="mt-1 break-words text-[13px] text-foreground/90 font-medium">{describe(event)}</div>
                         {event.note && (
                             <div className="mt-1 break-words rounded bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
                                 {event.note}

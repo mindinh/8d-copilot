@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
     Button,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     Input,
     Label,
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { Check, Sparkles, Star, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Edit3, Loader2, RefreshCw, Sparkles, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { saveDisciplineField } from '@/services/eightd-service';
+import { useQueryClient } from '@tanstack/react-query';
+import { reanalyzeDownstream, saveDisciplineField } from '@/services/eightd-service';
 import { TaskTable } from './action-table';
 import {
     actionLabel,
@@ -19,6 +27,7 @@ import {
     taskFromAction,
     type ActionTask,
 } from '../../../../../shared/action-task';
+import { AiProvenanceInfo } from './ai-provenance-info';
 
 /**
  * Các widget cho D4 (Root Cause) và các bước hành động (D3, D5, D6, D7).
@@ -164,6 +173,10 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                             <p className="break-words text-sm font-semibold text-foreground">
                                                 {row.question ?? row.why ?? '—'}
                                             </p>
+                                            <AiProvenanceInfo
+                                                fieldKey={`fiveWhy#${index + 1}`}
+                                                label={`5-Why Step #${index + 1}`}
+                                            />
                                             {isRoot && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive border border-destructive/20">
                                                     <Star className="h-3 w-3 fill-current" />
@@ -385,7 +398,25 @@ export function IshikawaGridWidget({
                     >
                         <div>
                             <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                    <AiProvenanceInfo
+                                        fieldKey={`ishikawa.${category}`}
+                                        label={`Ishikawa ${category}`}
+                                        caseContext={root}
+                                        customReasoning={
+                                            text
+                                                ? [
+                                                    isRoot ? 'Assessment: Validated primary root cause branch.' : 'Assessment: Evaluated contributing factor.',
+                                                    `Observed finding: "${text}"${metric ? ` (Metric: ${metric})` : ''}.`,
+                                                ]
+                                                : [
+                                                    'Assessment: Not assessed (No findings).',
+                                                    `Observation: Neither SAP QM source telemetry nor AI root-cause investigation identified contributing factors under [${category}] for this defect.`,
+                                                ]
+                                        }
+                                    />
+                                </div>
                                 {!isEditingThis && !readOnly && (
                                     <button
                                         type="button"
@@ -621,34 +652,235 @@ export function ActionCardsWidget({
    Khoi ban nhap cua AI
    ───────────────────────────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Khối kết luận Root Cause (AI Draft + Chỉnh sửa & Chạy lại các bước sau)
+   ───────────────────────────────────────────────────────────────────────── */
+
 /**
- * Ket luan do AI soan, danh dau ro la BAN NHAP.
- *
- * -- Vi sao khong dung `callout` -
- * `callout` la mot khoi thong tin trung tinh: no noi "day la thong tin quan
- * trong". Cai can noi o day khac han - "day la MAY viet, chua ai duyet". Nhan
- * "AI DRAFT" nam de len vien khoi lam dieu do trong mot cai liec, va no la quy
- * uoc xuyen suot ban mockup.
- *
- * Mau canh bao nhat chu khong phai mau thanh cong: ban nhap chua duoc duyet thi
- * khong duoc trong nhu mot ket luan da chot.
+ * Kết luận Root Cause do AI soạn hoặc kỹ sư chỉnh sửa.
+ * Cho phép chỉnh sửa nội dung kết luận và cảnh báo xác nhận chạy lại các bước downstream (D5..D8).
  */
-export function AiDraftWidget({ value }: { value: unknown }) {
+export function AiDraftWidget({
+    value,
+    disciplineID,
+    readOnly = false,
+    reportID = '',
+    fieldKey = 'rootCause.statement',
+}: {
+    value: unknown;
+    disciplineID?: string;
+    readOnly?: boolean;
+    reportID?: string;
+    fieldKey?: string;
+}) {
+    const queryClient = useQueryClient();
+    const params = useParams<{ id?: string }>();
+    const effectiveReportID = reportID || params.id || '';
     const text = typeof value === 'string' ? value.trim() : '';
-    if (!text) {
-        return (
-            <p className="text-sm italic text-muted-foreground">
-                The AI produced no conclusion for this step.
-            </p>
-        );
-    }
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(text);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!editing) {
+            setDraft(text);
+        }
+    }, [text, editing]);
+
+    const handleStartEdit = () => {
+        setDraft(text);
+        setEditing(true);
+    };
+
+    const handleCancel = () => {
+        setDraft(text);
+        setEditing(false);
+    };
+
+    const handleRequestSave = () => {
+        if (draft.trim() === text) {
+            setEditing(false);
+            return;
+        }
+        setConfirmOpen(true);
+    };
+
+    const handleSaveAndReanalyze = async (reanalyze: boolean) => {
+        if (!disciplineID) return;
+        setSaving(true);
+        try {
+            const nextValue = draft.trim();
+            await saveDisciplineField(disciplineID, fieldKey || 'rootCause.statement', nextValue);
+            toast.success('Đã lưu kết luận nguyên nhân gốc.');
+            setConfirmOpen(false);
+            setEditing(false);
+
+            if (reanalyze && effectiveReportID) {
+                toast.info('Starting re-analysis of downstream steps (D5, D6, D7, D8)...');
+                await reanalyzeDownstream(effectiveReportID, 'D5');
+                toast.success('Scheduled re-analysis of steps D5-D8.');
+            }
+
+            await queryClient.invalidateQueries({ queryKey: ['8d'] });
+        } catch (e: any) {
+            toast.error(e?.response?.data?.error?.message || e.message || 'Error saving root cause.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
-        <div className="relative mt-2 rounded-lg border border-destructive/25 bg-destructive/[0.04] px-4 py-4">
-            <span className="absolute -top-2.5 left-3.5 rounded-full bg-destructive px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
-                AI draft
-            </span>
-            <p className="break-words text-[13px] leading-relaxed">{text}</p>
+        <div className="relative mt-2 rounded-xl border border-primary/25 bg-primary/[0.03] p-4 shadow-xs transition-all">
+            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/15">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-foreground">
+                        {disciplineID ? 'Root Cause Conclusion (D4)' : 'AI Draft'}
+                    </span>
+                    <AiProvenanceInfo
+                        fieldKey={fieldKey || 'rootCause.statement'}
+                        label="Root Cause Conclusion (D4)"
+                    />
+                </div>
+                {!readOnly && disciplineID && !editing && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                        onClick={handleStartEdit}
+                    >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit
+                    </Button>
+                )}
+            </div>
+
+            {editing ? (
+                <div className="space-y-3 pt-1">
+                    <Textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        rows={3}
+                        placeholder="Enter concise root cause conclusion..."
+                        className="text-[13px] leading-relaxed resize-y bg-background font-normal"
+                        autoFocus
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                            {draft.length} characters
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={handleCancel}
+                                disabled={saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs gap-1.5"
+                                onClick={handleRequestSave}
+                                disabled={saving || !draft.trim()}
+                            >
+                                Save Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="min-w-0">
+                    {text ? (
+                        <p className="break-words text-[13px] leading-relaxed text-foreground font-medium">
+                            {text}
+                        </p>
+                    ) : (
+                        <p className="text-sm italic text-muted-foreground">
+                            The AI produced no conclusion for this step.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Warning Confirmation Modal */}
+            <Dialog open={confirmOpen} onOpenChange={(open) => { if (!open && !saving) setConfirmOpen(false); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <div className="flex items-center gap-2 text-warning mb-1">
+                            <AlertTriangle className="h-5 w-5 shrink-0" />
+                            <DialogTitle className="text-base font-bold text-foreground">
+                                Confirm Root Cause Modification
+                            </DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground leading-relaxed pt-1">
+                            Modifying the Root Cause in D4 impacts subsequent action and prevention steps:
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs">
+                        <div className="font-semibold text-warning-foreground flex items-center gap-1.5">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Downstream dependencies to be updated:
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-muted-foreground pl-1">
+                            <li><strong className="text-foreground">D5 (Corrective Actions):</strong> Realignment with new root cause.</li>
+                            <li><strong className="text-foreground">D6 (Verification Plan):</strong> Validation against new mechanism.</li>
+                            <li><strong className="text-foreground">D7 (Preventive Actions):</strong> Recurrence prevention and FMEA link.</li>
+                            <li><strong className="text-foreground">D8 (Closure & Lessons):</strong> Summary and team closure gates.</li>
+                        </ul>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                        The system will save the new root cause and automatically re-analyze from D5 onward.
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfirmOpen(false)}
+                            disabled={saving}
+                            className="text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleSaveAndReanalyze(false)}
+                            disabled={saving}
+                            className="text-xs"
+                        >
+                            Save D4 Only
+                        </Button>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleSaveAndReanalyze(true)}
+                            disabled={saving}
+                            className="text-xs gap-1.5 bg-primary font-semibold"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    Save & Reanalyze D5-D8
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

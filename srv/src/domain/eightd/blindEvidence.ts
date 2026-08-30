@@ -36,6 +36,7 @@ export interface BlindEvidence {
     header: CaseContext['header'];
     product: CaseContext['product'];
     inspections: CaseContext['inspections'];
+    historicalInspectionLots?: CaseContext['historicalInspectionLots'];
     isIsNot: CaseContext['isIsNot'];
     /** Sáu nhánh Ishikawa, ĐÃ BỎ cờ `isRootCause`. */
     investigationFindings: Array<{
@@ -55,6 +56,7 @@ export function buildBlindEvidence(context: CaseContext): BlindEvidence {
         header: context.header,
         product: context.product,
         inspections: context.inspections,
+        historicalInspectionLots: context.historicalInspectionLots,
         isIsNot: context.isIsNot,
         investigationFindings: context.ishikawa.map((r) => ({
             category: r.category,

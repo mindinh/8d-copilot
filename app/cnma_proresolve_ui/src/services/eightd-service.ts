@@ -271,6 +271,9 @@ export interface Report8D {
     errorMessage: string | null;
 
     createdAt?: string;
+    createdBy?: string;
+    modifiedAt?: string;
+    modifiedBy?: string;
     disciplines?: Discipline8D[];
 }
 
@@ -278,6 +281,7 @@ export interface Report8D {
 const LIST_COLUMNS = [
     'ID', 'notificationId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
     'workCenterId', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
+    'createdBy', 'modifiedAt', 'modifiedBy',
     'tokensUsed', 'durationMs', 'errorMessage',
     'aiModelParse', 'aiModelAnalyze',
     // Cột chẩn đoán độc lập — nhẹ, và là thứ đáng nhìn nhất ở trang danh sách.
@@ -355,6 +359,15 @@ class EightDService extends BaseODataService<Report8D> {
         const res = await axiosInstance.post<{ value: string }>(
             `${this.serviceName}/reanalyze`,
             { reportID },
+        );
+        return res.data.value;
+    }
+
+    /** Chạy lại các bước downstream (D5..D8) sau khi sửa D4. */
+    async reanalyzeDownstream(reportID: string, fromStep: string = 'D5'): Promise<string> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/reanalyzeDownstream`,
+            { reportID, fromStep },
         );
         return res.data.value;
     }
@@ -815,4 +828,8 @@ export async function deleteTaskEvidence(evidenceID: string): Promise<void> {
 
 export function getEvidenceDownloadUrl(evidenceID: string): string {
     return `/api/cnma/EIGHTD_SRV/TaskEvidences(${evidenceID})/content`;
+}
+
+export async function reanalyzeDownstream(reportID: string, fromStep: string = 'D5'): Promise<string> {
+    return eightDService.reanalyzeDownstream(reportID, fromStep);
 }

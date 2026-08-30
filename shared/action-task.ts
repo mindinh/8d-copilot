@@ -45,7 +45,16 @@ export interface SuggestedAction {
     protection?: string;
 }
 
-export const TASK_STATUSES = ['Not started', 'In progress', 'Blocked', 'Done'] as const;
+export const TASK_STATUSES = ['Planned', 'In Progress', 'Done', 'Verified', 'Blocked'] as const;
+
+export function normalizeActionStatus(status?: string): 'Planned' | 'In Progress' | 'Done' | 'Verified' | 'Blocked' {
+    const s = String(status ?? '').trim().toLowerCase();
+    if (s.includes('block')) return 'Blocked';
+    if (s.includes('verifi')) return 'Verified';
+    if (s.includes('done') || s.includes('implement') || s.includes('complete')) return 'Done';
+    if (s.includes('progress') || s.includes('process') || s.includes('doing')) return 'In Progress';
+    return 'Planned';
+}
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
