@@ -22,6 +22,8 @@ export interface HistoricalCaseItem {
     rootCauseCategory?: string | null;
     copqEur?: number | null;
     fmeaId?: string | null;
+    sourcePayload?: string | null;
+    attributesJson?: string | null;
     createdAt?: string;
     createdBy?: string;
     modifiedAt?: string;

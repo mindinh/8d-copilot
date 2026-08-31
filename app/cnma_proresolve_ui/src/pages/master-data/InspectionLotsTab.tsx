@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Badge,
@@ -27,6 +27,7 @@ import {
     Edit,
     FileCode,
     Layers,
+    Lock,
     Plus,
     RefreshCw,
     Search,
@@ -39,6 +40,40 @@ import {
     inspectionLotsService,
     type InspectionLotItem,
 } from '@/services/master-data-service';
+
+/**
+ * Tự động tính Inspection Lot ID kế tiếp (+1 từ max ID hiện tại).
+ * Ví dụ: 0010000019 -> 0010000020, LOT-06 -> LOT-07
+ */
+export function generateNextLotId(items: { lotId?: string }[]): string {
+    let maxNum = 0;
+    let maxDigitsLength = 10;
+    let prefix = '';
+
+    for (const item of items) {
+        if (!item?.lotId) continue;
+        const str = item.lotId.trim();
+        const match = str.match(/^(.*?)(\d+)$/);
+        if (match) {
+            const p = match[1];
+            const digits = match[2];
+            const num = parseInt(digits, 10);
+            if (!isNaN(num) && num > maxNum) {
+                maxNum = num;
+                maxDigitsLength = digits.length;
+                prefix = p;
+            }
+        }
+    }
+
+    if (maxNum === 0) {
+        return '0010000001';
+    }
+
+    const nextNum = maxNum + 1;
+    const nextDigits = String(nextNum).padStart(maxDigitsLength, '0');
+    return `${prefix}${nextDigits}`;
+}
 
 export function InspectionLotsTab() {
     const queryClient = useQueryClient();
@@ -60,10 +95,16 @@ export function InspectionLotsTab() {
         }),
     });
 
+    const { data: allData } = useQuery({
+        queryKey: ['master-data', 'inspection-lots-all'],
+        queryFn: () => inspectionLotsService.list({ top: 1000 }),
+    });
+
     const rows = data?.value ?? [];
+    const allRows = allData?.value ?? rows;
 
     // Distinct materials for filter dropdown
-    const allMaterials = Array.from(new Set(rows.map((r) => r.materialId).filter(Boolean))).sort();
+    const allMaterials = Array.from(new Set(allRows.map((r) => r.materialId).filter(Boolean))).sort();
 
     const createMutation = useMutation({
         mutationFn: (item: Partial<InspectionLotItem>) => inspectionLotsService.create(item),
@@ -276,6 +317,7 @@ export function InspectionLotsTab() {
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 title="Add Inspection Lot (QM Data)"
+                existingRows={allRows}
                 isPending={createMutation.isPending}
                 onSubmit={(values) => createMutation.mutate(values)}
             />
@@ -284,7 +326,10 @@ export function InspectionLotsTab() {
             <InspectionLotJsonImportDialog
                 open={jsonImportOpen}
                 onOpenChange={setJsonImportOpen}
-                onSuccess={() => void queryClient.invalidateQueries({ queryKey: ['master-data', 'inspection-lots'] })}
+                onSuccess={() => {
+                    void queryClient.invalidateQueries({ queryKey: ['master-data', 'inspection-lots'] });
+                    void queryClient.invalidateQueries({ queryKey: ['master-data', 'inspection-lots-all'] });
+                }}
             />
 
             {/* Edit Dialog */}
@@ -294,6 +339,7 @@ export function InspectionLotsTab() {
                     onOpenChange={(open) => !open && setEditItem(null)}
                     title={`Edit Inspection Lot — ${editItem.lotId}`}
                     initialValues={editItem}
+                    existingRows={allRows}
                     isPending={updateMutation.isPending}
                     onSubmit={(values) => updateMutation.mutate({ id: editItem.ID, item: values })}
                 />
@@ -336,6 +382,7 @@ function InspectionLotFormDialog({
     onOpenChange,
     title,
     initialValues,
+    existingRows = [],
     isPending,
     onSubmit,
 }: {
@@ -343,10 +390,19 @@ function InspectionLotFormDialog({
     onOpenChange: (open: boolean) => void;
     title: string;
     initialValues?: InspectionLotItem;
+    existingRows?: InspectionLotItem[];
     isPending: boolean;
     onSubmit: (values: Partial<InspectionLotItem>) => void;
 }) {
-    const [lotId, setLotId] = useState(initialValues?.lotId || '');
+    const [lotId, setLotId] = useState(
+        () => initialValues?.lotId || generateNextLotId(existingRows)
+    );
+
+    useEffect(() => {
+        if (open) {
+            setLotId(initialValues?.lotId || generateNextLotId(existingRows));
+        }
+    }, [open, initialValues, existingRows]);
     const [materialId, setMaterialId] = useState(initialValues?.materialId || '');
     const [characteristic, setCharacteristic] = useState(initialValues?.characteristic || '');
     const [equipment, setEquipment] = useState(initialValues?.equipment || '');
@@ -379,9 +435,9 @@ function InspectionLotFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:max-w-4xl md:max-w-5xl !max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-0 gap-0 rounded-2xl border-border/90 shadow-2xl">
+            <DialogContent className="w-[95vw] sm:max-w-4xl md:max-w-5xl !max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0 rounded-2xl border-border/90 shadow-2xl overflow-hidden">
                 {/* SAP Fiori QM Header Strip */}
-                <div className="bg-gradient-to-r from-blue-950/20 via-blue-900/10 to-transparent px-6 py-4 border-b border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-gradient-to-r from-blue-950/20 via-blue-900/10 to-transparent px-6 py-4 border-b border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                     <div className="flex items-center gap-3.5 min-w-0">
                         <div className="p-2.5 rounded-xl bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-600/30 shrink-0">
                             <ClipboardCheck className="w-6 h-6" />
@@ -411,242 +467,251 @@ function InspectionLotFormDialog({
                     </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* Section 1: General Header Data (Allgemeine Daten) */}
-                    <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                                1. Inspection Lot Identification (Prüflos Header)
-                            </span>
-                            <span className="text-[11px] text-muted-foreground font-mono">QALS-PRUEFLOS</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                            <div className="sm:col-span-4 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Inspection Lot ID (Prüflos) *
-                                </Label>
-                                <Input
-                                    value={lotId}
-                                    onChange={(e) => setLotId(e.target.value)}
-                                    placeholder="e.g. 0010000001"
-                                    className="font-mono text-xs h-9 bg-background font-semibold"
-                                    required
-                                />
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="p-6 space-y-4 flex-1 overflow-y-auto min-h-0">
+                        {/* Section 1: General Header Data (Allgemeine Daten) */}
+                        <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                    1. Inspection Lot Identification (Prüflos Header)
+                                </span>
+                                <span className="text-[11px] text-muted-foreground font-mono">QALS-PRUEFLOS</span>
                             </div>
 
-                            <div className="sm:col-span-4 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Inspection Origin (Herkunft)
-                                </Label>
-                                <Select value={originCode} onValueChange={setOriginCode}>
-                                    <SelectTrigger className="text-xs h-9 bg-background">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="03">03 — In-Process Production</SelectItem>
-                                        <SelectItem value="01">01 — Goods Receipt (Vendor)</SelectItem>
-                                        <SelectItem value="04">04 — Goods Receipt from Production</SelectItem>
-                                        <SelectItem value="89">89 — Other Manual Inspection</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="sm:col-span-4 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Plant (Werk)
-                                </Label>
-                                <Input
-                                    value={plant}
-                                    onChange={(e) => setPlant(e.target.value)}
-                                    placeholder="e.g. 1000 (Hannover)"
-                                    className="font-mono text-xs h-9 bg-background"
-                                />
-                            </div>
-
-                            <div className="sm:col-span-6 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Material Number (Material) *
-                                </Label>
-                                <Input
-                                    value={materialId}
-                                    onChange={(e) => setMaterialId(e.target.value)}
-                                    placeholder="e.g. MAT-10247"
-                                    className="font-mono text-xs h-9 bg-background font-semibold text-primary"
-                                    required
-                                />
-                            </div>
-
-                            <div className="sm:col-span-6 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Inspection Date (Prüfdatum)
-                                </Label>
-                                <Input
-                                    type="date"
-                                    value={lotDate}
-                                    onChange={(e) => setLotDate(e.target.value)}
-                                    className="text-xs h-9 bg-background"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section 2: Work Center & Equipment (Arbeitsplatz & Equipment) */}
-                    <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                                2. Work Center & Equipment Assignment (Arbeitsplatz & Equipment)
-                            </span>
-                            <span className="text-[11px] text-muted-foreground font-mono">QAMR-EQUIPMENT</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <div className="space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Equipment / Fixture (Vorrichtung) *
-                                </Label>
-                                <Input
-                                    value={equipment}
-                                    onChange={(e) => setEquipment(e.target.value)}
-                                    placeholder="e.g. WC-MILL-07-F1"
-                                    className="font-mono text-xs h-9 bg-background font-medium"
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Work Center Reference (Arbeitsplatz)
-                                </Label>
-                                <Input
-                                    value={equipment.includes('-') ? equipment.split('-').slice(0, 3).join('-') : 'WC-MILL-07'}
-                                    disabled
-                                    className="font-mono text-xs h-9 bg-muted/40 text-muted-foreground"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section 3: Characteristic Results Recording & Valuation (Ergebniserfassung - QE51N) */}
-                    <div className="rounded-xl border border-border/80 bg-card p-4 space-y-4 shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                                3. Characteristic Result Recording & Usage Decision (QE51N)
-                            </span>
-                            <span className="text-[11px] text-muted-foreground font-mono">QAMV / QASR</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                            <div className="sm:col-span-6 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Master Inspection Characteristic (Prüfmerkmal) *
-                                </Label>
-                                <Input
-                                    value={characteristic}
-                                    onChange={(e) => setCharacteristic(e.target.value)}
-                                    placeholder="e.g. Flange burr height"
-                                    className="text-xs h-9 bg-background font-medium"
-                                    required
-                                />
-                            </div>
-
-                            <div className="sm:col-span-3 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Measured Value (Messwert)
-                                </Label>
-                                <Input
-                                    value={measuredValue}
-                                    onChange={(e) => setMeasuredValue(e.target.value)}
-                                    placeholder="e.g. 0.32"
-                                    className="font-mono text-xs h-9 bg-background font-bold"
-                                />
-                            </div>
-
-                            <div className="sm:col-span-3 space-y-1">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Unit (Einheit)
-                                </Label>
-                                <Input
-                                    value={unit}
-                                    onChange={(e) => setUnit(e.target.value)}
-                                    placeholder="e.g. mm"
-                                    className="text-xs h-9 bg-background"
-                                />
-                            </div>
-                        </div>
-
-                        {/* SAP QM Valuation / Usage Decision Choice Cards */}
-                        <div className="space-y-2 pt-1">
-                            <Label className="text-xs font-semibold text-foreground block">
-                                Characteristic Valuation / Usage Decision (UD - Bewertung) *
-                            </Label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setConforming(true)}
-                                    className={cn(
-                                        'flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
-                                        conforming
-                                            ? 'border-emerald-500 bg-emerald-500/10 shadow-xs ring-1 ring-emerald-500/40'
-                                            : 'border-border bg-card hover:bg-muted/40 opacity-70'
-                                    )}
-                                >
-                                    <div className={cn(
-                                        'p-2 rounded-lg shrink-0',
-                                        conforming ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
-                                    )}>
-                                        <CheckCircle2 className="w-5 h-5" />
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                                <div className="sm:col-span-4 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Inspection Lot ID (Prüflos) *
+                                        </Label>
+                                        <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
+                                            <Lock className="w-3 h-3 text-muted-foreground" />
+                                            Auto-generated (+1)
+                                        </span>
                                     </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
-                                            <span>Accepted (A) — Conforming</span>
-                                            <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">Pass / In-Spec</span>
+                                    <Input
+                                        value={lotId}
+                                        disabled
+                                        readOnly
+                                        placeholder="Auto-generated (+1)"
+                                        className="font-mono text-xs h-9 bg-muted/60 text-muted-foreground cursor-not-allowed font-semibold select-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-4 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Inspection Origin (Herkunft)
+                                    </Label>
+                                    <Select value={originCode} onValueChange={setOriginCode}>
+                                        <SelectTrigger className="text-xs h-9 bg-background">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="03">03 — In-Process Production</SelectItem>
+                                            <SelectItem value="01">01 — Goods Receipt (Vendor)</SelectItem>
+                                            <SelectItem value="04">04 — Goods Receipt from Production</SelectItem>
+                                            <SelectItem value="89">89 — Other Manual Inspection</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="sm:col-span-4 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Plant (Werk)
+                                    </Label>
+                                    <Input
+                                        value={plant}
+                                        onChange={(e) => setPlant(e.target.value)}
+                                        placeholder="e.g. 1000 (Hannover)"
+                                        className="font-mono text-xs h-9 bg-background"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-6 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Material Number (Material) *
+                                    </Label>
+                                    <Input
+                                        value={materialId}
+                                        onChange={(e) => setMaterialId(e.target.value)}
+                                        placeholder="e.g. MAT-10247"
+                                        className="font-mono text-xs h-9 bg-background font-semibold text-primary"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-6 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Inspection Date (Prüfdatum)
+                                    </Label>
+                                    <Input
+                                        type="date"
+                                        value={lotDate}
+                                        onChange={(e) => setLotDate(e.target.value)}
+                                        className="text-xs h-9 bg-background"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Work Center & Equipment (Arbeitsplatz & Equipment) */}
+                        <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                    2. Work Center & Equipment Assignment (Arbeitsplatz & Equipment)
+                                </span>
+                                <span className="text-[11px] text-muted-foreground font-mono">QAMR-EQUIPMENT</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Equipment / Fixture (Vorrichtung) *
+                                    </Label>
+                                    <Input
+                                        value={equipment}
+                                        onChange={(e) => setEquipment(e.target.value)}
+                                        placeholder="e.g. WC-MILL-07-F1"
+                                        className="font-mono text-xs h-9 bg-background font-medium"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Work Center Reference (Arbeitsplatz)
+                                    </Label>
+                                    <Input
+                                        value={equipment.includes('-') ? equipment.split('-').slice(0, 3).join('-') : 'WC-MILL-07'}
+                                        disabled
+                                        className="font-mono text-xs h-9 bg-muted/40 text-muted-foreground"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Characteristic Results Recording & Valuation (Ergebniserfassung - QE51N) */}
+                        <div className="rounded-xl border border-border/80 bg-card p-4 space-y-4 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                    3. Characteristic Result Recording & Usage Decision (QE51N)
+                                </span>
+                                <span className="text-[11px] text-muted-foreground font-mono">QAMV / QASR</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                                <div className="sm:col-span-6 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Master Inspection Characteristic (Prüfmerkmal) *
+                                    </Label>
+                                    <Input
+                                        value={characteristic}
+                                        onChange={(e) => setCharacteristic(e.target.value)}
+                                        placeholder="e.g. Flange burr height"
+                                        className="text-xs h-9 bg-background font-medium"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-3 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Measured Value (Messwert)
+                                    </Label>
+                                    <Input
+                                        value={measuredValue}
+                                        onChange={(e) => setMeasuredValue(e.target.value)}
+                                        placeholder="e.g. 0.32"
+                                        className="font-mono text-xs h-9 bg-background font-bold"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-3 space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Unit (Einheit)
+                                    </Label>
+                                    <Input
+                                        value={unit}
+                                        onChange={(e) => setUnit(e.target.value)}
+                                        placeholder="e.g. mm"
+                                        className="text-xs h-9 bg-background"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Characteristic Valuation Decision */}
+                            <div className="pt-2">
+                                <Label className="text-xs font-semibold text-foreground block mb-2">
+                                    Characteristic Valuation (Merkmalsbewertung / VBEWERTUNG)
+                                </Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setConforming(true)}
+                                        className={cn(
+                                            'flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                                            conforming
+                                                ? 'border-emerald-500 bg-emerald-500/10 shadow-xs ring-1 ring-emerald-500/40'
+                                                : 'border-border bg-card hover:bg-muted/40 opacity-70'
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            'p-2 rounded-lg shrink-0',
+                                            conforming ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
+                                        )}>
+                                            <CheckCircle2 className="w-5 h-5" />
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                                            Result conforms with drawing tolerance limits
-                                        </p>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setConforming(false)}
-                                    className={cn(
-                                        'flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
-                                        !conforming
-                                            ? 'border-rose-500 bg-rose-500/10 shadow-xs ring-1 ring-rose-500/40'
-                                            : 'border-border bg-card hover:bg-muted/40 opacity-70'
-                                    )}
-                                >
-                                    <div className={cn(
-                                        'p-2 rounded-lg shrink-0',
-                                        !conforming ? 'bg-rose-600 text-white' : 'bg-muted text-muted-foreground'
-                                    )}>
-                                        <XCircle className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
-                                            <span>Rejected (R) — Non-Conforming</span>
-                                            <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 font-medium">Fail / Out-of-Spec</span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
+                                                <span>Accepted (A) — Conforming</span>
+                                                <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">Pass / In-Spec</span>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                Result conforms with drawing tolerance limits
+                                            </p>
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                                            Exceeds specification limit (Lead for Is / Is-Not)
-                                        </p>
-                                    </div>
-                                </button>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setConforming(false)}
+                                        className={cn(
+                                            'flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                                            !conforming
+                                                ? 'border-rose-500 bg-rose-500/10 shadow-xs ring-1 ring-rose-500/40'
+                                                : 'border-border bg-card hover:bg-muted/40 opacity-70'
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            'p-2 rounded-lg shrink-0',
+                                            !conforming ? 'bg-rose-600 text-white' : 'bg-muted text-muted-foreground'
+                                        )}>
+                                            <XCircle className="w-5 h-5" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
+                                                <span>Rejected (R) — Non-Conforming</span>
+                                                <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 font-medium">Fail / Out-of-Spec</span>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                Exceeds specification limit (Lead for Is / Is-Not)
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Dialog Footer Actions */}
-                    <div className="pt-3 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="p-4 sm:px-6 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3 bg-background shrink-0">
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                             <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
                             <span>ISO 9001 / IATF 16949 QM Audit Compliant</span>
                         </div>
-                        <div className="flex items-center gap-2 self-end sm:self-center">
+                        <div className="flex items-center gap-2.5 self-end sm:self-center">
                             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 px-4 text-xs">
                                 Cancel
                             </Button>
@@ -774,16 +839,19 @@ function InspectionLotJsonImportDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:max-w-3xl md:max-w-4xl !max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-                <DialogHeader>
+            <DialogContent className="w-[95vw] sm:max-w-3xl md:max-w-4xl !max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 rounded-2xl border-border/90 shadow-2xl overflow-hidden">
+                <div className="p-5 sm:p-6 border-b border-border/70 bg-muted/20 shrink-0">
                     <DialogTitle className="text-base font-bold flex items-center gap-2">
                         <FileCode className="w-5 h-5 text-primary" />
                         Import QM Inspection Lots from JSON
                     </DialogTitle>
-                </DialogHeader>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Paste single lot object or array of lot inspection records.
+                    </p>
+                </div>
 
-                <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between">
+                <div className="p-5 sm:p-6 flex flex-col flex-1 min-h-0 space-y-3 overflow-hidden">
+                    <div className="flex items-center justify-between shrink-0">
                         <p className="text-xs text-muted-foreground">
                             Paste a single JSON object or an array of inspection lot records:
                         </p>
@@ -798,21 +866,23 @@ function InspectionLotJsonImportDialog({
                         </Button>
                     </div>
 
-                    <Textarea
-                        value={jsonText}
-                        onChange={(e) => { setJsonText(e.target.value); setParseError(null); }}
-                        placeholder={sampleJson}
-                        className="font-mono text-xs min-h-[220px] bg-background resize-y"
-                    />
+                    <div className="flex-1 min-h-0">
+                        <Textarea
+                            value={jsonText}
+                            onChange={(e) => { setJsonText(e.target.value); setParseError(null); }}
+                            placeholder={sampleJson}
+                            className="font-mono text-xs h-[360px] max-h-[50vh] sm:max-h-[55vh] w-full bg-background resize-none overflow-y-auto"
+                        />
+                    </div>
 
                     {parseError && (
-                        <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 p-2.5 rounded-md">
+                        <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 p-2.5 rounded-md shrink-0">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             <span>{parseError}</span>
                         </div>
                     )}
 
-                    <DialogFooter className="gap-2 pt-2 border-t">
+                    <div className="flex flex-row items-center justify-end gap-2.5 pt-3 border-t border-border/80 shrink-0">
                         <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing}>
                             Cancel
                         </Button>
@@ -820,7 +890,7 @@ function InspectionLotJsonImportDialog({
                             {importing ? <Spinner className="w-4 h-4 mr-1.5" /> : null}
                             Import Lots
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>
