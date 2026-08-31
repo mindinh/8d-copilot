@@ -88,16 +88,14 @@ export function getMergedCaseActions(
             const parsed = parseJsonSafe(d.resultJson);
             if (!parsed) continue;
 
-            const extractRows = (assignedVal: any, actionsVal: any) => {
-                if (Array.isArray(assignedVal) && assignedVal.length > 0) return assignedVal;
-                if (Array.isArray(actionsVal)) return actionsVal;
+            const extractRows = (assignedVal: any) => {
+                if (Array.isArray(assignedVal)) return assignedVal;
                 return [];
             };
 
             if (d.code === 'D3') {
                 const rows = extractRows(
                     parsed.containment?.assignedActions ?? parsed.assignedActions,
-                    parsed.containment?.actions ?? parsed.actions,
                 );
                 for (let i = 0; i < rows.length; i++) {
                     const r = rows[i];
@@ -118,7 +116,6 @@ export function getMergedCaseActions(
             } else if (d.code === 'D5') {
                 const rows = extractRows(
                     parsed.corrective?.assignedActions ?? parsed.assignedActions,
-                    parsed.corrective?.actions ?? parsed.actions,
                 );
                 for (let i = 0; i < rows.length; i++) {
                     const r = rows[i];
@@ -139,7 +136,6 @@ export function getMergedCaseActions(
             } else if (d.code === 'D7') {
                 const rows = extractRows(
                     parsed.preventive?.assignedActions ?? parsed.assignedActions,
-                    parsed.preventive?.actions ?? parsed.actions,
                 );
                 for (let i = 0; i < rows.length; i++) {
                     const r = rows[i];
@@ -243,7 +239,8 @@ export function ActionChecklist({
             toast.success(`Action status updated: ${newStatus}`);
             void queryClient.invalidateQueries({ queryKey: ['8d'] });
         } catch (err: any) {
-            toast.error(`Could not update action status: ${err?.message}`);
+            const msg = err?.response?.data?.error?.message ?? err?.message ?? 'Could not update action status.';
+            toast.error(msg);
         } finally {
             setUpdatingKey(null);
         }

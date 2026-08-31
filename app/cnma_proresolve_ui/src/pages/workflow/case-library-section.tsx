@@ -58,7 +58,40 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                                             <span className="font-mono text-xs">{c.notificationId}</span>
                                             <span className="ml-2 text-muted-foreground">{c.symptomShortText}</span>
                                         </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">{c.sapStatus}</TableCell>
+                                        <TableCell className="text-xs">
+                                            {(() => {
+                                                const s = (c.sapStatus || 'Closed').trim();
+                                                const sLower = s.toLowerCase();
+                                                if (sLower === 'completed' || sLower === 'complete') {
+                                                    return (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-success/30 text-success bg-success/10 text-[10.5px] font-medium"
+                                                        >
+                                                            {s}
+                                                        </Badge>
+                                                    );
+                                                }
+                                                if (sLower.includes('progress') || sLower.includes('process') || sLower === 'open') {
+                                                    return (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-info/30 text-info bg-info/10 text-[10.5px] font-medium"
+                                                        >
+                                                            {s}
+                                                        </Badge>
+                                                    );
+                                                }
+                                                return (
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="text-[10.5px] text-muted-foreground bg-muted border border-border/60 font-normal"
+                                                    >
+                                                        {s}
+                                                    </Badge>
+                                                );
+                                            })()}
+                                        </TableCell>
                                         <TableCell className="text-right text-xs">
                                             {c.embeddingModel
                                                 ? <span className="text-success">yes</span>

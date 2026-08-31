@@ -654,7 +654,7 @@ export function IsNotBasisWidget({
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                             <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                                            <span>Phân tích đối chiếu theo đặc tính đo</span>
+                                            <span>Characteristic Contrast Breakdown</span>
                                         </div>
 
                                         <div className="grid grid-cols-1 gap-2">
@@ -696,7 +696,7 @@ export function IsNotBasisWidget({
                                     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.08] p-2.5 text-xs">
                                         <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 mb-1 pb-1 border-b border-emerald-500/20 text-[11.5px]">
                                             <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Kết luận chung & Định hướng nguyên nhân gốc (Synthesis & Conclusion)</span>
+                                            <span>Synthesis & Conclusion (Lead for D4 Root Cause)</span>
                                         </div>
                                         <div className="text-foreground/90 leading-relaxed text-[12px]">
                                             <Markdown className="text-[12px]">{parsed.conclusion}</Markdown>

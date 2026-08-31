@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -126,6 +126,12 @@ export function EightDDetailPage() {
         },
     });
 
+    useEffect(() => {
+        if (report?.status === 'Failed' && report?.errorMessage) {
+            console.error('[8D Copilot] AI Analysis Error Details:', report.errorMessage);
+        }
+    }, [report?.status, report?.errorMessage]);
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
@@ -206,7 +212,9 @@ export function EightDDetailPage() {
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                         <p className="font-medium">Analysis failed</p>
-                        <p className="text-xs mt-1 break-words">{report.errorMessage}</p>
+                        <p className="text-xs mt-1 text-muted-foreground">
+                            An error occurred during AI analysis execution. Please retry running the analysis or inspect the browser console for details.
+                        </p>
                     </div>
                 </div>
             )}

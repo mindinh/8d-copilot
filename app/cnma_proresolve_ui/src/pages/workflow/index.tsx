@@ -36,7 +36,7 @@ export function WorkflowPage() {
                         <Sliders className="h-6 w-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">8D Training Center</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">AI Configuration</h1>
                         <p className="text-sm text-muted-foreground">
                             Configure global LLM models, precedent retrieval thresholds, and prompts for each 8D Discipline (D1 – D8).
                         </p>

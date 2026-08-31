@@ -28,6 +28,7 @@ import {
     type ActionTask,
 } from '../../../../../shared/action-task';
 import { AiProvenanceInfo } from './ai-provenance-info';
+import { ComparativeDiagnosisBadge } from './comparative-diagnosis-badge';
 
 /**
  * Các widget cho D4 (Root Cause) và các bước hành động (D3, D5, D6, D7).
@@ -732,8 +733,8 @@ export function AiDraftWidget({
 
     return (
         <div className="relative mt-2 rounded-xl border border-primary/25 bg-primary/[0.03] p-4 shadow-xs transition-all">
-            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/15">
-                <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/15">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
                     </span>
@@ -744,6 +745,7 @@ export function AiDraftWidget({
                         fieldKey={fieldKey || 'rootCause.statement'}
                         label="Root Cause Conclusion (D4)"
                     />
+                    <ComparativeDiagnosisBadge compact reportID={effectiveReportID} />
                 </div>
                 {!readOnly && disciplineID && !editing && (
                     <Button

@@ -8,7 +8,7 @@
         "admin": "Administrator",
         "user": "User",
         "logOut": "Log Out",
-        "workflow": "Training Center"
+        "workflow": "AI Configuration"
     },
     "common": {
         "loading": "Loading...",
