@@ -207,7 +207,7 @@ export const BUDGET = {
     parse: { maxTokens: 16_000, thinkingBudget: 256 },
     diagnose: { maxTokens: 32_000, thinkingBudget: 256 },
     analyze: { maxTokens: 100_000, thinkingBudget: 0 },
-    stepAnalyze: { maxTokens: 32_000, thinkingBudget: 0 },
+    stepAnalyze: { maxTokens: 64_000, thinkingBudget: 0 },
     summaries: { maxTokens: 16_000, thinkingBudget: 256 },
     structure: { maxTokens: 16_000, thinkingBudget: 0 },
 } as const;

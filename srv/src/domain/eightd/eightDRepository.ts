@@ -141,14 +141,14 @@ export async function saveReportContext(
     precedents?: unknown,
 ): Promise<void> {
     const ind = independent as
-        | { finding?: { confidence?: number }; verdict?: { aiCategory?: string; agrees?: boolean } }
+        | { finding?: { confidence?: number }; verdict?: { recordedCategory?: string | null; aiCategory?: string; agrees?: boolean | null } }
         | undefined;
     await UPDATE(REPORTS).set({
         caseContext: JSON.stringify(context),
         precedentsJson: precedents ? JSON.stringify(precedents) : null,
         aiFinding: ind ? JSON.stringify(ind) : null,
         aiRootCause: ind?.verdict?.aiCategory ?? null,
-        aiAgreesWithRecord: ind?.verdict?.agrees ?? null,
+        aiAgreesWithRecord: ind?.verdict?.recordedCategory ? (ind.verdict.agrees ?? null) : null,
         aiConfidence: numberOrNull(ind?.finding?.confidence),
     }).where({ ID: reportID });
 }

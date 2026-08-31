@@ -48,7 +48,7 @@ export interface IndependentFinding {
 export interface AgreementVerdict {
     recordedCategory: string | null;
     aiCategory: string;
-    agrees: boolean;
+    agrees: boolean | null;
     /** Số bước trong chuỗi 5-Why model tự dựng, so với chuỗi đã ghi. */
     aiStepCount: number;
     recordedStepCount: number;
@@ -199,7 +199,7 @@ export function compareWithRecorded(
     return {
         recordedCategory: recorded,
         aiCategory: finding.rootCauseCategory,
-        agrees: recorded !== null && recorded === finding.rootCauseCategory,
+        agrees: recorded !== null ? (recorded.toLowerCase() === finding.rootCauseCategory.toLowerCase()) : null,
         aiStepCount: finding.derivedFiveWhy.length,
         recordedStepCount: context.fiveWhy.length,
     };
