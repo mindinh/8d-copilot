@@ -188,10 +188,10 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         >
             <DialogContent className="w-[calc(100%-2rem)] max-w-2xl overflow-hidden">
                 <DialogHeader>
-                    <DialogTitle>Analyze from JSON</DialogTitle>
+                    <DialogTitle>Create 8D Report</DialogTitle>
                     <DialogDescription>
-                        Paste the JSON of one SAP QM defect case. The AI extracts the verified facts
-                        and drafts all eight disciplines.
+                        Paste the JSON of an SAP QM defect case, upload a file, or select an incoming
+                        issue to generate an AI-powered 8D problem solving report.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -249,7 +249,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                         className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
                                     >
                                         <span className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                            {s.notificationId}
+                                             {s.notificationId}
                                         </span>
                                         <span className="min-w-0 flex-1 text-left">
                                             <span className="block break-words text-xs font-normal text-foreground">{s.symptom}</span>
@@ -297,7 +297,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     </Button>
                     <Button onClick={submit} disabled={busy || !check?.ok}>
                         {busy && <Spinner className="w-4 h-4" />}
-                        {busy ? 'Scheduling…' : 'Analyze'}
+                        {busy ? 'Creating…' : 'Create & Analyze'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

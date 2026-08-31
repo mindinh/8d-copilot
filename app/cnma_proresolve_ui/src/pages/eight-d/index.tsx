@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Spinner, cn } from '@cnma/react-ui';
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
-import { ClipboardList, Info, PlusCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { ClipboardList, Info, RefreshCw, Sparkles } from 'lucide-react';
 import {
     eightDService,
     isCustomerComplaint,
@@ -12,7 +12,6 @@ import {
 } from '@/services/eightd-service';
 import { ReportStatusBadge } from './status-badge';
 import { AnalyzeDialog } from './analyze-dialog';
-import { CreateDefectDialog } from '../create-defect';
 
 /**
  * Danh sách báo cáo 8D.
@@ -214,7 +213,6 @@ export function EightDListPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [analyzeOpen, setAnalyzeOpen] = useState(false);
-    const [createDefectOpen, setCreateDefectOpen] = useState(false);
 
     /**
      * Report vừa được xếp lịch: BỎ cache của bảng trước khi rời trang.
@@ -275,13 +273,9 @@ export function EightDListPage() {
                         <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
                         Refresh
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setCreateDefectOpen(true)} className="gap-1.5">
-                        <PlusCircle className="w-4 h-4 text-primary" />
-                        Record Defect (SAP UI5)
-                    </Button>
                     <Button size="sm" onClick={() => setAnalyzeOpen(true)}>
                         <Sparkles className="w-4 h-4" />
-                        Analyze from JSON
+                        Create 8D Report
                     </Button>
                 </div>
             </div>
@@ -338,7 +332,7 @@ export function EightDListPage() {
                 isLoading={isLoading}
                 error={isError ? (error as Error) : null}
                 onRowClick={(row) => navigate(`/8d/${row.ID}`)}
-                emptyMessageKey="No 8D reports yet. Use Record Defect (SAP UI5) to create an SAP defect notification, or click Analyze from JSON to start an analysis."
+                emptyMessageKey="No 8D reports yet. Click Create 8D Report to start an analysis."
                 errorMessageKey="Failed to load reports."
             />
 
@@ -346,12 +340,6 @@ export function EightDListPage() {
                 open={analyzeOpen}
                 onOpenChange={setAnalyzeOpen}
                 onScheduled={goToNewReport}
-            />
-
-            <CreateDefectDialog
-                open={createDefectOpen}
-                onOpenChange={setCreateDefectOpen}
-                onCreated={goToNewReport}
             />
         </div>
     );
