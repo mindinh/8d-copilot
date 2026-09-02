@@ -7,9 +7,13 @@
   "private": true,
   "scripts": {
     "start": "cds-serve",
+    "deploy:sqlite": "cds deploy --to sqlite",
     "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources < NUL",
+    "dev:local": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend:local\" \"npm run dev:frontend\"",
+    "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources,db.sqlite,db.sqlite-wal,db.sqlite-shm < NUL",
+    "dev:backend:local": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile local --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources,db.sqlite,db.sqlite-wal,db.sqlite-shm < NUL",
     "dev:frontend": "node scripts/wait-backend.mjs && npm run dev --prefix app/cnma_proresolve_ui",
+    "dev:backend:serve": "powershell -Command \"while($true){ node node_modules/tsx/dist/cli.mjs node_modules/@sap/cds-dk/bin/cds-tsx.js serve all --profile local --port 4008; Start-Sleep -Seconds 2 }\"",
     "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources",
     "dev:all": "powershell -ExecutionPolicy Bypass -File .\\start-dev.ps1",
     "clean": "node -e \"['gen','mta_archives','ui_resources','app/ui_resources','.cnma_proresolve_mta_build_tmp'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch(e){}}); try{require('fs').readdirSync('.').filter(f=>/^Makefile.*\\.mta$/.test(f)).forEach(f=>require('fs').unlinkSync(f))}catch(e){}\"",
@@ -60,6 +64,7 @@
     "@types/node": "^22.13.10",
     "concurrently": "^10.0.4",
     "jest": "^29.7.0",
+    "sqlite3": "^6.0.1",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.12",
@@ -93,6 +98,12 @@
     "requires": {
       "db": {
         "kind": "hana-cloud"
+      },
+      "[local]": {
+        "db": {
+          "kind": "sqlite",
+          "credentials": { "url": "db.sqlite" }
+        }
       },
       "auth": {
         "[development]": {

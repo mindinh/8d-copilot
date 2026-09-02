@@ -30,17 +30,100 @@ import {
 } from './fieldConfirm';
 import { assignedFieldFor, normalizeActionStatus, normalizeTasks } from '../../../../shared/action-task';
 import { getPath } from './runtimeConfig';
+import { writeClosedCaseToLibrary, type WriteBackResult } from './precedent/closedCaseWriteBack';
 
 const REPORTS = 'cnma.proresolve.Reports';
 const DISCIPLINES = 'cnma.proresolve.Disciplines';
 const REVIEW_EVENTS = 'cnma.proresolve.ReviewEvents';
 const TASK_EVIDENCES = 'cnma.proresolve.TaskEvidences';
+const HISTORICAL_TEAM_MEMBERS = 'cnma.proresolve.HistoricalTeamMembers';
 
 export interface ReportRow {
     ID: string;
     notificationId: string;
     status: string;
     sourcePayload: string;
+}
+
+/**
+ * Ngày ISO, hoặc null cho mọi thứ khác.
+ *
+ * `customer.slaResponseDue` là chuỗi tự do: ngày ISO ở case Q1, và sentinel
+ * 'N/A' / 'N/A - Internal Defect' ở case nội bộ. Cột `Reports.slaResponseDue`
+ * là kiểu Date và tồn tại để so với hôm nay — nên bất cứ thứ gì không phải một
+ * ngày thật đều phải thành null chứ không phải thành một ngày đoán ra.
+ *
+ * Kiểm cả regex lẫn `Date.parse`: '2026-13-45' khớp regex nhưng không phải ngày.
+ */
+export function isoDateOrNull(v: unknown): string | null {
+    if (typeof v !== 'string') return null;
+    const s = v.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    return Number.isNaN(Date.parse(s)) ? null : s;
+}
+
+/**
+ * Số hiệu khiếu nại của khách, hoặc null khi case không có khách.
+ *
+ * `customer.complaintReference` cũng là chuỗi tự do như `slaResponseDue`, và ở
+ * case nội bộ nó mang nguyên một câu tiếng Anh: 'N/A - internal defect, no
+ * customer reference'. Đổ câu đó vào một cột dài 50 ký tự rồi hiển thị nó cạnh
+ * nhãn Origin thì cột trông như có dữ liệu trong khi thực ra không có.
+ *
+ * Bắt mọi biến thể bắt đầu bằng 'N/A', không chỉ đúng hai chuỗi đã thấy: đây là
+ * trường do người và do model điền, và danh sách sentinel sẽ còn dài ra.
+ */
+export function customerRefOrNull(v: unknown): string | null {
+    if (typeof v !== 'string') return null;
+    const s = v.trim();
+    if (!s) return null;
+    if (/^n\s*\/?\s*a\b/i.test(s)) return null;
+    return s.slice(0, 50);
+}
+
+/** Trưởng nhóm trong `team.assignedRoster` của D1. Cả hai trường đều có thể rỗng. */
+export interface TeamLeaderRef {
+    name: string | null;
+    partnerId: string | null;
+}
+
+/**
+ * Trưởng nhóm trong `team.assignedRoster` của D1, hoặc null nếu chưa chốt.
+ *
+ * Trả về CẢ hai trường thay vì một chuỗi đã chọn sẵn, vì hai trường trả lời hai
+ * câu hỏi khác nhau: `name` là thứ hiển thị được, `partnerId` là thứ tra được
+ * trong danh bạ. Bảng nhân sự trong dữ liệu thật chỉ lưu `partnerId` — gộp sớm
+ * thành một chuỗi là vứt mất khoá tra cứu và ép worklist hiện số hiệu.
+ */
+export function teamLeaderRefFrom(resultJson: unknown): TeamLeaderRef | null {
+    let data: any;
+    try {
+        data = typeof resultJson === 'string' ? JSON.parse(resultJson) : resultJson;
+    } catch { return null; }
+
+    const roster = Array.isArray(data?.team?.assignedRoster) ? data.team.assignedRoster : [];
+    const leader = roster.find((r: any) => r?.partnerRole === '8D Team Leader');
+    if (!leader) return null;
+
+    const name = String(leader.partnerName ?? '').trim();
+    // `BP-100014` và `100014` là cùng một người. Danh bạ lưu dạng đã gọt tiền tố,
+    // nên gọt ở đây, nếu không mọi lần tra đều trượt mà không báo gì.
+    const partnerId = String(leader.partnerId ?? '').trim().replace(/^BP-/i, '');
+    if (!name && !partnerId) return null;
+    return { name: name || null, partnerId: partnerId || null };
+}
+
+/**
+ * Tên trưởng nhóm suy ra CHỈ từ D1, không tra danh bạ.
+ *
+ * `partnerName` là thứ người đọc worklist cần; `partnerId` là thứ luôn có. Rơi
+ * về ID còn hơn để trống — một ô trống nói "chưa chốt trưởng nhóm", điều đó ở
+ * đây là sai. `syncTeamLeader` cải thiện thêm bằng cách tra danh bạ trước khi
+ * chấp nhận số hiệu.
+ */
+export function teamLeaderFrom(resultJson: unknown): string | null {
+    const ref = teamLeaderRefFrom(resultJson);
+    return ref ? ref.name ?? ref.partnerId : null;
 }
 
 /** Số EUR có thể là chuỗi trong workbook — chỉ ghi khi ra được số thật. */
@@ -61,12 +144,39 @@ export async function createReport(
     payload: string,
     context: CaseContext,
     title?: string,
+    /**
+     * Số lỗi (`Defects.defectId`) mà báo cáo này mở ra từ đó — chỉ có ở đường
+     * `startEightD`. Đường dán JSON để trống, vì payload dán vào không đến từ
+     * một bản ghi lỗi nào trong hệ thống này.
+     */
+    sourceDefectId?: string | null,
+    /**
+     * Hai CAM KẾT do người mở 8D nhập, ghi đè giá trị suy từ payload.
+     *
+     * ── Vì sao là ghi đè chứ không phải một cột riêng ──
+     * `slaResponseDue` suy từ `caseContext.customer.slaResponseDue` chỉ có giá
+     * trị ở case Q1; case nội bộ ra null, và theo quyết định Q12 hệ thống KHÔNG
+     * được tự bịa một hạn cho chúng. Nhưng "hệ thống không bịa" khác với "không
+     * ai được cam kết": một điều phối viên gõ ngày vào ô này là một CON NGƯỜI
+     * cam kết, và đó chính là thứ Q12 muốn có. Nên cùng một cột, hai đường ghi.
+     *
+     * Để trống thì rơi về giá trị suy từ payload — không phải ghi đè bằng null,
+     * vì như thế mở 8D mà không nhập gì sẽ XOÁ mất hạn SLA thật của case Q1.
+     */
+    commitments?: {
+        slaResponseDue?: string | null;
+        coordinator?: string | null;
+    },
 ): Promise<string> {
     const ID = cds.utils.uuid();
+
+    const committedDue = isoDateOrNull(commitments?.slaResponseDue);
+    const committedCoordinator = commitments?.coordinator?.trim() || null;
 
     await INSERT.into(REPORTS).entries({
         ID,
         status: 'Analyzing',
+        sourceDefectId: sourceDefectId?.trim() || null,
 
         notificationId: context.notificationId,
         origin: context.origin,
@@ -75,13 +185,34 @@ export async function createReport(
         foundDate: context.header.foundDate,
         completionDate: context.header.completionDate,
         quantityExtent: context.header.quantityExtent,
+        defectQuantity: context.header.defectQuantity,
+        defectQuantityUom: context.header.defectQuantityUom,
         teamSize: context.header.teamSize,
+        // Ba cột này đã có trong `Reports` từ trước nhưng chưa ai ghi, nên luôn null
+        // trong DB dù `caseContext` giữ đúng giá trị. Danh sách case lọc theo cột,
+        // không theo JSON — để trống là tự làm mù bộ lọc.
+        entryMode: context.header.entryMode ?? null,
+        inspectionLotId: context.header.inspectionLotId ?? null,
+        referenceNumber: context.header.referenceNumber ?? null,
 
+        // Hai cột của worklist. `teamLeader` KHÔNG được đặt ở đây: lúc này chưa
+        // có D1 nào, nên mọi giá trị viết vào cũng chỉ là phỏng đoán. Nó được
+        // ghi khi kỹ sư chốt bảng nhân sự — xem `syncTeamLeader`.
+        customerRef: customerRefOrNull(context.customer?.complaintReference),
+        // Cam kết người dùng gõ đi trước; để trống thì rơi về giá trị suy từ
+        // payload. KHÔNG phải `committedDue ?? null` — mở 8D mà bỏ trống ô hạn
+        // sẽ xoá mất SLA thật của một case Q1.
+        slaResponseDue: committedDue ?? isoDateOrNull(context.customer?.slaResponseDue),
+        coordinator: committedCoordinator ?? context.responsibility?.coordinator ?? null,
+
+        plant: context.product.plant,
         materialId: context.product.materialId,
         materialDesc: context.product.materialDesc,
         batchId: context.product.batchId,
+        defectCodeGroup: context.product.defectCodeGroup,
         defectCode: context.product.defectCode,
         defectText: context.product.defectText,
+        defectClass: context.product.defectClass,
         workCenterId: context.product.workCenterId,
         workCenterDesc: context.product.workCenterDesc,
 
@@ -133,6 +264,28 @@ export async function savePartialDiscipline(
     });
 }
 
+/**
+ * Sửa hạn cam kết và người điều phối của một case đã tạo.
+ *
+ * Khác `createReport`: ở đây `null` nghĩa là XOÁ, không phải "rơi về giá trị suy
+ * từ payload". Đây là màn hình sửa — người dùng xoá ô ngày là muốn ô đó trống.
+ *
+ * Trả về `false` khi không có dòng nào mang `reportID` đó, để tầng service phân
+ * biệt "sửa xong" với "không tìm thấy" mà không phải truy vấn thêm một lần.
+ */
+export async function setCaseCommitments(
+    reportID: string,
+    commitments: { slaResponseDue: string | null; coordinator: string | null },
+): Promise<boolean> {
+    const affected = await UPDATE(REPORTS)
+        .set({
+            slaResponseDue: commitments.slaResponseDue,
+            coordinator: commitments.coordinator,
+        })
+        .where({ ID: reportID });
+    return Number(affected) > 0;
+}
+
 /** Ghi context, chẩn đoán mù và tiền lệ sớm cho report để UI đọc được ngay. */
 export async function saveReportContext(
     reportID: string,
@@ -143,8 +296,29 @@ export async function saveReportContext(
     const ind = independent as
         | { finding?: { confidence?: number }; verdict?: { recordedCategory?: string | null; aiCategory?: string; agrees?: boolean | null } }
         | undefined;
+    // Ghi lại ba cột worklist từ context ĐÃ làm giàu. `createReport` viết chúng
+    // từ context thô; `enrichFromDatabase` có thể BỔ SUNG đúng mấy trường này, và
+    // bỏ qua ở đây thì cột sẽ nói một đằng, `caseContext` một nẻo — sai lệch
+    // không bao giờ báo lỗi, chỉ hiện sai ngày đến hạn.
+    //
+    // ── Vì sao "bổ sung" chứ không phải "ghi đè" ──
+    // Hai cột `slaResponseDue` và `coordinator` có thể đã mang CAM KẾT do người mở
+    // 8D gõ tay (xem `commitments` ở `createReport`). Làm giàu từ DB rồi ghi đè
+    // thẳng sẽ lặng lẽ thay ngày người ta vừa hứa bằng ngày suy từ payload — đúng
+    // cái người dùng cố ý sửa. Nên chỉ lấp chỗ trống, không đụng vào chỗ đã có.
+    const current = await SELECT.one
+        .from(REPORTS)
+        .columns('slaResponseDue', 'coordinator')
+        .where({ ID: reportID });
+
+    const enrichedDue = isoDateOrNull(context.customer?.slaResponseDue);
+    const enrichedCoordinator = context.responsibility?.coordinator ?? null;
+
     await UPDATE(REPORTS).set({
         caseContext: JSON.stringify(context),
+        customerRef: customerRefOrNull(context.customer?.complaintReference),
+        slaResponseDue: current?.slaResponseDue ?? enrichedDue,
+        coordinator: current?.coordinator ?? enrichedCoordinator,
         precedentsJson: precedents ? JSON.stringify(precedents) : null,
         aiFinding: ind ? JSON.stringify(ind) : null,
         aiRootCause: ind?.verdict?.aiCategory ?? null,
@@ -297,12 +471,60 @@ export interface AssignedTeamRow {
  * `aiGenerated` giu nguyen `true`: buoc nay VAN do AI sinh, chi rieng danh sach
  * nguoi la do con nguoi chot. Ha co xuong `false` se noi doi ve phan con lai.
  */
+/**
+ * Đồng bộ `Reports.teamLeader` sau mỗi lần `team.assignedRoster` của D1 đổi.
+ *
+ * -- Vi sao goi tu ca hai duong ghi --
+ * `assignedRoster` sua duoc bang hai loi goi khac nhau: bang nhan su rieng
+ * (`saveAssignedTeam`) va duong ghi truong chung (`saveDisciplineFieldValue`).
+ * Chi dong bo o mot duong nghia la duong con lai lang le lam cot worklist lech
+ * khoi D1 - va lech kieu do khong bao gio bao loi, no chi hien sai ten.
+ *
+ * Roster rong hoac khong co truong nhom thi ghi null: "chua chot" la mot cau
+ * tra loi that, con de nguyen ten cu la noi doi ve mot nguoi da bi go ra.
+ */
+async function syncTeamLeader(reportID: string | null | undefined, data: unknown): Promise<void> {
+    if (!reportID) return;
+    await UPDATE(REPORTS).set({ teamLeader: await resolveTeamLeaderName(data) }).where({ ID: reportID });
+}
+
+/**
+ * Tên trưởng nhóm để hiện trên worklist — tra danh bạ khi D1 chỉ lưu số hiệu.
+ *
+ * Bảng nhân sự lưu `{ partnerId, partnerRole }` và KHÔNG lưu tên: tên là dữ liệu
+ * chủ, nhân bản nó vào từng case là để nó lệch khi người ta đổi tên. Nhưng cột
+ * worklist thì phải đọc được — "100014" không nói cho ai biết ai đang giữ case.
+ *
+ * Nên tra `HistoricalTeamMembers`, đúng cái danh bạ mà widget bảng nhân sự dùng.
+ * Không thấy thì vẫn ghi số hiệu: một số hiệu còn tra tay được, một ô trống thì
+ * nói sai rằng chưa ai được giao.
+ */
+async function resolveTeamLeaderName(data: unknown): Promise<string | null> {
+    const ref = teamLeaderRefFrom(data);
+    if (!ref) return null;
+    if (ref.name) return ref.name;
+    if (!ref.partnerId) return null;
+
+    // Danh bạ có một dòng cho mỗi lần tham gia case, nên cùng một người xuất hiện
+    // nhiều lần — lấy dòng đầu có tên, thay vì dòng đầu bất kỳ (dòng đó có thể
+    // rỗng tên và làm hỏng cả phép tra).
+    const rows = await SELECT.from(HISTORICAL_TEAM_MEMBERS)
+        .columns('partnerName')
+        .where({ partnerId: { in: [ref.partnerId, `BP-${ref.partnerId}`] } });
+
+    for (const row of rows ?? []) {
+        const name = String((row as any).partnerName ?? '').trim();
+        if (name) return name;
+    }
+    return ref.partnerId;
+}
+
 export async function saveAssignedTeam(
     disciplineID: string,
     roster: AssignedTeamRow[],
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
+        .columns('ID', 'code', 'report_ID', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
     if (normalizeStatus((row as any).reviewStatus) === 'Approved') {
@@ -339,9 +561,11 @@ export async function saveAssignedTeam(
         : {};
     team.assignedRoster = roster;
 
+    const next = { ...data, team };
     await UPDATE(DISCIPLINES)
-        .set({ resultJson: JSON.stringify({ ...data, team }) })
+        .set({ resultJson: JSON.stringify(next) })
         .where({ ID: disciplineID });
+    await syncTeamLeader((row as any).report_ID, next);
 
     cds.log('eightd-repo').info(`Saved 8D team for discipline ${disciplineID}: ${roster.length} member(s)`);
 }
@@ -402,7 +626,7 @@ export async function saveDisciplineFieldValue(
     value: unknown,
 ): Promise<void> {
     const row = await SELECT.one.from(DISCIPLINES)
-        .columns('ID', 'code', 'resultJson', 'reviewStatus', 'workState')
+        .columns('ID', 'code', 'report_ID', 'resultJson', 'reviewStatus', 'workState')
         .where({ ID: disciplineID });
     if (!row) throw Object.assign(new Error(`Discipline ${disciplineID} not found.`), { code: 404 });
     const isApproved = normalizeStatus((row as any).reviewStatus) === 'Approved';
@@ -465,6 +689,10 @@ export async function saveDisciplineFieldValue(
         await UPDATE(DISCIPLINES).set({
             resultJson: JSON.stringify(data),
         }).where({ ID: disciplineID });
+    }
+
+    if (fieldKey === 'team.assignedRoster') {
+        await syncTeamLeader((row as any).report_ID, data);
     }
 
     cds.log('eightd-repo').info(`Saved ${fieldKey} on discipline ${disciplineID} (${row.code})`);
@@ -592,6 +820,13 @@ export interface ReviewResult {
     reviewedBy: string;
     reviewedAt: string;
     gate: ClosureGate;
+    /** Chỉ có khi vừa duyệt D8: case đã đóng và đã ghi vào kho tiền lệ hay chưa. */
+    closure?: {
+        reportClosed: boolean;
+        libraryWrite: WriteBackResult | null;
+        /** Lý do không ghi được vào kho. Có mặt nghĩa là case đã đóng nhưng kho chưa học được gì. */
+        libraryError?: string;
+    };
 }
 
 /**
@@ -622,6 +857,25 @@ export async function reviewDiscipline(
     let nextWorkState = String((row as any).workState ?? 'NotStarted');
 
     if (toStatus === 'Approved') {
+        /**
+         * Duyệt D8 = ĐÓNG CASE. Cổng phải chặn ở đây, không chỉ ở màn hình.
+         *
+         * `EightDService.cds` đã tuyên bố "D8 chỉ mở khi D1-D7 Approved" từ đầu,
+         * nhưng chỗ duy nhất kiểm điều đó là UI — một lời gọi thẳng vào action
+         * vẫn đóng được một case còn ba bước dở dang. Từ Phase 5 việc này còn
+         * kéo theo một dòng ghi vào kho tiền lệ, nên một case đóng non không chỉ
+         * sai trong audit: nó trở thành bằng chứng cho những case sau.
+         */
+        if (String(row.code ?? '') === 'D8') {
+            const prereqs = await SELECT.from(DISCIPLINES)
+                .columns('code', 'reviewStatus')
+                .where({ report_ID: reportID });
+            const gate = evaluateClosureGate(prereqs as any[]);
+            if (!gate.canClose) {
+                throw Object.assign(new Error(`Cannot close the case. ${gate.reason}`), { code: 400 });
+            }
+        }
+
         if (String(row.code ?? '') === 'D6') {
             const siblings = await SELECT.from(DISCIPLINES)
                 .columns('code', 'resultJson')
@@ -687,6 +941,10 @@ export async function reviewDiscipline(
         `Review ${row.code} ${fromStatus} -> ${toStatus} by ${actor} on report ${reportID}`,
     );
 
+    const closure = toStatus === 'Approved' && String(row.code ?? '') === 'D8'
+        ? await closeCase(reportID, at)
+        : undefined;
+
     return {
         disciplineID,
         code: String(row.code ?? ''),
@@ -695,7 +953,49 @@ export async function reviewDiscipline(
         reviewedBy: actor,
         reviewedAt: at,
         gate: evaluateClosureGate(siblings as any[]),
+        ...(closure ? { closure } : {}),
     };
+}
+
+/**
+ * Đóng case và cho kho tiền lệ học nó.
+ *
+ * ── Vì sao đóng report ở đây chứ không để UI gọi thêm một action ──
+ * Duyệt D8 CHÍNH LÀ hành vi đóng case; tách thành hai lời gọi nghĩa là tồn tại
+ * một trạng thái "D8 đã duyệt nhưng report vẫn mở", và mọi màn hình đọc
+ * `report.status` sẽ nói ngược với vết duyệt.
+ *
+ * ── Vì sao lỗi ghi kho KHÔNG làm hỏng việc đóng case ──
+ * Case đã được con người duyệt xong tám bước; từ chối đóng nó vì kho tiền lệ ghi
+ * hỏng là để một sự cố phụ chặn kết luận nghiệp vụ. Nhưng cũng KHÔNG nuốt lỗi:
+ * `libraryError` đi thẳng lên kết quả trả về, vì một kho lặng lẽ không nhận case
+ * mới đúng là thứ không ai phát hiện ra cho tới khi gợi ý bắt đầu nghèo đi.
+ */
+async function closeCase(reportID: string, at: string): Promise<NonNullable<ReviewResult['closure']>> {
+    await UPDATE(REPORTS).set({
+        status: 'Closed',
+        // `status` là trạng thái pipeline, `sapStatus` là trạng thái phía SAP —
+        // kho tiền lệ lọc theo cột thứ hai (`CLOSED_STATUSES`), nên thiếu nó thì
+        // dòng vừa ghi không bao giờ được chọn làm ứng viên.
+        sapStatus: 'Completed',
+        completionDate: at.slice(0, 10),
+    }).where({ ID: reportID });
+
+    try {
+        const libraryWrite = await writeClosedCaseToLibrary(reportID);
+        if (libraryWrite.skippedReason) {
+            cds.log('eightd-repo').warn(
+                `Case ${reportID} đã đóng nhưng không vào kho tiền lệ: ${libraryWrite.skippedReason}`,
+            );
+            return { reportClosed: true, libraryWrite, libraryError: libraryWrite.skippedReason };
+        }
+        return { reportClosed: true, libraryWrite };
+    } catch (e: any) {
+        cds.log('eightd-repo').error(
+            `Case ${reportID} đã đóng nhưng ghi kho tiền lệ thất bại: ${e.message}`,
+        );
+        return { reportClosed: true, libraryWrite: null, libraryError: e.message };
+    }
 }
 
 /** Vết duyệt của một report, mới nhất trước. Dùng cho panel audit trên UI. */

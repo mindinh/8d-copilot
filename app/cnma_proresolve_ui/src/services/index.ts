@@ -15,5 +15,7 @@ export type { Item } from './items-service';
 export { identityHttpClient } from './identity-http-client';
 export { eightDService, parseList, isCustomerComplaint, originShort } from './eightd-service';
 export type { Report8D, Discipline8D, ReportStatus } from './eightd-service';
+export { defectsService, DEFECT_STATUS_TONE } from './defect-service';
+export type { DefectItem, DefectCharacteristicItem, DefectStatus } from './defect-service';
 
 

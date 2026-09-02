@@ -13,6 +13,8 @@ export interface HistoricalCaseItem {
     quantityExtent?: string | null;
     workCenterId?: string | null;
     workCenterDesc?: string | null;
+    /** Nhóm mã lỗi. Suy từ mã qua danh mục — chưa có trọng số khi chấm tiền lệ. */
+    defectCodeGroup?: string | null;
     defectCode?: string | null;
     defectText?: string | null;
     materialId?: string | null;
@@ -24,6 +26,17 @@ export interface HistoricalCaseItem {
     fmeaId?: string | null;
     sourcePayload?: string | null;
     attributesJson?: string | null;
+    /**
+     * Dòng này vào kho bằng đường nào: `'imported'` (nạp hàng loạt dữ liệu cũ) hay
+     * `'closed-in-app'` (case do chính app đóng ở D8).
+     *
+     * Cột này trả lời câu hỏi đầu tiên khi ai đó thắc mắc "sao AI lại gợi ý case
+     * này": tiền lệ có vết duyệt của con người trên tám bước D không đáng tin
+     * ngang một dòng di trú chỉ mang những gì file cũ ghi lại.
+     */
+    provenance?: string | null;
+    /** Lượt chạy 8D đã sinh ra dòng này. Null với dòng import. */
+    sourceReportID?: string | null;
     createdAt?: string;
     createdBy?: string;
     modifiedAt?: string;
@@ -36,6 +49,12 @@ export interface InspectionLotItem {
     materialId: string;
     characteristic: string;
     equipment?: string | null;
+    /**
+     * Trạm sản xuất của lô. Trước đây màn hình tự cắt nó ra từ mã equipment kèm
+     * giá trị dự phòng cứng — nghĩa là con số hiển thị không hề được lưu. Giờ nó
+     * là một cột thật, vì Đường A trả nó về form ghi nhận lỗi.
+     */
+    workCenterId?: string | null;
     measuredValue?: string | null;
     unit?: string | null;
     conforming: boolean;

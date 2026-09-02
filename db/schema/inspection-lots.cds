@@ -10,6 +10,19 @@ entity InspectionLots : cuid, managed {
     materialId     : String(30)  @mandatory;
     characteristic : String(120) @mandatory;
     equipment      : String(50);
+    /**
+     * Work center (ARBPL) của lô.
+     *
+     * ── Vì sao thêm cột thay vì cắt từ `equipment` ──
+     * Form của tab này vẫn hiện một ô "Work Center Reference", nhưng nó được CẮT
+     * bằng chuỗi từ mã equipment ('WC-MILL-07-F1' → 'WC-MILL-07'), có sẵn giá trị
+     * dự phòng cứng 'WC-MILL-07', và không bao giờ được lưu. Nghĩa là màn hình
+     * khẳng định một work center mà cơ sở dữ liệu không hề biết.
+     *
+     * F4 lô kiểm tra (1.4) phải dán work center vào form ghi nhận lỗi. Dán một
+     * chuỗi tự cắt ra là chép lại chỗ đoán sang một case có tính pháp lý.
+     */
+    workCenterId   : String(30);
     measuredValue  : String(60);
     unit           : String(20);
     conforming     : Boolean default true;

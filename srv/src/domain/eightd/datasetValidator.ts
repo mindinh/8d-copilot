@@ -32,7 +32,7 @@
 import {
     ISHIKAWA_CATEGORIES,
     ORIGIN_CUSTOMER,
-    ORIGIN_INTERNAL,
+    originAllowsInspectionLot,
 } from './types';
 import { extractDeepCase } from './caseMapper';
 
@@ -201,13 +201,25 @@ export function validateDataset(raw: any): ValidationIssue[] {
         quality('TEAM-SIZE-MATCH', `team_size ghi ${note.team_size} nhưng có ${team.length} thành viên.`);
     }
 
+    // Lô kiểm tra trên case Q1 — mắt xích không thể tồn tại.
+    // Mapper đã bỏ nó rồi; ở đây chỉ để dataset biết mình có vấn đề, vì validator
+    // chạy trên FILE nguồn chứ không phải trên context đã dọn.
+    if (!originAllowsInspectionLot(origin) && note.inspection_lot_id) {
+        quality(
+            'Q1-NO-INSPECTION-LOT',
+            `Case khiếu nại khách hàng (Q1) nhưng có inspection_lot_id '${note.inspection_lot_id}'.`,
+        );
+    }
+
     // Khách hàng
+    // Luật này thuộc về MỌI nguồn gốc không hướng khách hàng, không riêng Q3:
+    // case Q2 (nhà cung cấp) cũng không có khiếu nại khách hàng nào.
     const cref = rows(data, 'customer_reference')[0];
-    if (cref && origin === ORIGIN_INTERNAL) {
+    if (cref && origin !== ORIGIN_CUSTOMER) {
         for (const f of ['complaint_reference', 'customer_plant_contact', 'sla_response_due']) {
             const v = cref[f];
             if (v != null && String(v).trim() !== '' && !isDeliberateNA(v)) {
-                quality('Q1-ONLY-CUSTOMER-FIELDS', `Case nội bộ (Q3) nhưng customer_reference.${f} có dữ liệu: '${v}'.`);
+                quality('Q1-ONLY-CUSTOMER-FIELDS', `Case không hướng khách hàng (${origin || 'không rõ nguồn gốc'}) nhưng customer_reference.${f} có dữ liệu: '${v}'.`);
             }
         }
     } else if (cref && origin === ORIGIN_CUSTOMER) {

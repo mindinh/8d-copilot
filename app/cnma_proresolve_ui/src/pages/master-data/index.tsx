@@ -5,12 +5,34 @@ import {
     TabsList,
     TabsTrigger,
 } from '@cnma/react-ui';
-import { Database, FolderKanban, Layers } from 'lucide-react';
+import { ClipboardList, Database, FolderKanban, Layers, Tags } from 'lucide-react';
+import { CodeCataloguesTab } from './CodeCataloguesTab';
+import { DefectsTab } from './DefectsTab';
 import { HistoricalDefectsTab } from './HistoricalDefectsTab';
 import { InspectionLotsTab } from './InspectionLotsTab';
 
+/**
+ * Mỗi tab nói rõ nó LÀ CÁI GÌ, ngay dưới thanh tab.
+ *
+ * Hai tên cũ đều tuyên bố sai. "QM Inspection Lots" hứa hẹn đối tượng lô kiểm tra
+ * của SAP — một header với N kết quả; bảng đằng sau nó là một lô một đặc tính, và
+ * việc thật của nó là làm tập so sánh cho Is/Is-Not. "Historical Defects" nghe như
+ * chỗ ghi nhận lỗi; nó là kho tiền lệ, chỉ chứa case đã đóng.
+ */
+const TAB_CAPTIONS = {
+    'inspection-lots': 'Inspection History — the comparison population behind D2\'s Is / Is-Not analysis. One row is one characteristic measured on one lot, not the full SAP inspection lot object.',
+    'defects': 'Defect Records — every quality defect recorded, whether or not it warrants an 8D. Most defects are closed here; opening an 8D is a separate, deliberate decision made on this list.',
+    'historical-cases': 'Closed Case Library — the precedent store the AI retrieves from. Completed and closed cases only; an open case has no proven lesson to reuse.',
+    'code-catalogues': 'Code Catalogues — the two SAP QM code lists this app codes against: defect codes (catalog type 9) and quality task codes (type 2). Read-only, because both are master data sourced from S/4 once it is connected.',
+} as const;
+
+type MasterDataTab = keyof typeof TAB_CAPTIONS;
+
 export function MasterDataPage() {
-    const [activeTab, setActiveTab] = useState<'historical-cases' | 'inspection-lots'>('historical-cases');
+    // Lô kiểm tra đứng trước: chuỗi là ② lô → ③ kết quả → ④ lỗi, và thứ tự tab nên
+    // dạy chuỗi đó chứ không mâu thuẫn với nó. Tab "Defects" đã chen vào giữa ở
+    // Phase 2 — nó là mắt xích ④, đứng sau kết quả kiểm tra và trước case đã đóng.
+    const [activeTab, setActiveTab] = useState<MasterDataTab>('inspection-lots');
 
     return (
         <div className="p-6 md:p-8 w-full min-w-0 space-y-6">
@@ -23,7 +45,7 @@ export function MasterDataPage() {
                     <div>
                         <h1 className="text-xl font-bold text-foreground">Master Data Management</h1>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            Manage historical defect precedents and QM inspection lot population data for AI 8D analysis and Is/Is-Not comparison
+                            Maintain the inspection history behind Is/Is-Not comparison, the defect records an 8D can be opened from, and the closed case library the AI retrieves precedents from
                         </p>
                     </div>
                 </div>
@@ -32,34 +54,62 @@ export function MasterDataPage() {
             {/* Navigation Tabs */}
             <Tabs
                 value={activeTab}
-                onValueChange={(v) => setActiveTab(v as 'historical-cases' | 'inspection-lots')}
-                className="w-full space-y-6"
+                onValueChange={(v) => setActiveTab(v as MasterDataTab)}
+                className="w-full space-y-4"
             >
-                <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/60 p-1 rounded-xl border border-border/80 h-10 shadow-xs">
-                    <TabsTrigger
-                        value="historical-cases"
-                        className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all border-b-0 data-[state=active]:border-b-0 data-[state=active]:border-transparent -mb-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs hover:text-foreground h-8 cursor-pointer"
-                    >
-                        <FolderKanban className="h-3.5 w-3.5" />
-                        <span>Historical Defects</span>
-                    </TabsTrigger>
+                <TabsList className="grid w-full grid-cols-4 max-w-3xl bg-muted/60 p-1 rounded-xl border border-border/80 h-10 shadow-xs">
                     <TabsTrigger
                         value="inspection-lots"
                         className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all border-b-0 data-[state=active]:border-b-0 data-[state=active]:border-transparent -mb-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs hover:text-foreground h-8 cursor-pointer"
                     >
                         <Layers className="h-3.5 w-3.5" />
-                        <span>QM Inspection Lots</span>
+                        <span>Inspection History</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="defects"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all border-b-0 data-[state=active]:border-b-0 data-[state=active]:border-transparent -mb-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs hover:text-foreground h-8 cursor-pointer"
+                    >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        <span>Defect Records</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="historical-cases"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all border-b-0 data-[state=active]:border-b-0 data-[state=active]:border-transparent -mb-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs hover:text-foreground h-8 cursor-pointer"
+                    >
+                        <FolderKanban className="h-3.5 w-3.5" />
+                        <span>Closed Case Library</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="code-catalogues"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all border-b-0 data-[state=active]:border-b-0 data-[state=active]:border-transparent -mb-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs hover:text-foreground h-8 cursor-pointer"
+                    >
+                        <Tags className="h-3.5 w-3.5" />
+                        <span>Code Catalogues</span>
                     </TabsTrigger>
                 </TabsList>
 
-                {/* Tab 1: Historical Cases */}
+                <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed">
+                    {TAB_CAPTIONS[activeTab]}
+                </p>
+
+                {/* Tab 1: Inspection History — Is/Is-Not population */}
+                <TabsContent value="inspection-lots" className="mt-0 outline-none space-y-4">
+                    <InspectionLotsTab />
+                </TabsContent>
+
+                {/* Tab 2: Defect Records — mắt xích ④, nơi 8D được mở ra một cách có chủ ý */}
+                <TabsContent value="defects" className="mt-0 outline-none space-y-4">
+                    <DefectsTab />
+                </TabsContent>
+
+                {/* Tab 3: Closed Case Library — precedent store */}
                 <TabsContent value="historical-cases" className="mt-0 outline-none space-y-4">
                     <HistoricalDefectsTab />
                 </TabsContent>
 
-                {/* Tab 2: Inspection Lots */}
-                <TabsContent value="inspection-lots" className="mt-0 outline-none space-y-4">
-                    <InspectionLotsTab />
+                {/* Tab 4: Code Catalogues — hai danh mục mã QM đứng cạnh nhau */}
+                <TabsContent value="code-catalogues" className="mt-0 outline-none space-y-4">
+                    <CodeCataloguesTab />
                 </TabsContent>
             </Tabs>
         </div>

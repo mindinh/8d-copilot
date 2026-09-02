@@ -15,8 +15,34 @@
 
 export const ORIGIN_INTERNAL = 'Q3 - Internal Defect';
 export const ORIGIN_CUSTOMER = 'Q1 - Customer Complaint';
+/**
+ * Q2 — lỗi do nhà cung cấp.
+ *
+ * Đường nhập JSON vẫn ánh xạ được Q2 từ trước, và kho case có case Q2, nhưng
+ * dropdown của form chỉ có Q1 và Q3. Nghĩa là có một loại case chỉ vào được hệ
+ * thống qua cửa import, không ai gõ tay được — và không ai biết vì sao.
+ */
+export const ORIGIN_SUPPLIER = 'Q2 - Supplier Defect';
 
-export type Origin = typeof ORIGIN_INTERNAL | typeof ORIGIN_CUSTOMER;
+export type Origin =
+    | typeof ORIGIN_INTERNAL
+    | typeof ORIGIN_CUSTOMER
+    | typeof ORIGIN_SUPPLIER;
+
+/**
+ * Nguồn gốc này có lô kiểm tra được không?
+ *
+ * Lô kiểm tra là một đối tượng của NHÀ MÁY MÌNH. Khiếu nại khách hàng đến sau
+ * khi hàng đã rời cổng — cái lô kiểm tra đã đóng từ lâu, và nếu nó bắt được lỗi
+ * này thì hàng đã không đi. Gắn một số lô vào case Q1 là dựng một mắt xích
+ * không tồn tại, rồi mọi thứ đọc chuỗi đó về sau sẽ tin nó.
+ *
+ * Đặt ở đây chứ không nằm trong component: cả form lẫn pipeline phía server đều
+ * cần cùng câu trả lời, và hai bản sao của một luật sẽ lệch nhau.
+ */
+export function originAllowsInspectionLot(origin: string): boolean {
+    return String(origin ?? '').trim() !== ORIGIN_CUSTOMER;
+}
 
 export const ISHIKAWA_CATEGORIES = [
     'Man', 'Machine', 'Method', 'Material', 'Measurement', 'Environment',
@@ -35,6 +61,21 @@ export interface ActionRow {
     actionType: string;
     actionText: string;
     status: string;
+
+    /**
+     * ── Ba trường Quality Task, chỉ có ở case đóng TRONG app ──
+     * Dataset nhập vào không mang người thực hiện, công sức hay hạn của từng
+     * hành động — nó chỉ mang một câu văn và một trạng thái. Nên ba trường này
+     * là optional chứ không phải bắt buộc-nhưng-rỗng: `undefined` ở đây nói
+     * "nguồn không có", khác hẳn với "có mà bỏ trống".
+     *
+     * `taskCode`/`taskCodeGroup` KHÔNG nằm ở đây: chúng suy ra từ `actionText`
+     * ở đúng một chỗ (`writeHistoricalCase`), nên mọi đường vào kho đều mã hoá
+     * bằng cùng một bộ luật.
+     */
+    taskProcessor?: string | null;
+    timeEffort?: number | null;
+    plannedEndDate?: string | null;
 }
 
 export interface TeamRow {
@@ -46,17 +87,55 @@ export interface TeamRow {
     phone?: string | null;
 }
 
+/**
+ * Phán quyết của người kiểm cho MỘT đặc tính — bước ③ của chuỗi SAP.
+ *
+ * Đây là dữ kiện, không phải suy luận: người kiểm nhìn số đo, đối chiếu spec, rồi
+ * quyết. Có nó thì `outOfSpec` không còn phải đoán từ chuỗi.
+ */
+export const VALUATIONS = ['Accepted', 'Rejected'] as const;
+export type Valuation = (typeof VALUATIONS)[number];
+
+export function isValuation(v: unknown): v is Valuation {
+    return VALUATIONS.includes(String(v ?? '').trim() as Valuation);
+}
+
 export interface InspectionRow {
     characteristic: string;
     measuredValue: string;
+    /**
+     * Spec dạng chuỗi để HIỂN THỊ và để trích dẫn trong 8D.
+     *
+     * Dựng từ hai giới hạn bên dưới khi có chúng; ở dữ liệu cũ (workbook, JSON
+     * import) đây là văn bản tự do và là thứ duy nhất có. Không còn là nguồn duy
+     * nhất để kết luận vượt spec — xem `resolveOutOfSpec`.
+     */
     specValue: string;
+    /**
+     * Giới hạn dưới / trên đã tách thành SỐ, và đơn vị đứng riêng.
+     *
+     * ── Vì sao tách ──
+     * Một chuỗi 'max 0.10mm' phải được parse lại mỗi lần muốn so, và parse hỏng
+     * thì `outOfSpec` về null — trong khi `postProcess` chọn đặc tính cho Is/Is-Not
+     * DỰA TRÊN `outOfSpec`. Nghĩa là một lỗi parse âm thầm đổi luôn đặc tính mà D2
+     * đem ra so sánh. Số thì không parse hỏng được.
+     *
+     * `null` ở một vế nghĩa là spec một phía: chỉ `max` hoặc chỉ `min`. Cả hai null
+     * nghĩa là dòng này chưa khai giới hạn — và khi đó `valuation` phải gánh.
+     */
+    specLowerLimit: number | null;
+    specUpperLimit: number | null;
+    specUom: string | null;
+    /** Bước ③ của SAP. Người kiểm quyết định; ta không suy ra hộ. */
+    valuation: Valuation | null;
     equipment?: string | null;
     /**
-     * Có vượt spec không, suy ra bằng code từ hai chuỗi trên.
+     * Có vượt spec không.
      *
-     * `null` khi KHÔNG parse được số (ví dụ 'Class 3' vs 'Class 0-1'). Để null
-     * chứ không đoán — một phán quyết sai ở đây sẽ được model dùng làm bằng
-     * chứng cho D2 và D4.
+     * Thứ tự nguồn: `valuation` → hai giới hạn số → parse chuỗi `specValue` (chỉ
+     * còn cho dữ liệu cũ). `null` khi không nguồn nào kết luận được. Để null chứ
+     * không đoán — một phán quyết sai ở đây sẽ được model dùng làm bằng chứng cho
+     * D2 và D4.
      */
     outOfSpec: boolean | null;
 }
@@ -66,6 +145,8 @@ export interface HistoricalInspectionLot {
     materialId: string;
     characteristic: string;
     equipment?: string | null;
+    /** Work center của lô. Có thật trên bảng chứ không cắt từ mã equipment. */
+    workCenterId?: string | null;
     measuredValue?: string | null;
     conforming: boolean;
     lotDate?: string | null;
@@ -104,13 +185,37 @@ export interface CaseContext {
         status: string;
         foundDate: string | null;
         completionDate: string | null;
+        /**
+         * Chuỗi hiển thị của lượng ảnh hưởng ('128 units affected', hoặc '128 PC'
+         * ghép từ hai trường dưới).
+         *
+         * GIỮ LẠI dù đã có số: nó là một `evidence path` mà model được phép trích
+         * dẫn (`header.quantityExtent`), và toàn bộ kho tiền lệ lưu bằng cột này.
+         * Bỏ đi là đổi hợp đồng trích dẫn của mọi case cũ để lấy về đúng một trường
+         * mà UI chỉ đem ra in.
+         */
         quantityExtent: string;
+        /**
+         * Lượng ảnh hưởng dạng SỐ, kèm đơn vị. Đây mới là thứ đếm được.
+         *
+         * `null` ở case cũ: workbook chỉ ghi văn xuôi, và ép một câu chữ thành số
+         * là tự nhận rủi ro parse sai để đổi lấy một con số không ai kiểm chứng.
+         */
+        defectQuantity: number | null;
+        defectQuantityUom: string | null;
         teamSize: number | null;
         entryMode?: string | null;
         inspectionLotId?: string | null;
+        /** Số tham chiếu bên ngoài (khiếu nại của khách, phiếu giao của NCC, ticket). */
+        referenceNumber?: string | null;
     };
 
     product: {
+        /**
+         * Nhà máy (WERKS). Chuỗi rỗng ở dữ liệu cũ — workbook không khai nhà máy.
+         * Cần cho F4 lô kiểm tra (lọc theo vật tư + nhà máy) ở bước sau.
+         */
+        plant: string;
         materialId: string;
         materialDesc: string;
         /**
@@ -123,8 +228,24 @@ export interface CaseContext {
          */
         materialGroup: string;
         batchId: string;
+        /**
+         * Nhóm mã lỗi (catalog type 9). Mã lỗi chỉ duy nhất TRONG một nhóm, nên
+         * `defectCode` một mình là khoá thiếu vế — hai nhóm khác nhau có thể cùng
+         * dùng mã `0001`.
+         *
+         * Chuỗi rỗng khi nguồn cũ không khai nhóm. Case import từ workbook nằm hết
+         * ở nhóm này; đừng suy ngược nhóm từ mã, vì suy sai thì D2 in ra một khoá
+         * nghe rất SAP mà tra không ra.
+         */
+        defectCodeGroup: string;
         defectCode: string;
         defectText: string;
+        /**
+         * Mức nghiêm trọng của mã lỗi (SAP FECLAS). Lấy từ danh mục qua F4, không
+         * do người nhập gõ — cùng một mã lỗi phải luôn có cùng mức, nếu không thì
+         * xếp hạng ưu tiên giữa các case mất hết ý nghĩa.
+         */
+        defectClass: string;
         workCenterId: string;
         workCenterDesc: string;
     };

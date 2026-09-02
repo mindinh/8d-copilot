@@ -53,6 +53,51 @@ export function WorkflowPage() {
                 </div>
             </div>
 
+            {/*
+              * ── Chuỗi nghiệp vụ, nói trước khi nói về cấu hình AI ──
+              *
+              * Trang này cấu hình NỬA SAU của chuỗi. Nửa đầu — ghi nhận lỗi, rồi
+              * quyết định có mở 8D hay không — không có AI nào tham gia, và trước
+              * Phase 2 nó cũng không hiện ra ở đâu cả: bấm "Record Defect" là ra
+              * thẳng một 8D, nên người đọc trang này tưởng mọi lỗi đều chạy qua
+              * những gì bên dưới. Không phải. Phần lớn lỗi dừng ở bước ②.
+              */}
+            <div className="rounded-xl border border-border/80 bg-muted/30 p-4 space-y-2">
+                <h2 className="text-sm font-semibold tracking-tight">Where AI enters the chain</h2>
+                <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs">
+                    {[
+                        { n: '1', label: 'Inspection result', hint: 'Recorded in Master Data', ai: false },
+                        { n: '2', label: 'Defect recorded', hint: 'Master Data → Defect Records. No AI.', ai: false },
+                        { n: '3', label: '8D opened', hint: 'A separate, deliberate decision — one 8D per defect, at most', ai: false },
+                        { n: '4', label: 'Precedents retrieved', hint: 'Embeddings + scoring', ai: true },
+                        { n: '5', label: 'D1 – D8 drafted', hint: 'Configured below', ai: true },
+                        { n: '6', label: 'Case closed', hint: 'Joins the Closed Case Library', ai: false },
+                    ].map((s, i, arr) => (
+                        <li key={s.n} className="flex items-center gap-2">
+                            <span
+                                title={s.hint}
+                                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium ${
+                                    s.ai
+                                        ? 'border-primary/30 bg-primary/10 text-primary'
+                                        : 'border-border bg-background text-muted-foreground'
+                                }`}
+                            >
+                                <span className="font-mono text-[10px] opacity-70">{s.n}</span>
+                                {s.label}
+                            </span>
+                            {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
+                        </li>
+                    ))}
+                </ol>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
+                    <strong className="font-semibold text-foreground">Steps ② and ③ are two separate acts.</strong>{' '}
+                    Recording a defect does not open an 8D — most defects are closed without one. An 8D is
+                    opened explicitly from <Link to="/master-data" className="underline underline-offset-2">Defect Records</Link>,
+                    or from an open defect in the Create 8D Report dialog, and a defect can carry at most one.
+                    Only the highlighted steps are configured on this page.
+                </p>
+            </div>
+
             {/* ── Top Level Category Switcher (Ordered from High-Level to Detailed) ── */}
             <div className="flex flex-wrap items-center gap-2 p-1.5 bg-muted/60 rounded-xl border">
                 {/* Tab 1: Global AI Model Routing */}

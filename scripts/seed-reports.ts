@@ -29,6 +29,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { Agent } from 'undici';
 
 const HOST = process.env.SEED_HOST ?? 'http://127.0.0.1:4004';
 const SRV = `${HOST}/api/cnma/EIGHTD_SRV`;
@@ -64,6 +65,9 @@ const SETS: string[] = args.includes('--both')
 
 const auth = `Basic ${Buffer.from(`${USER}:${PASS}`).toString('base64')}`;
 
+/** Custom dispatcher: disable undici headersTimeout so long AI calls don't get HeadersTimeoutError. */
+const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
 interface ReportRow {
     ID: string;
     notificationId: string;
@@ -81,6 +85,8 @@ async function api(method: string, url: string, body?: unknown) {
         headers: { Authorization: auth, 'Content-Type': 'application/json' },
         ...(body !== undefined && { body: JSON.stringify(body) }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        // @ts-ignore — undici dispatcher, not in standard fetch types
+        dispatcher,
     });
 
     const text = await res.text();

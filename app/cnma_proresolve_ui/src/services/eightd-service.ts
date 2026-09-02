@@ -227,14 +227,55 @@ export interface Report8D {
     sapStatus: string;
     foundDate: string | null;
     completionDate: string | null;
+    /** Câu mô tả phạm vi. Vẫn là đường dẫn bằng chứng D3 nên giữ lại. */
     quantityExtent: string;
+    /** RKMNG/MGEIN: số lượng bị ảnh hưởng, tách số khỏi đơn vị để còn tính được. */
+    defectQuantity: number | null;
+    defectQuantityUom: string | null;
     teamSize: number | null;
+    entryMode: string | null;
+    inspectionLotId: string | null;
+    /** Số của hệ thống khác: phiếu khiếu nại, phiếu giao hàng, ticket. */
+    referenceNumber: string | null;
+    /**
+     * Số lỗi mà báo cáo này được mở ra từ đó. Null với case nhập bằng JSON —
+     * chúng không đi qua một bản ghi lỗi nào trong hệ thống này.
+     */
+    sourceDefectId: string | null;
 
+    // ── Bốn cột của worklist (Phase 3.1) ──
+    // Cả ba đã nằm trong `caseContext`, nhưng đó là LargeString chứa JSON: OData
+    // không sắp xếp và không lọc theo nó được. Cột riêng là điều kiện để có cột
+    // "Due Date" bấm sắp xếp được và chip lọc "Overdue" chạy được.
+    /**
+     * Hạn phản hồi khách. Chỉ Q1 mới có — Q2/Q3 để null theo quyết định Q12,
+     * KHÔNG bịa hạn. Ô trống ở đây là câu trả lời đúng, không phải dữ liệu thiếu.
+     */
+    slaResponseDue: string | null;
+    /** Người điều phối notification. Là chủ sở hữu dự phòng khi D1 chưa chốt. */
+    coordinator: string | null;
+    /** Trưởng nhóm 8D đã chốt ở D1. Null cho tới lúc đó — xem `syncTeamLeader`. */
+    teamLeader: string | null;
+    /**
+     * Số hiệu khiếu nại của khách, ví dụ 'CC-2026-0442'. Null ở Q2/Q3.
+     *
+     * Đứng thay cho "tên khách hàng" mà kế hoạch xin ở cột Origin: dữ liệu không
+     * có tên khách ở bất kỳ đâu, và số hiệu này là thứ duy nhất chỉ đích danh vụ
+     * việc bên phía khách.
+     */
+    customerRef: string | null;
+
+    /** WERKS — CHAR(4) số trần ('1000'). */
+    plant: string;
     materialId: string;
     materialDesc: string;
     batchId: string;
+    /** Nhóm mã lỗi. Đi kèm `defectCode`: mã chỉ duy nhất trong nhóm của nó. */
+    defectCodeGroup: string;
     defectCode: string;
     defectText: string;
+    /** SAP FECLAS. Hiện trên giao diện dưới nhãn "Severity". */
+    defectClass: string;
     workCenterId: string;
     workCenterDesc: string;
 
@@ -279,9 +320,17 @@ export interface Report8D {
 
 /** Cột đủ cho trang danh sách — đừng kéo về `sourcePayload` 50 KB mỗi dòng. */
 const LIST_COLUMNS = [
-    'ID', 'notificationId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
-    'workCenterId', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
+    'ID', 'notificationId', 'sourceDefectId', 'origin', 'symptomShortText', 'materialId', 'materialDesc',
+    'workCenterId', 'workCenterDesc', 'plant', 'rootCauseCategory', 'copqEur', 'status', 'analyzedAt', 'createdAt',
     'createdBy', 'modifiedAt', 'modifiedBy',
+    // ── Worklist (Phase 3.2) ──
+    // `foundDate` KHÔNG phải để tính Days Open — đồng hồ đó chạy từ `createdAt`.
+    // Nó ở đây cho cột Response Lag: khoảng cách giữa lúc phát hiện lỗi và lúc mở
+    // 8D. Hai con số khác nhau, và trước đây một cột giả vờ là cả hai.
+    'foundDate', 'completionDate', 'slaResponseDue', 'coordinator', 'teamLeader', 'customerRef',
+    // Mức nghiêm trọng: `defectClass` trên `Reports` gần như luôn null ở dữ liệu
+    // hiện có, nên bảng tra tiếp theo `defectCode` trong danh mục F4. Kéo cả hai.
+    'defectCode', 'defectClass',
     'tokensUsed', 'durationMs', 'errorMessage',
     'aiModelParse', 'aiModelAnalyze',
     // Cột chẩn đoán độc lập — nhẹ, và là thứ đáng nhìn nhất ở trang danh sách.
@@ -354,6 +403,28 @@ class EightDService extends BaseODataService<Report8D> {
         return res.data.value;
     }
 
+    /**
+     * Sửa hạn cam kết và người điều phối của một case đang chạy.
+     *
+     * Chuỗi rỗng nghĩa là XOÁ trường đó — khác `startEightD`, nơi để trống nghĩa
+     * là "lấy giá trị suy từ payload". Đây là màn hình sửa, không phải màn hình
+     * tạo, nên ô trống phải mang đúng nghĩa người dùng thấy.
+     */
+    async setCaseCommitments(
+        reportID: string,
+        commitments: { dueDate?: string | null; coordinator?: string | null },
+    ): Promise<string> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/setCaseCommitments`,
+            {
+                reportID,
+                dueDate: commitments.dueDate ?? '',
+                coordinator: commitments.coordinator ?? '',
+            },
+        );
+        return res.data.value;
+    }
+
     /** Chạy lại trên payload đã lưu. Ghi đè toàn bộ disciplines cũ. */
     async reanalyze(reportID: string): Promise<string> {
         const res = await axiosInstance.post<{ value: string }>(
@@ -361,6 +432,36 @@ class EightDService extends BaseODataService<Report8D> {
             { reportID },
         );
         return res.data.value;
+    }
+
+    /**
+     * Nạp case vào kho tiền lệ.
+     *
+     * ── Vì sao không tạo từng dòng bằng OData ──
+     * Bản đầu của hộp thoại Import JSON gọi `POST HistoricalCases` cho từng phần
+     * tử và tự tay map khoảng 20 trường. Dòng sinh ra thiếu `defectKeywords`,
+     * `searchText`, `attributesJson` và toàn bộ nhóm 8D — tức là nó nằm trong
+     * kho, hiện ra trên màn hình, và ăn 0 điểm ở mọi tiêu chí. Nhìn từ ngoài
+     * giống hệt "không có case nào tương tự".
+     *
+     * Action này đi qua đúng bộ mapper mà pipeline phân tích dùng, nên hiểu cả
+     * bốn định dạng payload và tính đủ mọi cột dẫn xuất. Thay thế theo
+     * `notificationId`, nên nạp lại cùng một bộ dữ liệu là an toàn.
+     *
+     * @param payload Mảng JSON các case, hoặc một case đơn lẻ.
+     * @returns JSON `SeedReport`: { inserted, replaced, skipped[], total }
+     */
+    async seedCaseLibrary(payload: unknown): Promise<{
+        inserted: number;
+        replaced: number;
+        skipped: Array<{ index: number; notificationId: string | null; reason: string }>;
+        total: number;
+    }> {
+        const res = await axiosInstance.post<{ value: string }>(
+            `${this.serviceName}/seedCaseLibrary`,
+            { payload: typeof payload === 'string' ? payload : JSON.stringify(payload) },
+        );
+        return JSON.parse(res.data.value);
     }
 
     /** Chạy lại các bước downstream (D5..D8) sau khi sửa D4. */

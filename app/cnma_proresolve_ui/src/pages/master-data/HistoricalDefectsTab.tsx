@@ -42,45 +42,27 @@ import {
     historicalCasesService,
     type HistoricalCaseItem,
 } from '@/services/master-data-service';
+import { eightDService } from '@/services/eightd-service';
+import { useValueHelp } from '@/hooks/use-value-help';
+import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
+import { applyReturnMapping, isOutsideCatalogue, VALUE_HELP_IDS } from '@/services/value-help-service';
 
-/**
- * Tự động tính Notification ID kế tiếp (+1 từ max ID hiện tại).
- * Ví dụ: 8D-10049120 -> 8D-10049121
+/*
+ * ── Số notification do SERVER cấp ────────────────────────────────────────────
+ *
+ * Ở đây từng có `generateNextNotificationId(items)` — `max(items) + 1` tính
+ * trong trình duyệt, với ba chỗ hỏng lặng lẽ: `items` chỉ là những dòng đang
+ * tải; hai người mở form cùng lúc thấy cùng một số; và số cấp ngay khi mở form
+ * nên form bỏ dở thì đốt mất một số.
+ *
+ * Giờ ô để trống và server cấp trong chính transaction của lệnh insert (xem
+ * `srv/src/domain/numberRange.ts`), rồi vá lại `sourcePayload.notificationId`
+ * cho khớp. Gõ tay vẫn được — case nhập từ hệ thống khác mang số của nó.
  */
-export function generateNextNotificationId(items: { notificationId?: string }[]): string {
-    let maxNum = 0;
-    let maxDigitsLength = 8;
-    let prefix = '8D-';
-
-    for (const item of items) {
-        if (!item?.notificationId) continue;
-        const str = item.notificationId.trim();
-        const match = str.match(/^(.*?)(\d+)$/);
-        if (match) {
-            const p = match[1];
-            const digits = match[2];
-            const num = parseInt(digits, 10);
-            if (!isNaN(num) && num > maxNum) {
-                maxNum = num;
-                maxDigitsLength = digits.length;
-                if (p) prefix = p;
-            }
-        }
-    }
-
-    if (maxNum === 0) {
-        return '8D-10000001';
-    }
-
-    const nextNum = maxNum + 1;
-    const nextDigits = String(nextNum).padStart(maxDigitsLength, '0');
-    return `${prefix}${nextDigits}`;
-}
 
 export function HistoricalDefectsTab() {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
-    const [createOpen, setCreateOpen] = useState(false);
     const [jsonImportOpen, setJsonImportOpen] = useState(false);
     const [editItem, setEditItem] = useState<HistoricalCaseItem | null>(null);
     const [deleteItem, setDeleteItem] = useState<HistoricalCaseItem | null>(null);
@@ -90,25 +72,7 @@ export function HistoricalDefectsTab() {
         queryFn: () => historicalCasesService.list({ search, top: 100 }),
     });
 
-    const { data: allData } = useQuery({
-        queryKey: ['master-data', 'historical-cases-all'],
-        queryFn: () => historicalCasesService.list({ top: 1000 }),
-    });
-
     const rows = data?.value ?? [];
-    const allRows = allData?.value ?? rows;
-
-    const createMutation = useMutation({
-        mutationFn: (item: Partial<HistoricalCaseItem>) => historicalCasesService.create(item),
-        onSuccess: () => {
-            toast.success('Historical defect case created successfully.');
-            setCreateOpen(false);
-            void queryClient.invalidateQueries({ queryKey: ['master-data', 'historical-cases'] });
-        },
-        onError: (err: any) => {
-            toast.error(err?.response?.data?.error?.message ?? err?.message ?? 'Failed to create case.');
-        },
-    });
 
     const updateMutation = useMutation({
         mutationFn: ({ id, item }: { id: string; item: Partial<HistoricalCaseItem> }) =>
@@ -161,21 +125,12 @@ export function HistoricalDefectsTab() {
                         Refresh
                     </Button>
                     <Button
-                        variant="outline"
                         size="sm"
                         onClick={() => setJsonImportOpen(true)}
-                        className="h-9 gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/5 font-medium"
+                        className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground font-semibold"
                     >
                         <FileCode className="w-4 h-4" />
                         Import JSON
-                    </Button>
-                    <Button
-                        size="sm"
-                        onClick={() => setCreateOpen(true)}
-                        className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground font-semibold"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Add Historical Case
                     </Button>
                 </div>
             </div>
@@ -208,6 +163,7 @@ export function HistoricalDefectsTab() {
                                     <th className="py-3 px-4 min-w-[240px]">Symptom & Defect</th>
                                     <th className="py-3 px-4 w-32">Root Cause</th>
                                     <th className="py-3 px-4 w-28">Status</th>
+                                    <th className="py-3 px-4 w-32">Source</th>
                                     <th className="py-3 px-4 w-24 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -287,6 +243,32 @@ export function HistoricalDefectsTab() {
                                                 );
                                             })()}
                                         </td>
+                                        {/*
+                                          * Nguồn gốc của dòng — câu hỏi đầu tiên khi ai đó thắc mắc
+                                          * "sao AI lại trích dẫn case này". Case do app đóng có vết
+                                          * duyệt của con người trên cả tám bước; dòng import chỉ có
+                                          * những gì file cũ ghi lại. Hai thứ không đáng tin ngang nhau,
+                                          * nên phải phân biệt được ngay trên danh sách.
+                                          */}
+                                        <td className="py-3 px-4">
+                                            {row.provenance === 'closed-in-app' ? (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="border-success/30 text-success bg-success/10 text-[10.5px] font-medium gap-1"
+                                                >
+                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    Closed in app
+                                                </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="text-[10.5px] text-muted-foreground bg-muted border border-border/60 font-normal gap-1"
+                                                >
+                                                    <FileCode className="w-3 h-3" />
+                                                    Imported
+                                                </Badge>
+                                            )}
+                                        </td>
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <Button
@@ -315,23 +297,12 @@ export function HistoricalDefectsTab() {
                 )}
             </Card>
 
-            {/* Create Dialog */}
-            <CaseFormDialog
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                title="Add Historical Defect Case"
-                existingRows={allRows}
-                isPending={createMutation.isPending}
-                onSubmit={(values) => createMutation.mutate(values)}
-            />
-
             {/* JSON Import Dialog */}
             <CaseJsonImportDialog
                 open={jsonImportOpen}
                 onOpenChange={setJsonImportOpen}
                 onSuccess={() => {
                     void queryClient.invalidateQueries({ queryKey: ['master-data', 'historical-cases'] });
-                    void queryClient.invalidateQueries({ queryKey: ['master-data', 'historical-cases-all'] });
                 }}
             />
 
@@ -342,7 +313,6 @@ export function HistoricalDefectsTab() {
                     onOpenChange={(open) => !open && setEditItem(null)}
                     title={`Edit Case — ${editItem.notificationId}`}
                     initialValues={editItem}
-                    existingRows={allRows}
                     isPending={updateMutation.isPending}
                     onSubmit={(values) => updateMutation.mutate({ id: editItem.ID, item: values })}
                 />
@@ -385,7 +355,6 @@ function CaseFormDialog({
     onOpenChange,
     title,
     initialValues,
-    existingRows = [],
     isPending,
     onSubmit,
 }: {
@@ -393,7 +362,6 @@ function CaseFormDialog({
     onOpenChange: (open: boolean) => void;
     title: string;
     initialValues?: HistoricalCaseItem;
-    existingRows?: HistoricalCaseItem[];
     isPending: boolean;
     onSubmit: (values: Partial<HistoricalCaseItem>) => void;
 }) {
@@ -406,15 +374,15 @@ function CaseFormDialog({
     }
 
     // Section 1: SAP Notification & Header
-    const [notificationId, setNotificationId] = useState(
-        () => initialValues?.notificationId || generateNextNotificationId(existingRows)
-    );
+    // Trống khi tạo mới: server cấp số lúc lưu. Có sẵn khi sửa — số đã cấp rồi.
+    const [notificationId, setNotificationId] = useState(() => initialValues?.notificationId || '');
+    const isEdit = Boolean(initialValues?.notificationId);
 
     useEffect(() => {
         if (open) {
-            setNotificationId(initialValues?.notificationId || generateNextNotificationId(existingRows));
+            setNotificationId(initialValues?.notificationId || '');
         }
-    }, [open, initialValues, existingRows]);
+    }, [open, initialValues]);
     const [origin, setOrigin] = useState(initialValues?.origin || parsedPayload?.origin || 'Q3 - Internal Defect');
     const [sapStatus, setSapStatus] = useState(initialValues?.sapStatus || parsedPayload?.status || 'Closed');
     const [foundDate, setFoundDate] = useState(initialValues?.foundDate || parsedPayload?.foundDate || '');
@@ -435,6 +403,32 @@ function CaseFormDialog({
     // Section 3: Defect & QM Measurements
     const [defectCode, setDefectCode] = useState(initialValues?.defectCode || parsedPayload?.defect?.defectCode || '');
     const [defectText, setDefectText] = useState(initialValues?.defectText || parsedPayload?.defect?.defectText || '');
+    // Chỉ đọc, luôn suy từ mã đã chọn. Case cũ nhập từ workbook không có nhóm —
+    // để trống chứ không đoán ngược từ mã.
+    const [defectCodeGroup, setDefectCodeGroup] = useState(
+        initialValues?.defectCodeGroup || parsedPayload?.defect?.defectCodeGroup || '',
+    );
+
+    // ── F4 trên màn hình Master Data ────────────────────────────────────────────
+    //
+    // Ba danh mục, nhưng KHÔNG cùng độ chặt — và sự khác nhau đó có lý do:
+    //
+    //  `DEFECT_CODE` là catalogue ĐỘC LẬP (`sourceType: 'static'`), không sinh ra
+    //  từ màn hình này. Nên khoá cứng được, và phải khoá: một mã lỗi tự chế ở đây
+    //  sẽ nằm trong kho case mà form ghi nhận lỗi không bao giờ chọn được — đúng
+    //  cái tình trạng `verifyDefectCatalogueCoverage` sinh ra để phát hiện.
+    //
+    //  `MATERIAL` và `WORK_CENTER` thì `sourceType: 'reference'`, đọc NGƯỢC LẠI từ
+    //  chính bảng mà form này ghi vào. Khoá cứng chúng ở đây là vòng tròn: không
+    //  case nào thêm được cho một vật tư mới, vì vật tư chỉ có trong danh mục sau
+    //  khi đã có case dùng nó. Kế hoạch nói "đường thoát cho một vật tư mới là
+    //  Master Data" — vậy Master Data phải nhận được vật tư mới. Nên ở đây chúng
+    //  GỢI Ý và cảnh báo gõ sai, không chặn.
+    const materialVh = useValueHelp(VALUE_HELP_IDS.material, { enabled: open });
+    const workCenterVh = useValueHelp(VALUE_HELP_IDS.workCenter, { enabled: open });
+    const defectCodeVh = useValueHelp(VALUE_HELP_IDS.defectCode, { enabled: open });
+
+    const defectCodeOutside = isOutsideCatalogue(defectCodeVh.entries, defectCode, defectCodeVh.loading);
     const [characteristic, setCharacteristic] = useState(parsedPayload?.inspections?.[0]?.characteristic || '');
     const [measuredValue, setMeasuredValue] = useState(parsedPayload?.inspections?.[0]?.measuredValue || '');
     const [specValue, setSpecValue] = useState(parsedPayload?.inspections?.[0]?.specValue || '');
@@ -462,8 +456,17 @@ function CaseFormDialog({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!notificationId.trim() || !materialId.trim()) {
-            toast.error('Notification ID and Material ID are required.');
+        // `notificationId` không còn bắt buộc: trống nghĩa là "server cấp đi".
+        if (!materialId.trim()) {
+            toast.error('Material ID is required.');
+            return;
+        }
+        // F4 cứng cho mã lỗi: một mã ngoài catalogue lưu được ở đây sẽ nằm trong
+        // kho case mà form ghi nhận lỗi không chọn lại được.
+        if (defectCodeOutside) {
+            toast.error(`Defect code "${defectCode.trim()}" is not in the catalogue.`, {
+                description: 'Pick one from the list, or add it to the defect catalogue first.',
+            });
             return;
         }
 
@@ -485,6 +488,7 @@ function CaseFormDialog({
                 materialId: materialId.trim(),
             } : undefined,
             defect: {
+                defectCodeGroup: defectCodeGroup.trim() || undefined,
                 defectCode: defectCode.trim() || undefined,
                 defectText: defectText.trim() || undefined,
             },
@@ -538,7 +542,10 @@ function CaseFormDialog({
         };
 
         onSubmit({
-            notificationId: notificationId.trim(),
+            // Bỏ khoá khỏi payload khi trống thay vì gửi '': chuỗi rỗng cũng là một
+            // giá trị, và server sẽ tôn trọng nó thay vì cấp số. Server cũng vá lại
+            // `sourcePayload.notificationId` sau khi cấp, nên chỗ này khỏi đoán.
+            ...(notificationId.trim() ? { notificationId: notificationId.trim() } : {}),
             origin,
             symptomShortText: symptomShortText.trim(),
             materialId: materialId.trim(),
@@ -547,6 +554,7 @@ function CaseFormDialog({
             batchId: batchId.trim() || null,
             workCenterId: workCenterId.trim() || null,
             workCenterDesc: workCenterDesc.trim() || null,
+            defectCodeGroup: defectCodeGroup.trim() || null,
             defectCode: defectCode.trim() || null,
             defectText: defectText.trim() || null,
             rootCauseCategory: rootCauseCategory || null,
@@ -584,19 +592,35 @@ function CaseFormDialog({
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-semibold">Notification ID (QMNUM) *</Label>
-                                        <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
-                                            <Lock className="w-3 h-3 text-muted-foreground" />
-                                            Auto-generated (+1)
-                                        </span>
+                                        <Label className="text-xs font-semibold">Notification ID (QMNUM)</Label>
+                                        {isEdit ? (
+                                            <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
+                                                <Lock className="w-3 h-3 text-muted-foreground" />
+                                                Assigned
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10.5px] font-medium text-muted-foreground">
+                                                Optional — external number
+                                            </span>
+                                        )}
                                     </div>
+                                    {/*
+                                      Sửa thì khoá: số đã cấp, và mọi trích dẫn tiền lệ
+                                      đều trỏ bằng nó. Tạo mới thì để trống — số có lúc
+                                      lưu, không phải lúc mở form.
+                                    */}
                                     <Input
                                         value={notificationId}
-                                        disabled
-                                        readOnly
-                                        placeholder="Auto-generated (+1)"
-                                        className="font-mono text-xs h-8 bg-muted/60 text-muted-foreground cursor-not-allowed font-semibold select-none"
-                                        required
+                                        onChange={(e) => setNotificationId(e.target.value)}
+                                        disabled={isEdit}
+                                        readOnly={isEdit}
+                                        placeholder="Assigned on save"
+                                        className={cn(
+                                            'font-mono text-xs h-8 font-semibold',
+                                            isEdit
+                                                ? 'bg-muted/60 text-muted-foreground cursor-not-allowed select-none'
+                                                : 'bg-background',
+                                        )}
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -699,12 +723,19 @@ function CaseFormDialog({
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                     <Label className="text-xs font-semibold">Material ID (MATNR) *</Label>
-                                    <Input
+                                    <ValueHelpInput
                                         value={materialId}
-                                        onChange={(e) => setMaterialId(e.target.value)}
+                                        onChange={setMaterialId}
+                                        onPick={(entry) => {
+                                            const filled = applyReturnMapping(entry, materialVh.returnMapping);
+                                            if (filled.materialDesc) setMaterialDesc(filled.materialDesc);
+                                            if (filled.materialGroup) setMaterialFamily(filled.materialGroup);
+                                        }}
+                                        entries={materialVh.entries}
+                                        loading={materialVh.loading}
+                                        catalogLabel="the material master"
+                                        scoringNote="Precedent search matches this code exactly — a new material is fine, a typo is not."
                                         placeholder="e.g. MAT-10247"
-                                        className="font-mono text-xs h-8"
-                                        required
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -739,11 +770,18 @@ function CaseFormDialog({
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs font-semibold">Work Center ID (ARBPL)</Label>
-                                    <Input
+                                    <ValueHelpInput
                                         value={workCenterId}
-                                        onChange={(e) => setWorkCenterId(e.target.value)}
+                                        onChange={setWorkCenterId}
+                                        onPick={(entry) => {
+                                            const filled = applyReturnMapping(entry, workCenterVh.returnMapping);
+                                            if (filled.workCenterDesc) setWorkCenterDesc(filled.workCenterDesc);
+                                        }}
+                                        entries={workCenterVh.entries}
+                                        loading={workCenterVh.loading}
+                                        catalogLabel="the work centre list"
+                                        scoringNote="Precedent search matches this code exactly — a new work centre is fine, a typo is not."
                                         placeholder="e.g. WC-MILL-07"
-                                        className="font-mono text-xs h-8"
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -758,23 +796,46 @@ function CaseFormDialog({
                             </div>
                         </div>
 
-                        {/* Section 3: Defect Classification & QM Measurements */}
+                        {/* Section 3: Defect Codes & QM Measurements. Cùng lý do
+                            như hộp thoại ghi nhận lỗi — S7 bỏ "Defect Class" khỏi
+                            giao diện, nên tiêu đề cũng không giữ lại "Classification". */}
                         <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/60">
                             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
                                 <Microscope className="w-4 h-4" />
-                                3. Defect Classification & QM Measurements
+                                3. Defect Codes & QM Measurements
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                     <Label className="text-xs font-semibold">Defect Code (FECOD)</Label>
-                                    <Input
+                                    <ValueHelpInput
                                         value={defectCode}
-                                        onChange={(e) => setDefectCode(e.target.value)}
+                                        onChange={setDefectCode}
+                                        onPick={(entry) => {
+                                            const filled = applyReturnMapping(entry, defectCodeVh.returnMapping);
+                                            if (filled.defectText) setDefectText(filled.defectText);
+                                            // Nhóm mã lấy từ chính dòng danh mục, không cho gõ:
+                                            // một mã chỉ thuộc đúng một nhóm, nên để người dùng
+                                            // sửa nhóm là mở đường cho một cặp nhóm/mã không tồn tại.
+                                            setDefectCodeGroup(filled.defectCodeGroup ?? '');
+                                        }}
+                                        entries={defectCodeVh.entries}
+                                        loading={defectCodeVh.loading}
+                                        strict
+                                        catalogLabel="the defect catalogue"
+                                        maintenanceHint="Add the code to the defect catalogue first."
                                         placeholder="e.g. DEF-0489"
-                                        className="font-mono text-xs h-8"
                                     />
                                 </div>
-                                <div className="sm:col-span-2 space-y-1">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold">Code Group</Label>
+                                    <Input
+                                        value={defectCodeGroup}
+                                        readOnly
+                                        placeholder="— from Defect Code —"
+                                        className="text-xs h-8 font-mono bg-muted/40"
+                                    />
+                                </div>
+                                <div className="space-y-1">
                                     <Label className="text-xs font-semibold">Defect Description (FETXT)</Label>
                                     <Input
                                         value={defectText}
@@ -896,7 +957,7 @@ function CaseFormDialog({
                         <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button type="submit" size="sm" disabled={isPending} className="bg-primary font-semibold gap-1.5">
+                        <Button type="submit" size="sm" disabled={isPending || defectCodeOutside} className="bg-primary font-semibold gap-1.5">
                             {isPending ? <Spinner className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                             Save Historical Case
                         </Button>
@@ -1016,76 +1077,69 @@ function CaseJsonImportDialog({
 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            const notifId = item.notificationId;
+            // `notificationId` tuỳ chọn: file xuất từ SAP mang số của nó, file dựng
+            // tay thì để server cấp. `materialId` thì không ai cấp hộ được.
             const matId = item.materialId || item.material?.materialId;
-            if (!notifId || !matId) {
-                setParseError(`Item at index ${i} is missing required fields (notificationId, materialId).`);
+            if (!matId) {
+                setParseError(`Item at index ${i} is missing a required field (materialId).`);
                 return;
             }
         }
 
         setImporting(true);
-        let successCount = 0;
-        let failCount = 0;
-        const errors: string[] = [];
+        try {
+            /*
+             * ── Vì sao gọi `seedCaseLibrary` chứ không tạo từng dòng ─────────────
+             *
+             * Ở đây từng có một vòng lặp `historicalCasesService.create(...)` tự tay
+             * map khoảng 20 trường. Dòng nó sinh ra thiếu `defectKeywords`,
+             * `searchText`, `attributesJson` và cả nhóm 8D lẫn danh sách hành động —
+             * tức là case nằm trong kho, hiện trên màn hình này, và ăn 0 điểm ở mọi
+             * tiêu chí tìm tiền lệ. Không có lỗi nào báo; nhìn từ phía người dùng nó
+             * giống hệt "không có case nào tương tự".
+             *
+             * Action ở server đi qua đúng bộ mapper mà pipeline phân tích dùng, nên
+             * một payload SAP lồng nhau đầy đủ vào kho nguyên vẹn thay vì bị dẹp
+             * phẳng thành 20 cột. Nó cũng báo lại từng dòng bị bỏ và LÝ DO — thứ mà
+             * vòng lặp cũ không có.
+             *
+             * Đánh đổi đã biết: action yêu cầu vai trò `admin`, còn `POST` trên
+             * entity mở tới `User`. Nhập kho tiền lệ là việc quản trị dữ liệu, không
+             * phải việc thường ngày của kỹ sư chất lượng, nên thu hẹp là đúng.
+             */
+            const report = await eightDService.seedCaseLibrary(items);
 
-        for (const item of items) {
-            try {
-                const notifId = String(item.notificationId).trim();
-                const matId = String(item.materialId || item.material?.materialId).trim();
-                const matDesc = item.materialDesc || item.material?.description || null;
-                const matFam = item.materialFamily || item.material?.materialGroup || null;
-                const wcId = item.workCenterId || item.workCenter?.workCenterId || null;
-                const wcDesc = item.workCenterDesc || item.workCenter?.description || null;
-                const defCode = item.defectCode || item.defect?.defectCode || null;
-                const defText = item.defectText || item.defect?.defectText || null;
-                const bId = item.batchId || item.batch?.batchId || null;
-                const fId = item.fmeaId || item.fmeaLink?.fmeaId || null;
-                const fDate = item.foundDate || null;
-                const cDate = item.completionDate || null;
-                const qExt = item.quantityExtent || null;
-                const rCause = item.rootCauseCategory || item.causesIshikawa?.find((c: any) => c.isRootCause === 'Y')?.category || null;
-                const copq = item.copqEur != null ? Number(item.copqEur) : item.costCopq?.costOfPoorQualityEur != null ? Number(item.costCopq.costOfPoorQualityEur) : null;
-                const sStatus = item.sapStatus || item.status || 'Closed';
-                const symp = item.symptomShortText || null;
-
-                await historicalCasesService.create({
-                    notificationId: notifId,
-                    origin: item.origin || 'Q3 - Internal Defect',
-                    symptomShortText: symp,
-                    materialId: matId,
-                    materialDesc: matDesc,
-                    materialFamily: matFam,
-                    batchId: bId,
-                    workCenterId: wcId,
-                    workCenterDesc: wcDesc,
-                    defectCode: defCode,
-                    defectText: defText,
-                    rootCauseCategory: rCause,
-                    copqEur: copq,
-                    fmeaId: fId,
-                    foundDate: fDate,
-                    completionDate: cDate,
-                    quantityExtent: qExt,
-                    sapStatus: sStatus,
-                    sourcePayload: JSON.stringify(item),
-                });
-                successCount++;
-            } catch (err: any) {
-                failCount++;
-                errors.push(err?.response?.data?.error?.message ?? err?.message ?? 'Failed to save');
+            if (report.inserted + report.replaced > 0) {
+                const parts = [
+                    report.inserted ? `${report.inserted} added` : '',
+                    report.replaced ? `${report.replaced} replaced` : '',
+                ].filter(Boolean).join(', ');
+                toast.success(`Imported ${report.inserted + report.replaced} case(s): ${parts}.`);
+                onSuccess();
+                onOpenChange(false);
+                setJsonText('');
             }
-        }
 
-        setImporting(false);
-        if (successCount > 0) {
-            toast.success(`Imported ${successCount} historical defect case${successCount > 1 ? 's' : ''} successfully!`);
-            onSuccess();
-            onOpenChange(false);
-            setJsonText('');
-        }
-        if (failCount > 0) {
-            toast.error(`Failed to import ${failCount} record(s): ${errors[0] || ''}`);
+            if (report.skipped.length) {
+                const first = report.skipped[0];
+                toast.error(
+                    `Skipped ${report.skipped.length} record(s). #${first.index + 1}: ${first.reason}`,
+                );
+                if (report.inserted + report.replaced === 0) {
+                    setParseError(
+                        report.skipped
+                            .slice(0, 5)
+                            .map((s) => `#${s.index + 1}${s.notificationId ? ` (${s.notificationId})` : ''}: ${s.reason}`)
+                            .join('\n'),
+                    );
+                }
+            }
+        } catch (err: any) {
+            const message = err?.response?.data?.error?.message ?? err?.message ?? 'Failed to import.';
+            setParseError(message);
+            toast.error(message);
+        } finally {
+            setImporting(false);
         }
     };
 

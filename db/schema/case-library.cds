@@ -34,6 +34,15 @@ entity HistoricalCases : cuid, managed {
     // ── Ba khoá chấm điểm ────────────────────────────────────────────────────
     workCenterId      : String(30);
     workCenterDesc    : String(255);
+    /**
+     * Nhóm mã lỗi (catalog type 9). Lưu ở đây để tiêu chí "cùng nhóm mã lỗi" có
+     * cái mà so — nhưng CHƯA có trọng số nào: tiêu chí đó thuộc luồng AI
+     * (RET-07), không thuộc đợt này. Cột được nạp trước, để khi luồng kia bật
+     * tiêu chí lên thì không phải nạp lại toàn bộ kho.
+     *
+     * Null ở case cũ nhập từ workbook — workbook không khai nhóm.
+     */
+    defectCodeGroup   : String(30);
     defectCode        : String(30);
     defectText        : String(255);
     materialId        : String(30);
@@ -56,6 +65,32 @@ entity HistoricalCases : cuid, managed {
      * chấm lại phải tách từ, bỏ dấu, hạ chữ hoa cho cả kho.
      */
     defectKeywords    : String(500);
+
+    /**
+     * Dòng này vào kho bằng đường nào.
+     *
+     *   closed-in-app  case do chính app này đóng ở D8
+     *   imported       nạp hàng loạt từ dữ liệu cũ (workbook, export SAP)
+     *
+     * ── Vì sao phải phân biệt ──
+     * Khi ai đó hỏi "sao AI lại gợi ý cái này", điều đầu tiên muốn biết là tiền lệ
+     * đó có phải một case thật đã đóng hay chỉ là một dòng di trú. Hai thứ đó không
+     * đáng tin ngang nhau: case đóng trong app có vết duyệt của con người trên từng
+     * bước D, dòng import thì chỉ có những gì file cũ ghi lại.
+     *
+     * Chỉ có ĐÚNG hai đường vào kho, và cả hai đều điền cột này. Không có đường
+     * thứ ba: `HistoricalCases` không mở CREATE trên service nữa.
+     */
+    provenance        : String(20);
+
+    /**
+     * ID của lượt chạy 8D đã sinh ra dòng này. Null với dòng import.
+     *
+     * `notificationId` không thay được cột này: một case có thể được phân tích lại
+     * nhiều lần, nên có nhiều `Reports` cùng mang một số. Cột này chỉ đúng một lượt
+     * — chính lượt mà con người đã duyệt xong và bấm đóng.
+     */
+    sourceReportID    : String(36);
 
     // ── Bối cảnh hiển thị trong panel tiền lệ ────────────────────────────────
     batchId           : String(30);
@@ -163,4 +198,27 @@ entity HistoricalActions : cuid {
     actionType : String(30);
     actionText : String(1000);
     status     : String(30);
+
+    /**
+     * ── Quality Task của SAP, năm trường ──
+     * Câu văn ở `actionText` đọc được nhưng không TRA được. Năm cột dưới đây là
+     * thứ biến "lần trước gặp lỗi này chúng ta đã làm gì" từ một lần đọc lại văn
+     * xuôi thành một phép đếm — và là điều kiện cho tiêu chí "case được sửa bằng
+     * cùng một cách", thứ hôm nay không tính được.
+     *
+     * `taskCode` suy ra bằng luật (`classifyTaskCode`), KHÔNG bằng AI: một mã
+     * sai trông y hệt một mã đúng và sẽ được đếm như nhau. Không nhận ra thì để
+     * null — ô trống đếm được, mã sai thì không.
+     *
+     * Ba cột còn lại null trên case NHẬP TỪ dataset, vì nguồn không mang chúng —
+     * cùng thái độ đã áp cho `HistoricalTeamMembers.email`/`phone`. Case đóng
+     * TRONG app thì có đủ, do người dùng đã điền trên màn hình D3/D5/D7.
+     */
+    taskCode        : String(20);
+    taskCodeGroup   : String(20);
+    /** SAP Task Processor. Bằng `assignee` của task trên màn hình. */
+    taskProcessor   : String(120);
+    /** SAP Time Effort, tính theo ngày. Bằng `durationDays` của task. */
+    timeEffort      : Decimal(5, 1);
+    plannedEndDate  : Date;
 }

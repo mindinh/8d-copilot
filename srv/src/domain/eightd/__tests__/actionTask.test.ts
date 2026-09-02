@@ -26,6 +26,9 @@ const task = (over: Partial<ActionTask> = {}): ActionTask => ({
     status: 'Not started',
     origin: 'AI suggestion',
     attachments: [],
+    taskCode: '',
+    taskCodeGroup: '',
+    plannedEndDate: '',
     ...over,
 });
 

@@ -9,8 +9,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { evaluateOutOfSpec, mapCase } from '../caseMapper';
-import { PipelineError } from '../types';
+import { evaluateOutOfSpec, formatSpecRange, mapCase, resolveOutOfSpec } from '../caseMapper';
+import { originAllowsInspectionLot, PipelineError } from '../types';
 
 const MOCK_DIR = path.resolve(__dirname, '../../../../../mock-data/clean');
 
@@ -57,6 +57,153 @@ describe('evaluateOutOfSpec', () => {
 
     it('trả null khi không hiểu định dạng spec — thà không biết còn hơn đoán sai', () => {
         expect(evaluateOutOfSpec('0.32mm', 'per drawing DOC-4610')).toBeNull();
+    });
+});
+
+/**
+ * Thứ tự ưu tiên của `resolveOutOfSpec`.
+ *
+ * `evaluateOutOfSpec` ở trên đọc MỘT CHUỖI tự do và trả null khi không hiểu.
+ * Null đó không dừng ở chỗ nó sinh ra: `postProcess` chọn đặc tính Is/Is-Not
+ * bằng `find((i) => i.outOfSpec)`, nên một dòng không kết luận được sẽ âm thầm
+ * đẩy D2 sang so một đặc tính khác. Ba tầng dưới đây tồn tại để chuyện đó chỉ
+ * còn xảy ra khi nguồn thực sự không ghi gì cả.
+ */
+describe('resolveOutOfSpec', () => {
+    const base = { measuredValue: '', specValue: '', specLowerLimit: null, specUpperLimit: null, valuation: null };
+
+    it('phán quyết của người kiểm thắng mọi thứ khác', () => {
+        // Số đo 0.32 vượt trần 0.10, nhưng người kiểm đã ghi Accepted — có thể vì
+        // một sai lệch được duyệt. Mapper KHÔNG lật lại phán quyết đó.
+        expect(resolveOutOfSpec({
+            ...base, measuredValue: '0.32', specValue: 'max 0.10mm',
+            specUpperLimit: 0.1, valuation: 'Accepted',
+        })).toBe(false);
+
+        expect(resolveOutOfSpec({
+            ...base, measuredValue: '0.04', specUpperLimit: 0.1, valuation: 'Rejected',
+        })).toBe(true);
+    });
+
+    it('không có phán quyết thì so số đo với giới hạn số', () => {
+        expect(resolveOutOfSpec({ ...base, measuredValue: '0.32 mm', specUpperLimit: 0.1 })).toBe(true);
+        expect(resolveOutOfSpec({ ...base, measuredValue: '0.04 mm', specUpperLimit: 0.1 })).toBe(false);
+        expect(resolveOutOfSpec({ ...base, measuredValue: '38 um', specLowerLimit: 60 })).toBe(true);
+        expect(resolveOutOfSpec({ ...base, measuredValue: '24.912', specLowerLimit: 24.95, specUpperLimit: 25 })).toBe(true);
+        expect(resolveOutOfSpec({ ...base, measuredValue: '24.98', specLowerLimit: 24.95, specUpperLimit: 25 })).toBe(false);
+    });
+
+    it('giới hạn số thắng chuỗi spec khi hai bên nói khác nhau', () => {
+        // Chuỗi cũ nói trần 0.50, ô số nói 0.10. Ô số là thứ được nhập có cấu
+        // trúc; chuỗi là di sản. Đọc chuỗi ở đây sẽ ra false.
+        expect(resolveOutOfSpec({
+            ...base, measuredValue: '0.32', specValue: 'max 0.50mm', specUpperLimit: 0.1,
+        })).toBe(true);
+    });
+
+    it('lùi về parser chuỗi khi không có cả phán quyết lẫn giới hạn', () => {
+        expect(resolveOutOfSpec({ ...base, measuredValue: '0.32mm', specValue: 'max 0.10mm' })).toBe(true);
+        expect(resolveOutOfSpec({ ...base, measuredValue: 'Class 3', specValue: 'Class 0-1' })).toBe(true);
+    });
+
+    it('có giới hạn nhưng số đo không phải số thì vẫn thử parser chuỗi', () => {
+        // 'pass' không so được với 0.10 — nhưng đó không phải lý do để bỏ qua
+        // chuỗi spec, vốn có thể mô tả một hạng chứ không phải một số.
+        expect(resolveOutOfSpec({
+            ...base, measuredValue: 'Class 3', specValue: 'Class 0-1', specUpperLimit: 1,
+        })).toBe(true);
+    });
+
+    it('trả null khi nguồn không ghi gì kết luận được', () => {
+        expect(resolveOutOfSpec({ ...base, measuredValue: '0.32mm', specValue: 'per drawing DOC-4610' })).toBeNull();
+        expect(resolveOutOfSpec({ ...base, measuredValue: '0.32mm' })).toBeNull();
+    });
+});
+
+describe('formatSpecRange', () => {
+    it.each([
+        [0.05, 0.1, 'mm', '0.05 – 0.1 mm'],
+        [null, 0.1, 'mm', 'max 0.1 mm'],
+        [60, null, 'um', 'min 60 um'],
+        [null, 0.1, null, 'max 0.1'],
+        [null, null, 'mm', ''],
+    ])('(%s, %s, %s) → "%s"', (lo, hi, uom, expected) => {
+        expect(formatSpecRange(lo, hi, uom)).toBe(expected);
+    });
+});
+
+describe('mapCase — trường đo có cấu trúc', () => {
+    const withRows = (inspections: unknown[]) => mapCase({
+        notificationId: '8D-TEST-SPEC-01',
+        origin: 'Q3 - Internal Defect',
+        symptomShortText: 'Burr on flange',
+        status: 'In Process',
+        inspections,
+    });
+
+    it('dựng specValue để hiển thị khi nguồn chỉ gửi giới hạn số', () => {
+        const ctx = withRows([{ characteristic: 'Burr height', measured_value: '0.32', spec_upper_limit: 0.1, spec_uom: 'mm' }]);
+        expect(ctx.inspections[0].specValue).toBe('max 0.1 mm');
+        expect(ctx.inspections[0].specUpperLimit).toBe(0.1);
+        expect(ctx.inspections[0].outOfSpec).toBe(true);
+    });
+
+    it('nhận valuation và không lật lại nó', () => {
+        const ctx = withRows([{ characteristic: 'Burr height', measured_value: '0.32', spec_upper_limit: 0.1, valuation: 'Accepted' }]);
+        expect(ctx.inspections[0].valuation).toBe('Accepted');
+        expect(ctx.inspections[0].outOfSpec).toBe(false);
+    });
+
+    it('bỏ qua valuation lạ thay vì coi nó là Accepted', () => {
+        const ctx = withRows([{ characteristic: 'Burr height', measured_value: '0.32', valuation: 'OK' }]);
+        expect(ctx.inspections[0].valuation).toBeNull();
+        expect(ctx.inspections[0].outOfSpec).toBeNull();
+    });
+
+    it('báo gap đích danh dòng không kết luận được', () => {
+        const ctx = withRows([
+            { characteristic: 'Burr height', measured_value: '0.32', spec_upper_limit: 0.1 },
+            { characteristic: 'Pocket depth', measured_value: '12.84' },
+        ]);
+        expect(ctx.gaps.some((g) => /Pocket depth/.test(g) && /not judged/i.test(g))).toBe(true);
+        // Dòng kết luận được thì không bị nhắc tên.
+        expect(ctx.gaps.some((g) => /Burr height/.test(g))).toBe(false);
+    });
+
+    it('không báo gap khi KHÔNG dòng nào kết luận được — đó là gap "thiếu số đo", đã có chỗ khác lo', () => {
+        const ctx = withRows([{ characteristic: 'Pocket depth', measured_value: '12.84' }]);
+        expect(ctx.gaps.some((g) => /not judged/i.test(g))).toBe(false);
+    });
+});
+
+describe('mapCase — số lượng bị ảnh hưởng', () => {
+    const withQty = (extra: Record<string, unknown>) => mapCase({
+        notificationId: '8D-TEST-QTY-01',
+        origin: 'Q3 - Internal Defect',
+        symptomShortText: 'Burr on flange',
+        status: 'In Process',
+        ...extra,
+    });
+
+    it('tách số khỏi đơn vị', () => {
+        const ctx = withQty({ defect_quantity: 61, defect_quantity_uom: 'PC' });
+        expect(ctx.header.defectQuantity).toBe(61);
+        expect(ctx.header.defectQuantityUom).toBe('PC');
+        // Câu mô tả vẫn có — nó là đường dẫn bằng chứng D3 mà prompt đang trích.
+        expect(ctx.header.quantityExtent).toBe('61 PC');
+    });
+
+    it('câu mô tả gõ tay vẫn thắng chuỗi tự ghép', () => {
+        const ctx = withQty({ quantity_extent: '128 units affected', defect_quantity: 61 });
+        expect(ctx.header.quantityExtent).toBe('128 units affected');
+        expect(ctx.header.defectQuantity).toBe(61);
+    });
+
+    it('không tự bóc số ra khỏi câu mô tả', () => {
+        // '128 units affected' có thể là 128 cái, 128 kg, hay 128 pallet. Đoán ở
+        // đây là biến một câu người đọc hiểu thành một con số máy tính sai.
+        const ctx = withQty({ quantity_extent: '128 units affected' });
+        expect(ctx.header.defectQuantity).toBeNull();
     });
 });
 
@@ -221,5 +368,137 @@ describe('mapCase — phương án dự phòng và lỗi', () => {
             coordinator: 'Quality Admin',
             department: 'QA Dept',
         });
+    });
+});
+
+/**
+ * Payload do popup "Record Defect" dựng — KHÔNG phải Golden Dataset, nên nó đi
+ * nhánh flat business JSON của mapper.
+ *
+ * Đây là hình dạng duy nhất mà phân loại lỗi đầy đủ (nhóm mã + mã + mức nghiêm
+ * trọng) đi qua. Mã lỗi chỉ duy nhất TRONG một nhóm: rơi mất nhóm ở bất kỳ khâu
+ * nào thì khoá còn thiếu vế, và không có gì đỏ lên để báo — case vẫn lưu được,
+ * chỉ là D2 in ra một mã tra không ra.
+ */
+describe('mapCase — payload từ popup Record Defect', () => {
+    const popupPayload = {
+        notificationId: '8D-TEST-CLS-01',
+        origin: 'Q3 - Internal Defect',
+        symptomShortText: 'Rough edge felt on flange after milling',
+        status: 'In Process',
+        referenceNumber: 'DN-77421',
+        plant: '2000',
+        material: { materialId: 'MAT-10247', description: 'Bracket Housing X240', materialGroup: 'MG-BRACKET', plant: '2000' },
+        defect: {
+            defectCodeGroup: 'QM-SUR',
+            defectCode: 'SUR-0003',
+            defectText: 'Burr on machined edge',
+            defectClass: 'Major',
+        },
+        workCenter: { workCenterId: 'WC-MILL-07', description: 'CNC Milling Line 7' },
+    };
+
+    it('giữ đủ nhóm mã, mã, mô tả và mức nghiêm trọng từ MỘT lần chọn', () => {
+        const ctx = mapCase(popupPayload);
+        expect(ctx.product.defectCodeGroup).toBe('QM-SUR');
+        expect(ctx.product.defectCode).toBe('SUR-0003');
+        expect(ctx.product.defectText).toBe('Burr on machined edge');
+        expect(ctx.product.defectClass).toBe('Major');
+    });
+
+    it('giữ nhà máy và số tham chiếu ngoài', () => {
+        const ctx = mapCase(popupPayload);
+        expect(ctx.product.plant).toBe('2000');
+        expect(ctx.header.referenceNumber).toBe('DN-77421');
+    });
+
+    it('nhận cả tên snake_case và tên "severity" của workbook cũ', () => {
+        const ctx = mapCase({
+            ...popupPayload,
+            defect: {
+                defect_code_group: 'QM-DIM',
+                defect_code: 'DIM-0001',
+                defect_text: 'Bore diameter out of tolerance',
+                severity: 'Critical',
+            },
+        });
+        expect(ctx.product.defectCodeGroup).toBe('QM-DIM');
+        expect(ctx.product.defectClass).toBe('Critical');
+    });
+
+    it('để trống nhóm chứ không suy ngược từ mã khi nguồn không khai', () => {
+        const ctx = mapCase({
+            ...popupPayload,
+            defect: { defectCode: 'SUR-0003', defectText: 'Burr on machined edge' },
+        });
+        expect(ctx.product.defectCode).toBe('SUR-0003');
+        expect(ctx.product.defectCodeGroup).toBe('');
+        expect(ctx.product.defectClass).toBe('');
+    });
+});
+
+/**
+ * Q1 không có lô kiểm tra.
+ *
+ * Chạy trên case Q1 thật, thêm một số lô vào — đúng thứ mà form cũ cho gõ và file
+ * import không ai kiểm. Điều cần chứng minh: số đó bị bỏ, VÀ việc bỏ đi được ghi
+ * lại. Bỏ âm thầm cũng tệ ngang giữ lại: sau này không ai truy được vì sao lô
+ * biến mất.
+ */
+describe('mapCase — nguồn gốc quyết định lô kiểm tra', () => {
+    it('bỏ lô kiểm tra trên case Q1 và ghi lại một gap', () => {
+        const ctx = mapCase({
+            ...load(Q1_MATERIAL),
+            entryMode: 'during-inspection',
+            inspectionLotId: '0010000001',
+        });
+        expect(ctx.header.inspectionLotId).toBeNull();
+        expect(ctx.header.entryMode).toBe('outside-inspection');
+        expect(ctx.gaps.some((g) => g.includes('0010000001'))).toBe(true);
+    });
+
+    it('không sinh gap khi case Q1 vốn không mang lô nào', () => {
+        const ctx = mapCase(load(Q1_MATERIAL));
+        expect(ctx.header.inspectionLotId).toBeNull();
+        expect(ctx.gaps.some((g) => g.includes('Inspection lot'))).toBe(false);
+    });
+
+    it('giữ nguyên lô kiểm tra trên case Q3', () => {
+        const ctx = mapCase({
+            ...load(Q3_MACHINE),
+            entryMode: 'during-inspection',
+            inspectionLotId: '0010000042',
+        });
+        expect(ctx.header.inspectionLotId).toBe('0010000042');
+        expect(ctx.header.entryMode).toBe('during-inspection');
+    });
+
+    it('giữ nguyên lô kiểm tra trên case Q2 — nhà cung cấp có lô nhập hàng', () => {
+        const ctx = mapCase({
+            ...load(Q3_MACHINE),
+            origin: 'Q2 - Supplier Defect',
+            entryMode: 'during-inspection',
+            inspectionLotId: '0010000099',
+        });
+        expect(ctx.header.inspectionLotId).toBe('0010000099');
+    });
+});
+
+/**
+ * Luật đặt ở `types.ts` chứ không nằm trong component, vì cả form lẫn pipeline
+ * đều cần cùng câu trả lời. Test nó trực tiếp: đây là một lệnh cấm HẸP cho Q1,
+ * không phải danh sách trắng — nguồn gốc lạ phải được cho qua, nếu không mọi
+ * dữ liệu cũ sẽ mất lô kiểm tra một cách âm thầm.
+ */
+describe('originAllowsInspectionLot', () => {
+    it.each([
+        ['Q1 - Customer Complaint', false],
+        ['  Q1 - Customer Complaint  ', false],
+        ['Q2 - Supplier Defect', true],
+        ['Q3 - Internal Defect', true],
+        ['Q6 - something nobody has seen', true],
+        ['', true],
+    ])('%s → %s', (origin, expected) => {
+        expect(originAllowsInspectionLot(origin)).toBe(expected);
     });
 });
