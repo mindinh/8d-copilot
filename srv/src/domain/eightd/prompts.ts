@@ -198,13 +198,13 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     unknown. Keep every containment action description simple, direct and concise
     (e.g., "Quarantine remaining stock from batch B-49172 and 100% burr check before packing").
 
-    Assign an owner to each containment action by matching the nature of the task to the D1 team members (team.roster or team.leader/members) and their organizational roles and responsibilities.
+    Assign an owner to each containment action from the D1 team roster (team.roster or team.leader/members), formatted strictly as "Name (Role)" (e.g. "Elena Rostova (Team Leader)" or "Anna Schmidt (Quality Engineer)"). Match the action to the person's responsibility.
 
     Work in this order:
       1. If this case already records containment actions, report them cleanly -
          stating the action description, owner and its status.
       2. Only when nothing is recorded, propose the containment action from the
-         highest-scoring precedent cleanly, assign the appropriate D1 team member as owner, and adapt the batch and quantity.
+         highest-scoring precedent cleanly, assign the appropriate D1 team member as owner formatted as "Name (Role)", and adapt the batch and quantity.
 
     Do not write long verbose paragraphs inside the action text.`,
 
@@ -278,14 +278,14 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     action that ties to no step is aimed either at a symptom or at a cause you
     have not established - say which.
 
-    Assign an owner to each corrective action by matching the technical work to the D1 team members (team.roster or team.leader/members) based on their organizational role and case responsibility. Do not output generic "Unassigned" when a matching member is in the D1 team.
+    Assign an owner to each corrective action chosen from the D1 team roster (team.roster or team.leader/members), formatted strictly as "Name (Role)" (e.g. "Karl Wagner (Maintenance Planner)" or "Marcus Vance (Manufacturing Engineer)"). Match their role to the root cause fix. Do not output generic "Unassigned" when a member is in the D1 team.
 
     Report the corrective actions on record with their owner and status. Then state plainly
     which part of the root cause no recorded action covers. That gap is the most
     useful line on this page.
 
     When nothing is recorded, propose the corrective action from the
-    highest-scoring precedent, assign the suitable D1 team member as owner, cite the case and its score, and tie it to the
+    highest-scoring precedent, assign the suitable D1 team member as owner formatted as "Name (Role)", cite the case and its score, and tie it to the
     hypothesis it would fix.
 
     Corrective is not containment. An action that only limits damage while the
@@ -307,7 +307,7 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     shift. An action that only protects this material or this batch is corrective
     and belongs in D5.
 
-    Assign an owner to each preventive action from the D1 team roster (team.roster or team.leader/members) based on who is responsible for the affected process, tooling, maintenance, or quality system.
+    Assign an owner to each preventive action from the D1 team roster (team.roster or team.leader/members), formatted strictly as "Name (Role)" (e.g. "Anna Schmidt (Quality Engineer)"), based on who is responsible for the affected process, tooling, maintenance, or quality system.
 
     Report the preventive actions on record with owner, then say which FMEA entry must
     change and how: the occurrence rating, the detection rating, or the control

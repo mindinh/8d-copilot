@@ -428,18 +428,19 @@ function extractTeamCandidates(
     const allDrafts = [...disciplines, ...(previousDisciplines ?? [])];
     const d1 = allDrafts.find((d) => d?.code === 'D1');
     if (d1?.data) {
-        const team = (d1.data as Record<string, unknown>).team || d1.data;
-        const roster = Array.isArray((team as Record<string, unknown>)?.assignedRoster)
-            ? (team as Record<string, unknown>).assignedRoster as unknown[]
-            : Array.isArray((team as Record<string, unknown>)?.roster)
-                ? (team as Record<string, unknown>).roster as unknown[]
-                : [];
+        const teamObj = (d1.data as Record<string, unknown>).team || d1.data;
+        const rawRoster = (teamObj as Record<string, unknown>)?.assignedRoster
+            ?? (teamObj as Record<string, unknown>)?.roster
+            ?? (d1.data as Record<string, unknown>)?.['team.assignedRoster']
+            ?? (d1.data as Record<string, unknown>)?.['team.roster'];
+        const roster = Array.isArray(rawRoster) ? rawRoster as unknown[] : [];
         for (const row of roster) {
             const r = row as Record<string, unknown>;
             if (r?.name && String(r.name).toLowerCase() !== 'unassigned') {
+                const role = String(r.assigned8DRole && r.assigned8DRole !== 'Team Member' ? r.assigned8DRole : (r.organizationalRole || r.assigned8DRole || (r as any).functionTitle || '')).trim();
                 addCandidate(
                     String(r.name),
-                    String(r.organizationalRole || r.assigned8DRole || ''),
+                    role,
                     String(r.caseResponsibility || ''),
                 );
             }
@@ -492,6 +493,11 @@ const DOMAIN_RULES: Array<{
 
 const STOP_WORDS = new Set(['and', 'the', 'for', 'with', 'from', 'that', 'this', 'have', 'has', 'per', 'all', 'into', 'each', 'after', 'over', 'out']);
 
+function formatCandidate(c: TeamMemberCandidate): string {
+    const role = c.role.trim();
+    return role ? `${c.name} (${role})` : c.name;
+}
+
 function resolveAssigneeFromTeam(
     currentOwner: string,
     actionText: string,
@@ -500,14 +506,17 @@ function resolveAssigneeFromTeam(
     if (!candidates.length) return null;
 
     const trimmed = String(currentOwner ?? '').trim();
-    // If it's already an exact match to a candidate's name, keep it
-    const exactMatch = candidates.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
-    if (exactMatch) return exactMatch.name;
+    // If it's already an exact match to a candidate's name or candidate already has (role)
+    const exactMatch = candidates.find((c) => {
+        const nameMatch = c.name.toLowerCase() === trimmed.toLowerCase();
+        const formattedMatch = formatCandidate(c).toLowerCase() === trimmed.toLowerCase();
+        return nameMatch || formattedMatch;
+    });
+    if (exactMatch) return formatCandidate(exactMatch);
 
     // Clean currentOwner (strip "Unassigned", parentheses, etc.)
     const cleanedOwner = trimmed
-        .replace(/^Unassigned\s*\(/i, '')
-        .replace(/\)$/, '')
+        .replace(/^Unassigned\s*(\([^)]*\))?/i, '')
         .trim();
 
     const searchBlob = `${cleanedOwner} ${actionText}`.toLowerCase();
@@ -552,7 +561,8 @@ function resolveAssigneeFromTeam(
         }
     }
 
-    return highestScore > 0 ? bestCandidate?.name ?? null : null;
+    const picked = highestScore > 0 ? bestCandidate : candidates[0];
+    return picked ? formatCandidate(picked) : null;
 }
 
 function backfillActionOwners(
@@ -596,14 +606,10 @@ function backfillActionOwners(
             const currentOwner = String(act.owner ?? '').trim();
             const actionText = String(act.action || act.actionText || '').trim();
 
-            const isGenericOrUnassigned = !currentOwner || currentOwner.toLowerCase() === 'unassigned' || currentOwner.toLowerCase().startsWith('unassigned') || currentOwner.includes('·') || !candidates.some((c) => c.name.toLowerCase() === currentOwner.toLowerCase());
-
-            if (isGenericOrUnassigned) {
-                const resolved = resolveAssigneeFromTeam(currentOwner, actionText, candidates);
-                if (resolved && resolved !== currentOwner) {
-                    act.owner = resolved;
-                    assignedCount += 1;
-                }
+            const resolved = resolveAssigneeFromTeam(currentOwner, actionText, candidates);
+            if (resolved && resolved !== currentOwner) {
+                act.owner = resolved;
+                assignedCount += 1;
             }
         }
 

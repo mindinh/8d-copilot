@@ -677,7 +677,15 @@ export function ActionCardsWidget({
                                 >
                                     <div className="flex items-start gap-2 min-w-0">
                                         <span className="mt-2.5 h-1 w-1 rounded-full bg-foreground/90 shrink-0" />
-                                        <p className="break-words text-[13.5px] font-normal text-foreground leading-relaxed">{text}</p>
+                                        <div className="space-y-1 min-w-0">
+                                            <p className="break-words text-[13.5px] font-normal text-foreground leading-relaxed">{text}</p>
+                                            {row.owner && (
+                                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                    <User className="h-3 w-3 text-primary/70 shrink-0" />
+                                                    <span className="font-medium text-foreground/85">{row.owner}</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0 ml-2 pt-0.5">
                                         {isAccepted(row, tasks) ? (

@@ -645,20 +645,20 @@ describe('postProcess — D3/D5/D7 Action Assignee Matching', () => {
         const d7Res = result.disciplines.find((d) => d.code === 'D7');
 
         const d3Actions = (d3Res?.data as any)['containment.actions'];
-        expect(d3Actions[0].owner).toBe('Anna Schmidt'); // Quality Engineer matches quarantine/check
-        expect(d3Actions[1].owner).toBe('Karl Wagner'); // Maintenance Planner matches maintenance
+        expect(d3Actions[0].owner).toBe('Anna Schmidt (Quality Engineer)'); // Quality Engineer matches quarantine/check
+        expect(d3Actions[1].owner).toBe('Karl Wagner (Maintenance Planner)'); // Maintenance Planner matches maintenance
 
         const d5Actions = (d5Res?.data as any)['corrective.actions'];
-        expect(d5Actions[0].owner).toBe('Karl Wagner'); // Maintenance
-        expect(d5Actions[1].owner).toBe('Minh Dinh'); // Production
+        expect(d5Actions[0].owner).toBe('Karl Wagner (Maintenance Planner)'); // Maintenance
+        expect(d5Actions[1].owner).toBe('Minh Dinh (Production Engineer)'); // Production
 
         const d7Actions = (d7Res?.data as any)['preventive.actions'];
-        expect(d7Actions[0].owner).toBe('Anna Schmidt'); // FMEA / Quality
+        expect(d7Actions[0].owner).toBe('Anna Schmidt (Quality Engineer)'); // FMEA / Quality
 
         expect(repairs.some((x) => /gán người phụ trách/.test(x))).toBe(true);
     });
 
-    it('giữ nguyên owner khi model đã gán đúng tên thành viên trong team D1', () => {
+    it('bổ sung role vào owner khi model đã gán đúng tên thành viên trong team D1', () => {
         const d3Draft: DisciplineDraft = {
             ...draft('D3'),
             data: {
@@ -676,6 +676,6 @@ describe('postProcess — D3/D5/D7 Action Assignee Matching', () => {
 
         const { result } = postProcess(r, mockTeamCtx, undefined, undefined, undefined, {}, ['D3']);
         const d3Actions = (result.disciplines[0].data as any)['containment.actions'];
-        expect(d3Actions[0].owner).toBe('Karl Wagner');
+        expect(d3Actions[0].owner).toBe('Karl Wagner (Maintenance Planner)');
     });
 });

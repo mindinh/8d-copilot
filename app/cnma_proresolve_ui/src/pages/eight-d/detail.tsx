@@ -7,6 +7,7 @@ import {
     Card,
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     Spinner,
@@ -18,7 +19,7 @@ import {
 } from '@cnma/react-ui';
 
 import {
-    AlertCircle, ArrowLeft, Braces, Cpu, RefreshCw, TriangleAlert,
+    AlertCircle, ArrowLeft, Braces, Cpu, History, RefreshCw, TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -37,8 +38,6 @@ import { CaseProvenanceProvider } from './ai-provenance-info';
 import { CaseStepper } from './case-stepper';
 import { CaseCommitments } from './case-commitments';
 import { AuditTrailPanel } from './audit-trail-panel';
-
-type SideTab = 'audit' | 'similar';
 
 /**
  * Chi tiết một báo cáo 8D.
@@ -80,9 +79,9 @@ export function EightDDetailPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [showPayload, setShowPayload] = useState(false);
+    const [showAudit, setShowAudit] = useState(false);
     const [activeDiscipline, setActiveDiscipline] = useState('D1');
     const [mainTab, setMainTab] = useState<'disciplines' | 'summary'>('disciplines');
-    const [sideTab, setSideTab] = useState<SideTab>('audit');
 
     // Bo cuc SONG, doc thang tu StepPrompts - khong phai ban chup luc phan tich.
     //
@@ -201,6 +200,15 @@ export function EightDDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAudit(true)}
+                        title="Audit Log"
+                    >
+                        <History className="w-4 h-4 text-primary" />
+                        Audit Log
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => setShowPayload(true)}>
                         <Braces className="w-4 h-4" />
                         Source JSON
@@ -243,7 +251,7 @@ export function EightDDetailPage() {
             <CaseProvenanceProvider caseContext={report.caseContext} precedentsJson={report.precedentsJson} reportID={id}>
                 <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'disciplines' | 'summary')} className="w-full space-y-6">
                 <TabsContent value="disciplines" className="mt-0 outline-none">
-                    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)_290px]">
+                    <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
 
                         {/* ── Cot trai: tien do + dieu huong ── */}
                         <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
@@ -307,27 +315,7 @@ export function EightDDetailPage() {
                                 );
                             })()}
                         </section>
-
-                            {/* ── Cot phai: tham chieu ── */}
-                            <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-                                <Tabs value={sideTab} onValueChange={(v) => setSideTab(v as SideTab)}>
-                                    <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="audit" className="text-xs">Audit</TabsTrigger>
-                                        <TabsTrigger value="similar" className="text-xs">Similar</TabsTrigger>
-                                    </TabsList>
-
-                                    <TabsContent value="audit" className="mt-3">
-                                        <Card className="overflow-hidden py-1">
-                                            <AuditTrailPanel reportID={report.ID} />
-                                        </Card>
-                                    </TabsContent>
-
-                                    <TabsContent value="similar" className="mt-3">
-                                        <PrecedentPanel reportID={report.ID} precedentsJson={report.precedentsJson} />
-                                    </TabsContent>
-                                </Tabs>
-                            </aside>
-                        </div>
+                    </div>
                     </TabsContent>
                 {/* ── Tab 2: Case Overview & AI Insights ── */}
                 <TabsContent value="summary" className="mt-0 space-y-6 outline-none">
@@ -465,6 +453,24 @@ export function EightDDetailPage() {
                 </TabsContent>
             </Tabs>
         </CaseProvenanceProvider>
+
+            {/* ── Dialog Audit Log ── */}
+            <Dialog open={showAudit} onOpenChange={setShowAudit}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <History className="w-4 h-4 text-primary" />
+                            Audit Trail — {report.notificationId}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Sign-offs, change requests, and status transitions recorded for this 8D case.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-1">
+                        <AuditTrailPanel reportID={report.ID} />
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* ── JSON gốc ── */}
             <Dialog open={showPayload} onOpenChange={setShowPayload}>
