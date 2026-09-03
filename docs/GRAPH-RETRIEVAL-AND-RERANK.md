@@ -190,7 +190,56 @@ from retrieval at all.
 
 ## 4. Chain-of-thought
 
-### 4.1 What changed
+### 4.1 One frame per discipline
+
+The schema used to hardcode D4's question - `queryAnalysis` read *"state what failure MECHANISM
+the OPEN CASE shows"*. Enabling re-rank for D1 would have told the model to reason about failure
+physics while D1 asks about people. It would have answered fluently and answered the wrong
+question, and nothing in the output would show it: valid schema, a score, a plausible reason.
+
+**Procedure and subject are separated.** `SYSTEM_PROMPT` carries only what is true for every step
+- reason first, score after, never invent an id. The subject comes from a `RerankFrame` the step
+owns:
+
+| Part | What it does |
+|---|---|
+| `queryFrame` | What to establish about the **open case** before looking at any candidate. This is the reference every score is measured against - and it is what genuinely differs between steps. |
+| `candidateFrame` | Which dimension to compare along. |
+| `rubric` | What 0 and 100 mean **here**. Without it the model invents a scale, and the scale moves between calls. |
+
+All eight steps carry a frame, even though weights stay 0. The frame has to be correct *before*
+anyone enables a step, or what they measure is not what they think they are measuring.
+
+| Step | What `queryFrame` establishes |
+|---|---|
+| D1 | Which capabilities the problem demands - equipment, measurement, process step, sign-off. Names no people. |
+| D2 | The boundary: which part, station and characteristic is out of spec, and by how much. |
+| D3 | What is exposed right now and must be protected - in transit, in stock, already shipped. |
+| D4 | The physical failure mechanism: what moved, wore, deformed or drifted. |
+| D5 | The root cause reached, and what would have to physically change for it to stop. |
+| D6 | What would count as proof it is gone: which characteristic, measured how, over what population. |
+| D7 | How far the risk reaches: which family, which processes, which FMEA entry. |
+| D8 | What complete closure looks like, and what typically stays open. |
+
+`RERANK-PRECEDENT-RETRIEVAL.md` argues D1/D3/D6/D8 do not pay - ranking people is counting, not
+text relevance - and that argument still holds. That is why every weight is 0.
+
+**Measured on the real model.** Same open case, same candidate (`8D-10048788`, chatter marks from
+a worn spindle bearing), three frames:
+
+| Frame | Score | The model's own reasoning |
+|---|---|---|
+| D4 mechanism | **10/100** | *"forced vibration from a failing machine component ... fundamentally different from the query's mechanism"* |
+| D7 systemic reach | **100/100** | *"both are equipment degradation over time ... where the existing monitoring was insufficient"* |
+| D1 capability | **20/100** | *"cylindrical grinding, not milling ... the required capabilities differ"* |
+
+A 10x swing on one pair, and each verdict is right for its own question. Under the shared frame
+all three would have scored like D4, and D7 would have discarded the case its step needs most.
+
+A test pins that **no two steps share a frame** and that each frame mentions its own subject - the
+failure this fixes is invisible in the output, so it has to be caught in the test.
+
+### 4.2 What changed
 
 The re-rank schema now asks for reasoning **before** the number:
 
@@ -221,14 +270,14 @@ Work in this order, and do not shortcut it:
 A score that does not follow from its own analysis is the failure this stage exists to prevent.
 ```
 
-### 4.2 Why field order *is* the mechanism
+### 4.3 Why field order *is* the mechanism
 
 Models generate in field order. `analysis` before `score` means the number lands after the
 reasoning is already in context. Reverse them and the analysis is a justification written after
 the fact — **and the two look identical in the output**, which is why a unit test pins the order
 rather than trusting review.
 
-### 4.3 Why output fields and not extended thinking
+### 4.4 Why output fields and not extended thinking
 
 A valid `thinkingBudget` (≥ 1024) makes the CDK attach `thinking_budget`, after which
 `applyVendorCompat` strips `temperature` — Anthropic forbids temperature alongside extended
@@ -240,7 +289,7 @@ so `temperature` survives; on Gemini the budget is meaningful and temperature is
 test asserts this conditionally rather than unconditionally — an earlier version asserted the
 budget was always stripped and went red against the running configuration.
 
-### 4.4 Cost, measured
+### 4.5 Cost, measured
 
 | | |
 |---|---|
@@ -251,7 +300,7 @@ budget was always stripped and went red against the running configuration.
 The old timeout failed in the quietest way available: stage-1 ranking stood, results looked fine,
 stage 2 never ran. Re-measure after any model or prompt change.
 
-### 4.5 Observed on the real model
+### 4.6 Observed on the real model
 
 ```
 Re-rank: 10/10 candidates scored in 23514ms
@@ -526,4 +575,4 @@ if (!cds.model) {
   is deployed to CF, as a second resource beside the existing one.
 - A UI banner on the Similarity screen would beat the current post-save message. The backend
   already exposes what the screen needs to render one.
-- The per-candidate `analysis` has not been read from a live model call (see §4.5).
+- The per-candidate `analysis` has not been read from a live model call (see §4.6).

@@ -184,7 +184,55 @@ trúc. D6/D8 gần như không lấy gì từ truy hồi.
 
 ## 4. Chain-of-Thought
 
-### 4.1 Đã đổi gì
+### 4.1 Mỗi bước một khung
+
+Schema trước đây **ghi cứng câu hỏi của D4** - `queryAnalysis` viết *"state what failure MECHANISM
+the OPEN CASE shows"*. Bật re-rank cho D1 sẽ bảo model suy nghĩ về vật lý hỏng hóc trong khi D1 hỏi
+về **người**. Nó sẽ trả lời trôi chảy và trả lời **sai câu**, mà output không hề lộ ra: vẫn đúng
+schema, vẫn có điểm, vẫn có lý do nghe hợp lý.
+
+**Tách thủ tục khỏi nội dung.** `SYSTEM_PROMPT` chỉ giữ thứ đúng ở mọi bước - lập luận trước, chấm
+sau, không bịa id. Nội dung đến từ `RerankFrame` mà **bước đó sở hữu**:
+
+| Mảnh | Làm gì |
+|---|---|
+| `queryFrame` | Xác lập gì về **case đang mở** trước khi nhìn ứng viên nào. Đây là **mốc** mà mọi điểm số được đo theo - và là thứ thật sự khác nhau giữa các bước. |
+| `candidateFrame` | So theo chiều nào. |
+| `rubric` | 0 và 100 nghĩa là gì **ở đây**. Thiếu nó thì model tự bịa một thang, và thang đó đổi giữa các lượt gọi. |
+
+Cả tám bước đều có khung, dù trọng số vẫn là 0. Khung phải đúng **trước** khi ai đó bật một bước,
+nếu không thứ họ đo không phải thứ họ tưởng.
+
+| Bước | `queryFrame` xác lập gì |
+|---|---|
+| D1 | Vấn đề này đòi những **năng lực** nào - thiết bị, phép đo đang nghi ngờ, công đoạn hỏng, chức năng phải ký. Không nêu tên người. |
+| D2 | **Biên** của vấn đề: chi tiết nào, trạm nào, đặc tính nào vượt spec, và vượt bao nhiêu. |
+| D3 | Cái gì **đang bị phơi nhiễm** và phải chặn: trên đường, trong kho, đã tới khách. |
+| D4 | **Cơ chế hỏng** vật lý: cái gì dịch, mòn, biến dạng hay trôi. |
+| D5 | **Nguyên nhân gốc** đã tới, và cái gì phải thay đổi về mặt vật lý để nó thôi tái diễn. |
+| D6 | Cái gì mới **đáng gọi là bằng chứng** đã hết: đặc tính nào, đo thế nào, trên dân số nào. |
+| D7 | Rủi ro **với xa tới đâu**: họ vật tư nào, quy trình nào, mục FMEA nào phải đổi. |
+| D8 | **Đóng trọn vẹn** trông thế nào, và cái gì thường còn để lại. |
+
+`RERANK-PRECEDENT-RETRIEVAL.md` lập luận D1/D3/D6/D8 không đáng bật - xếp hạng người là phép **đếm**
+chứ không phải độ liên quan văn bản - và lập luận đó vẫn đúng. Đó là lý do mọi trọng số đều bằng 0.
+
+**Đo trên model thật.** Cùng case đang mở, cùng ứng viên (`8D-10048788`, chatter marks do bạc trục
+mòn), ba khung:
+
+| Khung | Điểm | Lập luận của chính model |
+|---|---|---|
+| D4 cơ chế hỏng | **10/100** | *"forced vibration from a failing machine component ... fundamentally different from the query's mechanism"* |
+| D7 tầm với hệ thống | **100/100** | *"both are equipment degradation over time ... where the existing monitoring was insufficient"* |
+| D1 năng lực | **20/100** | *"cylindrical grinding, not milling ... the required capabilities differ"* |
+
+Chênh **10x** trên cùng một cặp, và mỗi phán quyết đều **đúng cho câu hỏi của nó**. Với khung chung,
+cả ba sẽ chấm như D4, và D7 sẽ vứt đi đúng case mà bước phòng ngừa cần nhất.
+
+Có test khoá lại rằng **không hai bước nào dùng chung một khung**, và mỗi khung phải nhắc tới chủ đề
+của chính nó - cái sai này vô hình trong output, nên chỉ test mới bắt được.
+
+### 4.2 Đã đổi gì
 
 Schema re-rank giờ đòi lập luận **trước** con số:
 
@@ -215,13 +263,13 @@ Work in this order, and do not shortcut it:
 A score that does not follow from its own analysis is the failure this stage exists to prevent.
 ```
 
-### 4.2 Vì sao **thứ tự trường chính là cơ chế**
+### 4.3 Vì sao **thứ tự trường chính là cơ chế**
 
 Model sinh theo thứ tự trường. `analysis` đứng trước `score` nghĩa là con số rơi xuống **sau khi**
 lập luận đã nằm trong ngữ cảnh. Đảo lại thì lập luận chỉ còn là lời biện minh viết sau — **và nhìn
 output thì hai đằng giống hệt nhau**, nên có một unit test khoá thứ tự đó lại thay vì tin vào review.
 
-### 4.3 Vì sao dùng trường output chứ không dùng extended thinking
+### 4.4 Vì sao dùng trường output chứ không dùng extended thinking
 
 Một `thinkingBudget` hợp lệ (≥ 1024) khiến CDK gắn `thinking_budget`, sau đó `applyVendorCompat`
 **xoá `temperature`** — Anthropic cấm temperature đi kèm extended thinking. Mất `temperature: 0` là
@@ -233,7 +281,7 @@ với Gemini thì budget có nghĩa thật và temperature không bị đụng. 
 model chứ không kiểm vô điều kiện — bản trước khẳng định budget luôn bị bỏ, và nó đỏ trên chính cấu
 hình đang chạy.
 
-### 4.4 Chi phí, đo được
+### 4.5 Chi phí, đo được
 
 | | |
 |---|---|
@@ -244,7 +292,7 @@ hình đang chạy.
 Timeout cũ hỏng theo kiểu êm nhất: xếp hạng tầng 1 vẫn đứng, kết quả vẫn hợp lý, tầng 2 chưa từng
 chạy. **Phải đo lại** sau mỗi lần đổi model hoặc đổi prompt.
 
-### 4.5 Quan sát trên model thật
+### 4.6 Quan sát trên model thật
 
 ```
 Re-rank: 10/10 ứng viên được chấm trong 23514ms
@@ -518,4 +566,4 @@ if (!cds.model) {
   và thêm như một resource **thứ hai** bên cạnh cái đang có.
 - Một banner trên màn hình Similarity sẽ tốt hơn thông báo sau-khi-lưu hiện tại. Backend đã expose
   đủ thứ màn hình cần để vẽ nó.
-- `analysis` của từng ứng viên **chưa** được đọc từ một lượt gọi model thật (xem §4.5).
+- `analysis` của từng ứng viên **chưa** được đọc từ một lượt gọi model thật (xem §4.6).
