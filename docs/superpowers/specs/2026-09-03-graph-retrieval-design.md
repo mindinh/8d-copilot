@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-03
 **Branch:** `feat/graph-retrieval` (cut from `dev/Thien`)
-**Status:** design — approved for implementation
+**Status:** design — approved, and amended in §10 by what implementation actually found
 **Supersedes:** the similarity engine described in `PRECEDENT-RETRIEVAL-REVIEW.md`; that document's findings R2, R3, R4 are resolved here.
 **Related:** `AI Requirements - 8D Copilot POC.md` §2 (weights) · `CHAIN-ALIGNMENT-IMPLEMENTATION-PLAN.md` (Phase 1.3 supplies `defectCodeGroup`, a prerequisite)
 
@@ -206,3 +206,106 @@ Both spikes can change the design, so they are the **first** tasks, not the last
 | Regression | anywhere | with `engine = 'scoring'`, output is **identical** to today |
 
 **D4 acceptance test**, taken straight from the recorded failure: a case containing *"pocket depth also reading shallow"* **must** retrieve `8D-10048880` (*"Pocket depth inconsistent across units"*) — the precedent today's engine scores **+0** because both occurrences live in `symptomShortText`, a field it never reads.
+
+---
+
+## 10. Amendments from implementation
+
+Six things the design got wrong or could not know. Each was found by running
+against the real container, and each changed the code.
+
+### 10.1 Both spikes answered — and one of them removed a whole file
+
+**S1: `OPENCYPHER_TABLE` does take bind parameters.** `PARAMETERS ('name' = ?)`
+works, with several parameters and with numeric values, and a hostile value
+(`MAT-10247' OR '1'='1`) comes back as zero rows — it stayed data. The planned
+`cypherLiteral.ts`, its allowlist and its injection tests **do not exist**,
+because there is no string interpolation left to defend. One exception survives:
+`IN [$a, $b]` is rejected with bind parameters (it works only with literals), so
+keyword lists are expressed as an `OR` chain of `= $kwN` in `anchor.ts`. That is
+uglier and completely safe; interpolating tokens would have been the only path in
+the module where SAP payload data reached query text.
+
+**S2: labelled multi-table workspaces work**, with three corrections the
+documentation does not mention: edges must name the vertex table at both ends
+(`SOURCE COLUMN "S" REFERENCES "GRAPH_V_CASE"`), `LABEL` takes a single-quoted
+literal rather than a quoted identifier, and `db/src` needs its own `.hdiconfig`
+— the one CAP generates lives in `db/src/gen` and maps no plugin for
+`hdbgraphworkspace`.
+
+**`Case` is a reserved word.** `MATCH (c:Case)` does not parse, and HANA's error
+(*"expecting identifier near Case"*) never says why. The label is `Case8D`;
+`Function` became `JobFunction` pre-emptively. A unit test now checks every label
+against the reserved list.
+
+### 10.2 The openCypher dialect is far narrower than assumed
+
+Measured on the bound instance:
+
+| Works | Does not work |
+|---|---|
+| labels; **named** relationships `-[e:T]->` | every aggregate — `count`, `collect`, `count(DISTINCT)` |
+| comma-separated patterns | `WITH`, `OPTIONAL MATCH` |
+| variable-length paths `p = (a)-[*1..3]-(b)` | reverse arrow `<-[e]-`, chained `(a)-[e1]->(b)-[e2]->(c)` |
+| `WHERE`, `AND`/`OR`, `IN [literals]`, `<>` | multiple `MATCH` clauses, `SKIP`, `IS NOT NULL`, `NOT (pattern)` |
+| `RETURN DISTINCT`, `ORDER BY`, `LIMIT`, `PARAMETERS` | |
+
+So **Cypher matches patterns and SQL aggregates.** Every V-shape is a comma
+pattern; every count is a `GROUP BY` in the SQL wrapped around the call. This is
+not a workaround — it is how `OPENCYPHER_TABLE` is meant to be used, since it
+returns a table for SQL to consume.
+
+Stated plainly: under this dialect Cypher does not replace SQL, it adds to it.
+What SQL here cannot do at all is the variable-length path, because HANA Cloud
+has no recursive CTE. That, plus one declared place where the relationships live
+instead of them being spread across join conditions, is what the graph buys.
+
+### 10.3 The data does not contain the hop the design leaned on
+
+`defectCodeGroup` is **null on all 25 library cases** (and a single constant
+`DEF-GENERIC` on the 25 open defects), and every case carries a **distinct**
+defect code — 25 codes for 25 cases. An `IN_GROUP` hop would match nothing and a
+`HAS_DEFECT` hop almost never joins two cases. `DefectGroup` is therefore not in
+the graph, and no query depends on defect codes to connect cases. The real
+discriminators in this dataset are **Keyword, MaterialFamily (MG-HOUSING covers
+9 of 25), WorkCenter (21 distinct) and RootCause (6)**.
+
+Defect code vertices key on the code alone, which is correct while one code space
+exists. **That must become composite when CHAIN-ALIGNMENT Phase 1.3 populates
+groups**, since an SAP defect code is only unique within its group.
+
+### 10.4 D4's weights came from a shadow run, not from judgement
+
+At the designed 2/2/1/1, `8D-10049030` (three shared keywords: burr, edge, limit)
+tied **6-6** with `8D-10049010` — the documented false positive, which shares only
+`flange` but matches work centre and material. R3 walking back in through the side
+door, at the step that cares most about failure mechanism. Keywords now weigh 3
+against a threshold of 5: three shared tokens score 9, one shared token plus
+location scores 5. Both still surface, in the right order.
+
+### 10.5 `searchKeywords` is a new persisted column, not a view expression
+
+Tokenising `symptomShortText` inside the graph view would have been a second
+implementation of `tokenizeDefectText` — lowercasing, stopwords, minimum length —
+and the two would drift the first time anyone added a stopword, silently. The
+column is computed by that same function at seed time; the view only splits on
+spaces. `seedLibraryFromBundle` treats a row without it as incomplete, so existing
+rows backfill.
+
+### 10.6 `cds deploy` rebinds the wrong profile by default
+
+`cds deploy --to hana --profile graph` writes its post-deploy binding into
+**`hybrid`**, because `--for` defaults there. On the first run it silently
+repointed the team's profile at the graph container. `npm run deploy:graph` pins
+`--for graph`. Anyone deploying by hand must pass it too.
+
+### 10.7 Still open
+
+- Embedding is **not yet wired as a booster**; `semanticUsed` reports `false`
+  rather than claiming otherwise. D-4 remains the intended design.
+- D2's Is/Is-Not and D6's non-recurrence traversals are verified as queries but
+  are not yet consumed by those steps — both produce data outside the
+  `Precedent` contract and need a home in the step inputs.
+- `prompts.ts:137-139` still hardcodes the old scoring formula (finding R2).
+- `mta.yaml` still has one HDI container; the graph container is added only when
+  this branch is deployed to CF, as a second resource beside the existing one.
