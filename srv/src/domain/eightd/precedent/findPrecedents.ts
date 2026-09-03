@@ -44,7 +44,7 @@ import {
 } from './precedentRepository';
 import { buildQueryText } from './searchText';
 import { embed, currentEmbeddingModel } from '../../../core/ai/llmClient';
-import { applyRerank, rerankCandidates } from './reranker';
+import { applyRerank, frameFromInstruction, rerankCandidates } from './reranker';
 import type { CaseContext } from '../types';
 
 const LOG = cds.log('precedent');
@@ -238,8 +238,10 @@ async function scoreWithProfile(
         if (rerankQueryText && pool.length) {
             try {
                 verdicts = await rerankCandidates(
-                    rerankCriterion.description?.trim()
-                        || 'Rank candidates by overall relevance to the open case.',
+                    // Engine chấm điểm chỉ có MỘT chuỗi instruction (`description`
+                    // của tiêu chí), nên nó được bọc thành khung đầy đủ ở đây. Cả
+                    // hai engine vì thế đi qua cùng một đường vào tầng 2.
+                    frameFromInstruction(rerankCriterion.description ?? ''),
                     rerankQueryText,
                     pool.map(({ row }) => ({
                         notificationId: row.notificationId,

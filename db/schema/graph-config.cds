@@ -144,12 +144,23 @@ entity GraphStepParams : managed {
         /** Sàn trên thang 0–1 của điểm model (0.5 = dưới 50/100 thì 0 điểm). */
         rerankFloor       : Decimal(3, 2);
 
-        /**
-         * Câu hỏi gửi cho model. Đây là chỗ mỗi bước D hỏi câu của riêng nó —
-         * D4 hỏi cơ chế hỏng, D5 hỏi hành động có gỡ được nguyên nhân không.
-         * Trống ⇒ dùng câu mặc định trong `graph/stepProfiles.ts`.
-         */
-        rerankInstruction : String(1000);
+        // ── Khung chain-of-thought của bước này ──────────────────────────
+        //
+        // Ba mảnh, không phải một câu, vì lập luận phải bắt đầu từ đúng chỗ.
+        // `rerankQueryFrame` là MỐC mà mọi điểm số được đo theo, và mốc đó khác
+        // hẳn nhau giữa các bước: D4 xác lập cơ chế hỏng, D3 xác lập cái đang bị
+        // phơi nhiễm, D7 xác lập tầm với hệ thống. Dùng chung một khung nghĩa là
+        // bảy bước suy nghĩ theo câu hỏi của bước thứ tám — model vẫn trả lời
+        // trôi chảy, chỉ là trả lời sai câu, và output không hề lộ ra điều đó.
+        //
+        // Ô nào trống thì rơi về mặc định CỦA BƯỚC ĐÓ trong `graph/stepProfiles.ts`.
+
+        /** Model phải xác lập gì về case đang mở, TRƯỚC khi nhìn ứng viên nào. */
+        rerankQueryFrame     : String(1000);
+        /** So chiều nào giữa ứng viên và mốc vừa xác lập. */
+        rerankCandidateFrame : String(1000);
+        /** 0 và 100 nghĩa là gì ở bước này. Thiếu thì model tự bịa thang. */
+        rerankRubric         : String(1000);
 
         /**
          * Loại hành động bước này quan tâm: Containment | Corrective | Preventive.

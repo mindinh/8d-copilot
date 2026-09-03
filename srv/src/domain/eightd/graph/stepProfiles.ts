@@ -65,8 +65,20 @@ export interface GraphStepProfile {
         weight: number;
         /** Sàn trên thang 0–1 của điểm model. Dưới sàn ⇒ 0 điểm. */
         floor: number;
-        /** Câu hỏi gửi cho model. Đây là chỗ mỗi bước D hỏi câu của riêng nó. */
-        instruction: string;
+        /**
+         * Khung chain-of-thought của RIÊNG bước này.
+         *
+         * ── Vì sao không phải một câu instruction chung ──
+         * Lập luận phải bắt đầu từ đúng chỗ. `queryFrame` là MỐC mà mọi điểm số
+         * được đo theo, và mốc đó khác nhau hoàn toàn giữa các bước: D4 xác lập
+         * cơ chế hỏng, D3 xác lập cái đang bị phơi nhiễm, D7 xác lập tầm với hệ
+         * thống. Dùng chung một khung nghĩa là bảy bước suy nghĩ theo câu hỏi của
+         * bước thứ tám — và model sẽ trả lời trôi chảy, chỉ là trả lời sai câu.
+         * Nhìn output không thấy: vẫn đúng schema, vẫn có điểm, vẫn có lý do.
+         */
+        queryFrame: string;
+        candidateFrame: string;
+        rubric: string;
     };
 }
 
@@ -78,24 +90,137 @@ export interface GraphStepProfile {
  * Nên ở D4, hai từ chung (4) ngang một lần trùng vật tư, còn một từ chung (2)
  * không bao giờ tự nó qua ngưỡng.
  */
+/**
+ * Khung chain-of-thought của từng bước D.
+ *
+ * ── Đọc bảng này thế nào ──
+ * `queryFrame` là thứ model phải xác lập về CASE ĐANG MỞ trước khi nhìn bất kỳ
+ * ứng viên nào — nó là mốc. `candidateFrame` nói so chiều nào. `rubric` nói 0 và
+ * 100 nghĩa là gì; thiếu nó thì model tự bịa một thang, và thang đó đổi giữa các
+ * lượt gọi.
+ *
+ * ── Vì sao cả tám bước đều có khung, dù chỉ vài bước nên bật ──
+ * Trọng số 0 tắt tầng 2, nhưng khung thì phải đúng SẴN. Ai bật một bước lên mà
+ * khung của bước đó chưa có sẽ nhận lại lập luận theo câu hỏi của bước khác —
+ * và không có gì báo, vì output vẫn hợp lệ.
+ *
+ * `docs/RERANK-PRECEDENT-RETRIEVAL.md` lập luận rằng D1, D3, D6 và D8 không đáng
+ * bật: xếp hạng người là phép ĐẾM chứ không phải độ liên quan văn bản, và D6/D8
+ * lấy rất ít từ truy hồi. Lập luận đó vẫn đúng và đó là lý do mọi trọng số ở đây
+ * bằng 0. Khung vẫn phải có, để lúc ai đó muốn đo thử thì thứ họ đo là thật.
+ */
+const RERANK_FRAMES = {
+    D1: {
+        queryFrame:
+            'State which capabilities this problem demands — the equipment involved, the measurement '
+            + 'in doubt, the process step that failed, the function that must sign it off. Name no people.',
+        candidateFrame:
+            'Did this case demand those same capabilities of its team? Judge what its team actually had '
+            + 'to do, not how similar the defect looks.',
+        rubric:
+            '100 = its team faced the same demands and would transfer directly. 50 = one capability in '
+            + 'common. 0 = a different kind of problem needing a different room of people.',
+    },
+    D2: {
+        queryFrame:
+            'State the boundary of this problem: which part, which station, which characteristic is out '
+            + 'of specification, and by how much. Say what is measurably wrong, not what caused it.',
+        candidateFrame:
+            'Does this case sit inside that boundary or just outside it? Both are useful — inside sharpens '
+            + 'the IS, just outside sharpens the IS-NOT. Say which, and on which dimension.',
+        rubric:
+            '100 = same boundary on the same characteristic. 60 = differs on exactly one dimension, which '
+            + 'makes it a strong IS-NOT. 0 = unrelated boundary, useful for neither.',
+    },
+    D3: {
+        queryFrame:
+            'State what is exposed right now and must be protected: how much is in transit, in stock, or '
+            + 'already at the customer, and where the next escape would happen. Ignore root cause.',
+        candidateFrame:
+            'Did this case face the same exposure, so its containment would protect the same thing? An '
+            + 'identical defect with a different exposure needs different containment.',
+        rubric:
+            '100 = same exposure, its containment transfers as-is. 50 = same exposure, different scale. '
+            + '0 = different exposure, its containment protects something else.',
+    },
+    D4: {
+        queryFrame:
+            'State what physical failure mechanism the open case shows, from its evidence alone — what '
+            + 'moved, wore, deformed or drifted, and why that produces this symptom.',
+        candidateFrame:
+            'What mechanism does this candidate show, and where does it agree or differ from that? Judge '
+            + 'the described physics.',
+        rubric:
+            '100 = the same mechanism, textbook. 0 = unrelated. Sharing a defect code or a work centre is '
+            + 'not evidence of a shared mechanism, and differing on both does not rule one out.',
+    },
+    D5: {
+        queryFrame:
+            'State the root cause this case has arrived at, and what would have to physically change for '
+            + 'it to stop recurring. Distinguish removing the cause from catching its output.',
+        candidateFrame:
+            "Would this candidate's corrective action remove THAT cause? Screening, sorting or reworking "
+            + 'output does not remove a cause, however similar the two cases look.',
+        rubric:
+            '100 = its action removes this exact cause. 50 = it removes a neighbouring cause on the same '
+            + 'chain. 0 = it only contains, or addresses something else.',
+    },
+    D6: {
+        queryFrame:
+            'State what would count as proof that this problem is gone: which characteristic, measured how, '
+            + 'over what population and for how long. Name the number that would have to hold.',
+        candidateFrame:
+            'Did this case produce that kind of proof, so its verification plan transfers? Judge the '
+            + 'evidence it generated, not the fix it applied.',
+        rubric:
+            '100 = same kind of proof, measurable the same way. 50 = proof exists but on a different '
+            + 'characteristic. 0 = closed without transferable verification.',
+    },
+    D7: {
+        queryFrame:
+            'State how far this risk reaches beyond this case: which family of parts, which processes and '
+            + 'which FMEA entry would have to change for it not to appear somewhere else.',
+        candidateFrame:
+            'Does this case show the same risk reaching the same way? A case at the same station but a '
+            + 'different mechanism does not extend the reach; a case elsewhere with the same mechanism does.',
+        rubric:
+            '100 = same systemic reach, its preventive action generalises. 50 = same mechanism, narrower '
+            + 'reach. 0 = local and unrelated.',
+    },
+    D8: {
+        queryFrame:
+            'State what a complete closure looks like for this problem: what has to be shown, what has to '
+            + 'be handed over, and what typically stays open afterwards.',
+        candidateFrame:
+            'Did this case close on those terms? Judge the completeness of its closure and what it left '
+            + 'open, not how similar the defect was.',
+        rubric:
+            '100 = closed on the same terms, its lessons transfer. 50 = closed, but leaving different '
+            + 'items open. 0 = closed on terms that say nothing about this case.',
+    },
+} as const;
+
 export const DEFAULT_STEP_PROFILES: Record<StepCode, GraphStepProfile> = {
     D1: {
         label: 'Establish the Team',
         question: 'Ai đã xử lý loại lỗi này, ở trạm này, trên họ vật tư này?',
         weights: { workCenter: 4, materialFamily: 3, material: 2, keywords: 1 },
         keywordCap: 3, minScore: 3, topN: 5,
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D1 },
     },
     D2: {
         label: 'Describe the Problem',
         question: 'Lỗi này đã xuất hiện ở đâu, trên vật tư nào, với mã lỗi nào?',
         weights: { defectCode: 4, material: 3, workCenter: 2, keywords: 2 },
         keywordCap: 3, minScore: 4, topN: 3,
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D2 },
     },
     D3: {
         label: 'Interim Containment Actions',
         question: 'Lần trước chặn tạm loại lỗi này bằng cách nào?',
         weights: { keywords: 2, materialFamily: 2, workCenter: 2, containment: 2 },
         keywordCap: 3, minScore: 4, topN: 3, actionType: 'Containment',
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D3 },
     },
     D4: {
         label: 'Root Cause Analysis',
@@ -118,34 +243,21 @@ export const DEFAULT_STEP_PROFILES: Record<StepCode, GraphStepProfile> = {
         // nhau. Trọng số 0 = TẮT — bật lên là một con số trong `GraphStepParams`,
         // không phải một lần deploy. Cùng thái độ Thanh đã đặt cho D4/D5 ở
         // engine chấm điểm: seed sẵn nhưng không tự bật.
-        rerank: {
-            weight: 0,
-            floor: 0.5,
-            instruction:
-                'Rank each candidate by whether it fails by the SAME PHYSICAL MECHANISM as the open '
-                + 'case. Sharing a defect code or a work centre is not evidence of a shared mechanism, '
-                + 'and differing on both does not rule one out. Judge the described physics.',
-        },
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D4 },
     },
     D5: {
         label: 'Permanent Corrective Actions',
         question: 'Cách sửa nào đã thật sự đóng được nguyên nhân này?',
         weights: { keywords: 2, materialFamily: 2, corrective: 3 },
         keywordCap: 3, minScore: 4, topN: 3, actionType: 'Corrective',
-        rerank: {
-            weight: 0,
-            floor: 0.5,
-            instruction:
-                "Rank each candidate by whether ITS corrective action would remove THIS case's root "
-                + 'cause. An action that only screens or reworks output does not remove a cause, however '
-                + 'similar the two cases look.',
-        },
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D5 },
     },
     D6: {
         label: 'Verify Effectiveness',
         question: 'Bằng chứng nào cho thấy bản sửa đã có tác dụng?',
         weights: { keywords: 2, materialFamily: 1, corrective: 3 },
         keywordCap: 2, minScore: 4, topN: 3, actionType: 'Corrective',
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D6 },
     },
     D7: {
         label: 'Prevent Recurrence',
@@ -154,12 +266,14 @@ export const DEFAULT_STEP_PROFILES: Record<StepCode, GraphStepProfile> = {
         // hỏng, nên thưởng điểm cho việc cùng trạm là đi ngược mục đích của bước.
         weights: { materialFamily: 4, material: 2, preventive: 3, keywords: 1 },
         keywordCap: 2, minScore: 4, topN: 3, actionType: 'Preventive',
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D7 },
     },
     D8: {
         label: 'Closure and Recognition',
         question: 'Case tương đương nào đã đóng trọn vẹn?',
         weights: { workCenter: 2, materialFamily: 2, keywords: 1 },
         keywordCap: 2, minScore: 3, topN: 3,
+        rerank: { weight: 0, floor: 0.5, ...RERANK_FRAMES.D8 },
     },
 };
 
@@ -404,9 +518,11 @@ export function normalizeStepParams(
             floor: hasFloor && Number.isFinite(rawFloor) && rawFloor >= 0 && rawFloor <= 1
                 ? rawFloor
                 : fallback.rerank?.floor ?? 0.5,
-            instruction: String(r.rerankInstruction ?? '').trim()
-                || fallback.rerank?.instruction
-                || 'Rank candidates by overall relevance to the open case.',
+            // Ô trống ⇒ dùng khung mặc định CỦA BƯỚC ĐÓ, không phải một khung
+            // chung: sửa một mảnh không được phép làm hai mảnh kia thành của bước khác.
+            queryFrame: String(r.rerankQueryFrame ?? '').trim() || fallback.rerank?.queryFrame || '',
+            candidateFrame: String(r.rerankCandidateFrame ?? '').trim() || fallback.rerank?.candidateFrame || '',
+            rubric: String(r.rerankRubric ?? '').trim() || fallback.rerank?.rubric || '',
         }
         : undefined;
 

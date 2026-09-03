@@ -78,6 +78,49 @@ export interface RerankVerdict {
 }
 
 /**
+ * Khung nội dung mà MỘT bước D đặt ra cho tầng 2.
+ *
+ * ── Vì sao ba mảnh, không phải một câu instruction ──
+ * Bản đầu chỉ có một chuỗi instruction, còn phần lập luận thì ghi cứng trong
+ * schema: "state what failure mechanism the OPEN CASE shows". Đó là câu hỏi của
+ * D4 nằm nhầm chỗ. Bật re-rank cho D1 thì model được bảo suy nghĩ về cơ chế hỏng
+ * trong khi D1 hỏi về NGƯỜI — và nó sẽ trả lời trôi chảy, chỉ là trả lời sai câu.
+ *
+ * Sai kiểu đó không lộ ra ở output: vẫn đúng schema, vẫn có điểm, vẫn có lý do
+ * nghe hợp lý. Nên khung phải là dữ liệu của bước, không phải hằng số của module.
+ *
+ * Thủ tục thì ngược lại — lập luận trước, chấm sau, không bịa id — giống nhau ở
+ * mọi bước, nên nó ở lại `SYSTEM_PROMPT`.
+ */
+export interface RerankFrame {
+    /** Model phải xác lập GÌ về case đang mở, trước khi nhìn bất kỳ ứng viên nào. */
+    queryFrame: string;
+    /** So chiều nào giữa ứng viên và mốc vừa xác lập. */
+    candidateFrame: string;
+    /** 0 và 100 nghĩa là gì Ở BƯỚC NÀY. Thiếu thì model tự bịa thang, và thang đó đổi giữa các lượt. */
+    rubric: string;
+}
+
+/**
+ * Một câu instruction đơn → khung đầy đủ.
+ *
+ * Engine chấm điểm lấy instruction từ `ProfileCriteria.description`, tức đúng một
+ * chuỗi. Hàm này bọc nó lại để cả hai engine đi qua CÙNG một đường, thay vì
+ * `rerankCandidates` phải nhận hai kiểu tham số khác nhau.
+ */
+export function frameFromInstruction(instruction: string): RerankFrame {
+    const text = instruction.trim() || 'Rank candidates by overall relevance to the open case.';
+    return {
+        queryFrame:
+            'State what the open case is about, in the terms this instruction cares about, '
+            + 'from its evidence alone. Mention no candidate.',
+        candidateFrame:
+            'Say where this candidate agrees or differs from that, in those same terms. Name the evidence.',
+        rubric: text,
+    };
+}
+
+/**
  * ── Vì sao thứ tự trường trong schema này quan trọng ──
  * Model sinh JSON theo thứ tự trường. `queryAnalysis` đứng trước `rankings`, và
  * trong mỗi mục `analysis` đứng trước `score`, nên con số được sinh RA SAU khi
@@ -91,14 +134,15 @@ export interface RerankVerdict {
  * temperature 0 là mất tính tất định, đúng thứ tầng này cần nhất. Lập luận bằng
  * trường output giữ được cả hai: model vẫn suy nghĩ ra chữ, mà vẫn temp 0.
  */
-const RERANK_SCHEMA = {
+function buildRerankSchema(frame: RerankFrame) {
+    return {
     type: 'object',
     properties: {
         queryAnalysis: {
             type: 'string',
             maxLength: 600,
             description:
-                'FIRST: state what failure mechanism the OPEN CASE shows, from its evidence alone. '
+                `FIRST: ${frame.queryFrame} `
                 + 'Do not mention any candidate here. This is the reference every score is measured against.',
         },
         rankings: {
@@ -111,12 +155,12 @@ const RERANK_SCHEMA = {
                         type: 'string',
                         maxLength: 400,
                         description:
-                            'Reason BEFORE scoring: what mechanism this candidate shows, and where it agrees '
-                            + 'or differs from queryAnalysis. Name the evidence. Then the score must follow it.',
+                            `Reason BEFORE scoring: ${frame.candidateFrame} `
+                            + 'Measure it against queryAnalysis. Then the score must follow what you just wrote.',
                     },
                     score: {
                         type: 'number',
-                        description: 'Relevance 0-100 against the instruction. 0 = unrelated, 100 = textbook match.',
+                        description: `Relevance 0-100. ${frame.rubric}`,
                     },
                     reason: {
                         type: 'string',
@@ -129,22 +173,28 @@ const RERANK_SCHEMA = {
         },
     },
     required: ['queryAnalysis', 'rankings'],
-} as const;
+    } as const;
+}
 
+/**
+ * THỦ TỤC — giống nhau ở mọi bước D.
+ *
+ * Cố ý không nói gì về cơ chế hỏng, về người, hay về hành động khắc phục: đó là
+ * NỘI DUNG, và nội dung đến từ `RerankFrame` của từng bước. Nhét một ví dụ cụ
+ * thể vào đây là ghi cứng câu hỏi của một bước lên cả bảy bước còn lại.
+ */
 const SYSTEM_PROMPT = `You are re-ranking historical quality-management (8D) cases against one open case.
 
-Score every candidate from 0 to 100 for how relevant it is UNDER THE GIVEN INSTRUCTION —
-not for generic similarity. Two cases can share a defect code and still score low, or share
-nothing on paper and score high, when the instruction asks about the underlying mechanism.
+Score each candidate 0-100 for how relevant it is UNDER THE GIVEN INSTRUCTION - not for generic
+similarity. Two cases can look alike on paper and be irrelevant to the question asked, and two
+that share nothing on paper can be exactly what the question is after.
 
 Work in this order, and do not shortcut it:
-1. queryAnalysis — read the open case ALONE and state the mechanism it shows. Mention no candidate.
-2. For each candidate, write analysis FIRST: what mechanism it shows, and where it agrees or
-   differs from queryAnalysis. Then let the score follow from what you just wrote.
+1. queryAnalysis - read the OPEN CASE alone and establish what the instruction asks you to
+   establish. Mention no candidate. This is the reference everything else is measured against.
+2. For each candidate, write analysis FIRST, then let the score follow from what you just wrote.
 
-A score that does not follow from its own analysis is the failure this stage exists to prevent:
-two cases can share a defect code and still be different mechanisms, and two cases can share
-nothing on paper and be the same one.
+A score that does not follow from its own analysis is the failure this stage exists to prevent.
 
 Rules:
 - Score every candidate exactly once, using its notificationId verbatim.
@@ -157,7 +207,7 @@ function clip(text: string | null | undefined, max: number): string {
 }
 
 function buildUserPrompt(
-    instruction: string,
+    frame: RerankFrame,
     queryText: string,
     candidates: readonly RerankCandidate[],
 ): string {
@@ -168,7 +218,13 @@ function buildUserPrompt(
         .join('\n');
 
     return `## INSTRUCTION
-${instruction.trim()}
+${frame.rubric.trim()}
+
+## WHAT TO ESTABLISH FIRST, ABOUT THE OPEN CASE
+${frame.queryFrame.trim()}
+
+## WHAT TO COMPARE, FOR EACH CANDIDATE
+${frame.candidateFrame.trim()}
 
 ## OPEN CASE (the query)
 ${clip(queryText, QUERY_TEXT_CHARS)}
@@ -217,7 +273,7 @@ export function normalizeRerankOutput(
  * vì chỉ người gọi biết xếp hạng tầng 1 đang có gì để giữ lại.
  */
 export async function rerankCandidates(
-    instruction: string,
+    frame: RerankFrame,
     queryText: string,
     candidates: readonly RerankCandidate[],
 ): Promise<Map<string, RerankVerdict>> {
@@ -241,8 +297,8 @@ export async function rerankCandidates(
                 {
                     role: 'user',
                     content: repairHint
-                        ? `${buildUserPrompt(instruction, queryText, candidates)}\n\n## CORRECTION\n${repairHint}`
-                        : buildUserPrompt(instruction, queryText, candidates),
+                        ? `${buildUserPrompt(frame, queryText, candidates)}\n\n## CORRECTION\n${repairHint}`
+                        : buildUserPrompt(frame, queryText, candidates),
                 },
             ],
             {
@@ -253,7 +309,7 @@ export async function rerankCandidates(
                 max_tokens: BUDGET.rerank.maxTokens,
                 thinkingBudget: BUDGET.rerank.thinkingBudget,
                 responseMimeType: 'application/json',
-                responseSchema: RERANK_SCHEMA as unknown as Record<string, unknown>,
+                responseSchema: buildRerankSchema(frame) as unknown as Record<string, unknown>,
             },
         );
         return { content: res.content, finishReason: res.finishReason };

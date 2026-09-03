@@ -180,7 +180,8 @@ async function rerankStep(
 
     try {
         const verdicts = await rerankCandidates(
-            rerank.instruction,
+            // Khung của CHÍNH bước này — xem `RERANK_FRAMES` trong stepProfiles.
+            { queryFrame: rerank.queryFrame, candidateFrame: rerank.candidateFrame, rubric: rerank.rubric },
             queryText,
             pool.map((c) => ({
                 notificationId: c.notificationId,

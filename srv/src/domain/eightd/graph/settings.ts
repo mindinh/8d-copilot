@@ -172,7 +172,9 @@ export async function seedGraphStepParams(): Promise<void> {
                     // lại cả một đoạn instruction.
                     wRerank: p.rerank?.weight || null,
                     rerankFloor: p.rerank?.floor ?? null,
-                    rerankInstruction: p.rerank?.instruction ?? null,
+                    rerankQueryFrame: p.rerank?.queryFrame ?? null,
+                    rerankCandidateFrame: p.rerank?.candidateFrame ?? null,
+                    rerankRubric: p.rerank?.rubric ?? null,
                     enabled: true,
                     sortOrder: (STEP_CODES.indexOf(code) + 1) * 10 + i * 0,
                 };

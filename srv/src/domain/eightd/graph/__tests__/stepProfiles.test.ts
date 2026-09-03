@@ -246,7 +246,7 @@ describe('accumulateEvidence / finalizeScores — tách ra để re-rank chen v�
 });
 
 describe('applyRerankToScored', () => {
-    const rerank = { weight: 4, floor: 0.5, instruction: 'same mechanism?' };
+    const rerank = { ...DEFAULT_STEP_PROFILES.D4.rerank!, weight: 4, floor: 0.5 };
     const base = () => accumulateEvidence(
         [hit('8D-2', 'keywords', 'flange', 1)],
         { label: 't', question: 't', weights: { keywords: 3 }, keywordCap: 4, minScore: 5, topN: 3 },
@@ -306,7 +306,8 @@ describe('normalizeStepParams — cấu hình re-rank', () => {
         const { profile } = normalizeStepParams('D4', { ...row, wRerank: 3 });
         expect(profile.rerank!.weight).toBe(3);
         expect(profile.rerank!.floor).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.floor);
-        expect(profile.rerank!.instruction).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.instruction);
+        expect(profile.rerank!.queryFrame).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.queryFrame);
+        expect(profile.rerank!.rubric).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.rubric);
     });
 
     it('sàn ngoài [0,1] rơi về mặc định thay vì tạo ra một ngưỡng vô nghĩa', () => {
@@ -332,17 +333,54 @@ describe('normalizeStepParams — cấu hình re-rank', () => {
     });
 });
 
-describe('mặc định re-rank của D4 và D5', () => {
-    it('seed sẵn câu hỏi nhưng TẮT — bật là một con số, không phải một lần deploy', () => {
-        for (const code of ['D4', 'D5'] as const) {
-            expect(DEFAULT_STEP_PROFILES[code].rerank).toBeDefined();
-            expect(DEFAULT_STEP_PROFILES[code].rerank!.weight).toBe(0);
-            expect(DEFAULT_STEP_PROFILES[code].rerank!.instruction.length).toBeGreaterThan(40);
+describe('khung chain-of-thought của tám bước', () => {
+    it('mọi bước đều có đủ ba mảnh khung, và TẮT mặc định', () => {
+        for (const code of STEP_CODES) {
+            const rerank = DEFAULT_STEP_PROFILES[code].rerank;
+            expect(`${code}:defined`).toBe(`${code}:${rerank ? 'defined' : 'missing'}`);
+            expect(rerank!.weight).toBe(0);
+            for (const part of ['queryFrame', 'candidateFrame', 'rubric'] as const) {
+                expect(`${code}.${part}`).toBe(
+                    rerank![part].trim().length > 40 ? `${code}.${part}` : `${code}.${part} QUÁ NGẮN`,
+                );
+            }
         }
     });
 
-    it('chỉ D4 và D5 có re-rank — cùng hai bước Thanh chọn ở engine chấm điểm', () => {
-        const withRerank = STEP_CODES.filter((c) => DEFAULT_STEP_PROFILES[c].rerank);
-        expect(withRerank).toEqual(['D4', 'D5']);
+    /**
+     * Bất biến chính của việc tách khung ra theo bước.
+     *
+     * `queryFrame` là MỐC mà mọi điểm số của bước đó được đo theo. Hai bước dùng
+     * chung một mốc nghĩa là một trong hai đang suy nghĩ theo câu hỏi của bước
+     * kia — model vẫn trả lời trôi chảy, vẫn đúng schema, vẫn có điểm và có lý do
+     * nghe hợp lý. Không có gì trong output lộ ra điều đó, nên chỉ chỗ này bắt được.
+     */
+    it('không bước nào dùng lại khung của bước khác', () => {
+        for (const part of ['queryFrame', 'candidateFrame', 'rubric'] as const) {
+            const values = STEP_CODES.map((c) => DEFAULT_STEP_PROFILES[c].rerank![part]);
+            expect(`${part}:${new Set(values).size}`).toBe(`${part}:${STEP_CODES.length}`);
+        }
+    });
+
+    /**
+     * Mỗi khung phải nói về đúng chủ đề của bước nó. Kiểm bằng một từ khoá neo —
+     * thô, nhưng đủ để bắt trường hợp ai đó copy khung D4 sang D1 rồi quên sửa.
+     */
+    it('khung nói đúng chủ đề của bước', () => {
+        const anchor: Record<string, RegExp> = {
+            D1: /capabilit|team/i,
+            D2: /boundary|specification/i,
+            D3: /exposed|containment/i,
+            D4: /mechanism/i,
+            D5: /root cause|remove/i,
+            D6: /proof|verif/i,
+            D7: /reach|FMEA/i,
+            D8: /closure|closed/i,
+        };
+        for (const code of STEP_CODES) {
+            const r = DEFAULT_STEP_PROFILES[code].rerank!;
+            const text = `${r.queryFrame} ${r.candidateFrame} ${r.rubric}`;
+            expect(`${code}:${anchor[code].test(text)}`).toBe(`${code}:true`);
+        }
     });
 });

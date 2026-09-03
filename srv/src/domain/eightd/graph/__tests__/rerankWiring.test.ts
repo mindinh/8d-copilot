@@ -17,7 +17,7 @@
  */
 
 import { setLlmProvider } from '@cnma/sap-aicore-integrate/llm';
-import { rerankCandidates } from '../../precedent/reranker';
+import { frameFromInstruction, rerankCandidates } from '../../precedent/reranker';
 import {
     DEFAULT_STEP_PROFILES,
     accumulateEvidence,
@@ -46,6 +46,8 @@ function installProvider(reply: unknown): void {
     } as any);
 }
 
+const FRAME = DEFAULT_STEP_PROFILES.D4.rerank!;
+
 const CANDIDATES = [
     { notificationId: '8D-10049030', symptomShortText: 'Burr height 0.22mm on die station 4', searchText: 'burr edge cracks' },
     { notificationId: '8D-10049010', symptomShortText: 'Surface roughness from chatter', searchText: 'chatter flange waviness' },
@@ -73,7 +75,8 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
     beforeEach(() => { installProvider(GOOD_REPLY); });
 
     it('gửi instruction, case đang mở và toàn bộ ứng viên trong MỘT lượt gọi', async () => {
-        await rerankCandidates('Same physical failure mechanism?', 'Burr on a milled flange edge', CANDIDATES);
+        await rerankCandidates(frameFromInstruction('Same physical failure mechanism?'),
+            'Burr on a milled flange edge', CANDIDATES);
 
         expect(lastUserPrompt).toContain('Same physical failure mechanism?');
         expect(lastUserPrompt).toContain('Burr on a milled flange edge');
@@ -87,7 +90,7 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
      * đằng giống hệt nhau, nên chỉ có chỗ này bắt được.
      */
     it('schema đặt lập luận TRƯỚC điểm số', async () => {
-        await rerankCandidates('x', 'y', CANDIDATES);
+        await rerankCandidates(FRAME, 'y', CANDIDATES);
 
         const schema = lastConfig.responseSchema as any;
         const item = schema.properties.rankings.items.properties;
@@ -98,7 +101,7 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
     });
 
     it('system prompt bắt buộc lập luận trước, chấm sau', () => {
-        return rerankCandidates('x', 'y', CANDIDATES).then(() => {
+        return rerankCandidates(FRAME, 'y', CANDIDATES).then(() => {
             expect(lastSystemPrompt).toMatch(/queryAnalysis/);
             expect(lastSystemPrompt).toMatch(/analysis FIRST/);
         });
@@ -117,7 +120,7 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
      * định budget luôn bị bỏ, và nó đỏ trên chính cấu hình đang chạy.
      */
     it('giữ temperature 0; budget dưới ngưỡng chỉ bị bỏ khi model là Claude', async () => {
-        await rerankCandidates('x', 'y', CANDIDATES);
+        await rerankCandidates(FRAME, 'y', CANDIDATES);
 
         expect(lastConfig.temperature).toBe(0);
 
@@ -127,7 +130,7 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
     });
 
     it('đọc được cả điểm, lý do và lập luận', async () => {
-        const verdicts = await rerankCandidates('x', 'y', CANDIDATES);
+        const verdicts = await rerankCandidates(FRAME, 'y', CANDIDATES);
 
         expect(verdicts.get('8D-10049030')).toEqual({
             score: 88,
@@ -145,7 +148,7 @@ describe('rerankCandidates — hợp đồng chain-of-thought', () => {
                 { notificationId: '8D-KHONG-CO-THAT', analysis: 'a', score: 99, reason: 'r' },
             ],
         });
-        const verdicts = await rerankCandidates('x', 'y', CANDIDATES);
+        const verdicts = await rerankCandidates(FRAME, 'y', CANDIDATES);
         expect(verdicts.has('8D-KHONG-CO-THAT')).toBe(false);
         expect(verdicts.size).toBe(2);
     });
@@ -174,8 +177,7 @@ describe('hai tầng chạy trọn — graph rồi re-rank', () => {
         const stage1 = accumulateEvidence(hits, profile);
         expect(finalizeScores(stage1, profile)).toEqual([]);   // tầng 1: không ai qua
 
-        const verdicts = await rerankCandidates(profile.rerank!.instruction, 'burr on flange edge',
-            CANDIDATES);
+        const verdicts = await rerankCandidates(profile.rerank!, 'burr on flange edge', CANDIDATES);
         const final = finalizeScores(applyRerankToScored(stage1, profile.rerank!, verdicts), profile);
 
         expect(final.map((c) => c.notificationId)).toEqual(['8D-10049030']);
