@@ -212,6 +212,14 @@ export function StepScorePanel({
                                     >
                                         <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={b.label}>
                                             {b.label}
+                                            {/* Preview chấm bằng code thuần, không gọi model — dòng
+                                                re-rank vì thế luôn 0 ở đây. Nói thẳng thay vì để
+                                                người xem tưởng tiêu chí hỏng. */}
+                                            {b.criterionKey === 'rerank' && (
+                                                <span className="ml-1.5 font-normal text-[10px] italic text-muted-foreground">
+                                                    (LLM pass — not simulated in preview)
+                                                </span>
+                                            )}
                                         </span>
                                         <div className="flex items-center gap-1.5 shrink-0">
                                             <Badge variant="outline" className={cn('h-4 px-1.5 text-[10px]', LEVEL_STYLE[b.level])}>

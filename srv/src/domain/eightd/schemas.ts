@@ -210,4 +210,8 @@ export const BUDGET = {
     stepAnalyze: { maxTokens: 64_000, thinkingBudget: 0 },
     summaries: { maxTokens: 16_000, thinkingBudget: 256 },
     structure: { maxTokens: 16_000, thinkingBudget: 0 },
+    // Re-rank listwise: output chỉ là mảng {id, score, reason ngắn} cho ≤20 ứng
+    // viên. 256 dưới ngưỡng 1024 của Anthropic nên thinking tắt và temperature 0
+    // thật sự tới model — cùng lý do với `diagnose`.
+    rerank: { maxTokens: 4_000, thinkingBudget: 256 },
 } as const;

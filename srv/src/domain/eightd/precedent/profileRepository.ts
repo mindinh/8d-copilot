@@ -12,7 +12,7 @@
  */
 
 import cds from '@sap/cds';
-import { DEFAULT_CRITERIA, DEFAULT_RETRIEVAL_SETTINGS } from './defaults';
+import { DEFAULT_CRITERIA, DEFAULT_RETRIEVAL_SETTINGS, RERANK_PROFILE_SPECS } from './defaults';
 import { CRITERIA, SETTINGS } from './configRepository';
 import type { Criterion } from './scoring';
 
@@ -74,6 +74,9 @@ function toCriterion(r: Record<string, any>): Criterion {
     return {
         criterionKey: r.criterionKey,
         label: r.label,
+        // Với tiêu chí `rerank`, description CHÍNH LÀ instruction gửi model —
+        // không map thì tầng re-rank chạy với câu hỏi rỗng.
+        description: r.description ?? null,
         sourceField: r.sourceField,
         matchType: r.matchType || 'exact',
         weight: Number(r.weight) || 0,
@@ -254,7 +257,10 @@ function criterionRow(profileKey: string, c: Criterion, index: number): Record<s
         profile_profileKey: profileKey,
         criterionKey: c.criterionKey,
         label: c.label,
-        description: meta?.description ?? null,
+        // Ưu tiên description của CHÍNH tiêu chí: với `rerank` đó là instruction
+        // admin đã sửa, và clone/save phải giữ nguyên nó thay vì tra lại bản
+        // mặc định theo criterionKey.
+        description: c.description ?? meta?.description ?? null,
         sourceTable: meta?.sourceTable ?? null,
         sourceField: c.sourceField,
         matchType: c.matchType,
@@ -332,6 +338,68 @@ export async function seedRetrievalProfiles(): Promise<void> {
                 ),
             );
             LOG.info(`Đã gán profile mặc định cho ${missing.length} bước: ${missing.join(', ')}`);
+        }
+
+        // ── Hai profile re-rank cho D4/D5 ───────────────────────────────────
+        // Idempotent: profile đã tồn tại thì KHÔNG đụng — kể cả tiêu chí lẫn
+        // binding, vì admin có thể đã chỉnh cả hai. Chỉ DB chưa từng có mới seed.
+        // isSystem = true (không xoá được, như `default`) — muốn bỏ re-rank thì
+        // TẮT tiêu chí, không phải xoá profile; xoá được thì boot sau seed lại
+        // và trông như cấu hình tự hồi sinh.
+        const haveKeys = new Set(existing.map((r: any) => String(r.profileKey)));
+        for (const spec of RERANK_PROFILE_SPECS) {
+            if (haveKeys.has(spec.profileKey)) continue;
+
+            // Nhân bản tiêu chí từ `default` ĐANG CÓ TRONG DB (không phải hằng
+            // số) — trọng số admin đã chỉnh trên default phải theo sang.
+            const defProfile = (await db.run(
+                SELECT.one.from(PROFILES).where({ profileKey: DEFAULT_PROFILE_KEY }),
+            )) as Record<string, any> | null;
+            const defRows = (await db.run(
+                SELECT.from(PROFILE_CRITERIA)
+                    .where({ profile_profileKey: DEFAULT_PROFILE_KEY })
+                    .orderBy('sortOrder'),
+            )) as Record<string, any>[];
+            const baseCriteria = defRows.length
+                ? defRows.map(toCriterion)
+                : DEFAULT_CRITERIA.map((c) => ({ ...c }));
+
+            await db.run(
+                INSERT.into(PROFILES).entries({
+                    profileKey: spec.profileKey,
+                    label: spec.label,
+                    description: spec.profileDescription,
+                    minScore: Number(defProfile?.minScore ?? DEFAULT_RETRIEVAL_SETTINGS.minScore),
+                    topN: Number(defProfile?.topN ?? DEFAULT_RETRIEVAL_SETTINGS.topN),
+                    closedOnly: defProfile ? defProfile.closedOnly !== false : DEFAULT_RETRIEVAL_SETTINGS.closedOnly,
+                    isSystem: true,
+                    sortOrder: 20 + RERANK_PROFILE_SPECS.indexOf(spec) * 10,
+                }),
+            );
+            await db.run(
+                INSERT.into(PROFILE_CRITERIA).entries(
+                    [...baseCriteria, spec.criterion].map((c, i) => criterionRow(spec.profileKey, c, i)),
+                ),
+            );
+
+            // Chỉ kéo bước sang profile mới khi nó còn đứng ở `default` — một
+            // binding admin đã tự tay đổi thì không bị cướp lại.
+            const binding = (await db.run(
+                SELECT.one.from(STEP_BINDINGS).where({ stepCode: spec.stepCode }),
+            )) as Record<string, any> | null;
+            const currentKey = String(binding?.profile_profileKey ?? binding?.profile?.profileKey ?? '');
+            if (!binding || currentKey === DEFAULT_PROFILE_KEY) {
+                await db.run(
+                    UPDATE(STEP_BINDINGS)
+                        .set({ profile_profileKey: spec.profileKey })
+                        .where({ stepCode: spec.stepCode }),
+                );
+            }
+
+            LOG.info(
+                `Đã tạo profile "${spec.profileKey}" (${baseCriteria.length} tiêu chí + rerank, TẮT sẵn) `
+                + `và gán cho ${spec.stepCode}${currentKey && currentKey !== DEFAULT_PROFILE_KEY ? ' — GIỮ binding admin đã chỉnh' : ''}`,
+            );
         }
 
         clearProfileCache();

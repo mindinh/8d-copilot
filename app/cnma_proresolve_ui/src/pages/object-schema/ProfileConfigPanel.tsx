@@ -40,6 +40,7 @@ const METHODS = [
     { value: 'keyword', label: 'Keyword Match', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30', hint: 'Matches when the two texts share at least one keyword, after dropping filler and short words.' },
     { value: 'family', label: 'Family Group', className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30', hint: 'Equality on a grouping field — used for "same material family".' },
     { value: 'cosine', label: 'Vector (Cosine)', className: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30', hint: 'Semantic closeness between two case narratives. Score = weight × cosine similarity.' },
+    { value: 'rerank', label: 'LLM Re-rank', className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30', hint: 'A second-stage pass: an LLM reads the open case and each top candidate together and scores them against the instruction below. Score = weight × (model score / 100). Costs one model call per search.' },
 ] as const;
 
 const METHOD_BY_VALUE = new Map(METHODS.map((m) => [m.value, m]));
@@ -106,7 +107,9 @@ function FieldCard({
                     <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-bold text-foreground">{labelText}</div>
                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
-                            <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">{c.sourceField}</span>
+                            <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">
+                                {methodKey === 'rerank' ? 'LLM · stage-2 pass' : c.sourceField}
+                            </span>
                             {field?.indexed && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -140,6 +143,15 @@ function FieldCard({
                                 ? {
                                     minSimilarity: c.minSimilarity ?? 0.7,
                                     sourceField: 'embedding',
+                                    fallbackMatch: null, fallbackField: null, fallbackWeight: null,
+                                }
+                                : {}),
+                            ...(v === 'rerank'
+                                ? {
+                                    // Sàn trên thang 0-1 của điểm model (50/100).
+                                    minSimilarity: c.minSimilarity ?? 0.5,
+                                    // Re-rank không đọc field nào — model đọc văn bản hai case.
+                                    sourceField: '',
                                     fallbackMatch: null, fallbackField: null, fallbackWeight: null,
                                 }
                                 : {}),
@@ -216,7 +228,47 @@ function FieldCard({
                 </div>
             )}
 
-            {!field && (
+            {methodKey === 'rerank' && (
+                <div className="mt-2.5 space-y-2 border-t pt-2.5">
+                    <div className="flex items-center gap-2">
+                        <Label className="text-[11px] font-medium text-muted-foreground">
+                            Minimum score
+                        </Label>
+                        <Input
+                            type="number" min={0} max={1} step={0.05}
+                            value={c.minSimilarity ?? 0.5}
+                            className="h-7 w-20 text-right text-xs"
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                if (Number.isFinite(v) && v >= 0 && v <= 1) onPatch({ minSimilarity: v });
+                            }}
+                        />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-72 text-xs">
+                                On the model's 0–1 scale: 0.5 means a candidate scoring below 50/100
+                                gets zero points from this criterion.
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-[11px] font-medium text-muted-foreground">
+                            Rerank instruction — the question the model ranks by
+                        </Label>
+                        <textarea
+                            value={c.description ?? ''}
+                            rows={2}
+                            placeholder='e.g. "Rank by same physical failure mechanism; ignore superficial code matches."'
+                            className="w-full rounded-md border bg-background px-2 py-1.5 text-xs leading-relaxed"
+                            onChange={(e) => onPatch({ description: e.target.value })}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {!field && methodKey !== 'rerank' && (
                 <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
                     Field <span className="font-mono font-semibold">{c.sourceField}</span> is not in the
                     catalog — this criterion can never score.
