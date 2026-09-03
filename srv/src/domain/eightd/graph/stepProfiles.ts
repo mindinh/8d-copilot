@@ -175,6 +175,105 @@ export function scoreEvidence(
         .slice(0, profile.topN);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cấu hình admin đè lên mặc định
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ACTION_TYPES = ['Containment', 'Corrective', 'Preventive'] as const;
+
+/** Cột trọng số trên `GraphStepParams` → khoá loại bằng chứng. */
+const WEIGHT_COLUMNS: ReadonlyArray<readonly [string, EvidenceKind]> = [
+    ['wWorkCenter', 'workCenter'],
+    ['wMaterial', 'material'],
+    ['wMaterialFamily', 'materialFamily'],
+    ['wDefectCode', 'defectCode'],
+    ['wKeywords', 'keywords'],
+    ['wContainment', 'containment'],
+    ['wCorrective', 'corrective'],
+    ['wPreventive', 'preventive'],
+];
+
+function positiveInt(value: unknown): number | null {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+export interface NormalizedStepParams {
+    profile: GraphStepProfile;
+    /** Null khi dòng cấu hình dùng được. Ngược lại: vì sao nó bị từ chối. */
+    violation: string | null;
+}
+
+/**
+ * Một dòng `GraphStepParams` → profile dùng được. HÀM THUẦN.
+ *
+ * ── Bất biến file này tồn tại để bảo vệ ──
+ * `wKeywords` PHẢI nhỏ hơn `minScore`. Vi phạm nó nghĩa là MỘT từ khoá chung tự
+ * mình đủ điểm làm tiền lệ — và đó chính xác là lỗi R3 mà cả đợt này sinh ra để
+ * đóng: hai case chỉ chung chữ `flange` được đối xử như một case khớp thật.
+ *
+ * ── Vì sao TỪ CHỐI cả dòng thay vì kẹp lại con số ──
+ * Kẹp lại thì admin lưu thành công, thấy con số mình gõ hiện trên màn hình, mà
+ * hệ thống đang chạy một con số khác. Từ chối cả dòng và rơi về mặc định là thô
+ * hơn, nhưng nó không bao giờ nói dối về thứ đang thật sự chạy — và người gọi có
+ * `violation` để nói ra chỗ sai.
+ */
+export function normalizeStepParams(
+    code: StepCode,
+    row: unknown,
+    fallback: GraphStepProfile = DEFAULT_STEP_PROFILES[code],
+): NormalizedStepParams {
+    if (!row || typeof row !== 'object') return { profile: fallback, violation: null };
+    const r = row as Record<string, unknown>;
+
+    if (r.enabled === false) return { profile: fallback, violation: null };
+
+    const weights: Partial<Record<EvidenceKind, number>> = {};
+    for (const [column, kind] of WEIGHT_COLUMNS) {
+        const weight = positiveInt(r[column]);
+        // Null/0 ⇒ bước KHÔNG cân loại này. Khác 0 ở chỗ nhìn thấy được: loại
+        // không được cân thì không bao giờ xuất hiện trong đường bằng chứng.
+        if (weight !== null) weights[kind] = weight;
+    }
+
+    const keywordCap = positiveInt(r.keywordCap) ?? fallback.keywordCap;
+    const minScore = positiveInt(r.minScore) ?? fallback.minScore;
+    const topN = positiveInt(r.topN) ?? fallback.topN;
+
+    if (!Object.keys(weights).length) {
+        return {
+            profile: fallback,
+            violation: `${code}: không có trọng số nào > 0, bước này sẽ không bao giờ tìm được tiền lệ.`,
+        };
+    }
+
+    const keywordWeight = weights.keywords ?? 0;
+    if (keywordWeight >= minScore) {
+        return {
+            profile: fallback,
+            violation:
+                `${code}: wKeywords=${keywordWeight} ≥ minScore=${minScore}, nên MỘT từ khoá chung `
+                + 'tự nó đủ điểm làm tiền lệ. Đó chính là lỗi R3 đã đóng '
+                + '(hai case chỉ chung chữ "flange" bị coi như khớp thật). Dùng mặc định.',
+        };
+    }
+
+    const actionType = ACTION_TYPES.find((t) => t === String(r.actionType ?? '').trim());
+
+    return {
+        profile: {
+            label: String(r.label ?? fallback.label),
+            question: String(r.question ?? fallback.question),
+            weights,
+            keywordCap,
+            minScore,
+            topN,
+            ...(actionType ? { actionType } : {}),
+        },
+        violation: null,
+    };
+}
+
 /** Một dòng người đọc hiểu: `"6 điểm — 3 từ khoá chung (burr, edge, limit), cùng họ vật tư MG-HOUSING"`. */
 export function explainEvidence(scored: ScoredCase): string {
     const parts = scored.evidence.map((e) => {

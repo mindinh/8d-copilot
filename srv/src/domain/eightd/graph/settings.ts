@@ -12,6 +12,13 @@
  */
 
 import cds from '@sap/cds';
+import {
+    DEFAULT_STEP_PROFILES,
+    STEP_CODES,
+    normalizeStepParams,
+    type GraphStepProfile,
+    type StepCode,
+} from './stepProfiles';
 
 const LOG = cds.log('graph');
 
@@ -76,4 +83,99 @@ export async function getGraphSettings(): Promise<GraphSettings> {
 
     cached = { value, at: Date.now() };
     return value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trọng số từng bước
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const GRAPH_STEP_PARAMS = 'cnma.proresolve.GraphStepParams';
+
+let cachedProfiles: { value: Record<StepCode, GraphStepProfile>; at: number } | null = null;
+
+export function resetStepProfilesCache(): void {
+    cachedProfiles = null;
+}
+
+/**
+ * Trọng số đang có hiệu lực cho cả tám bước.
+ *
+ * Thiếu dòng, dòng bị tắt, hoặc dòng vi phạm bất biến ⇒ bước đó dùng
+ * `DEFAULT_STEP_PROFILES`. Nghĩa là deploy bảng này KHÔNG đổi hành vi cho tới khi
+ * có người thật sự sửa một con số — cùng thái độ mà `StepPrompts` đã đặt ra.
+ *
+ * Dòng bị từ chối được LOG Ở MỨC WARN kèm lý do. Im lặng rơi về mặc định là cách
+ * chắc chắn nhất để admin tin rằng cấu hình của mình đang chạy trong khi không.
+ */
+export async function getStepProfiles(): Promise<Record<StepCode, GraphStepProfile>> {
+    if (cachedProfiles && Date.now() - cachedProfiles.at < TTL_MS) return cachedProfiles.value;
+
+    const value = { ...DEFAULT_STEP_PROFILES };
+    try {
+        const db = await cds.connect.to('db');
+        const rows = (await db.run(SELECT.from(GRAPH_STEP_PARAMS))) as Array<Record<string, unknown>>;
+        const byCode = new Map(rows.map((r) => [String(r.stepCode), r]));
+
+        for (const code of STEP_CODES) {
+            const { profile, violation } = normalizeStepParams(code, byCode.get(code));
+            if (violation) LOG.warn(`GraphStepParams bị từ chối — ${violation}`);
+            value[code] = profile;
+        }
+    } catch (e: any) {
+        LOG.warn(`Không đọc được GraphStepParams (${e.message}) — dùng trọng số mặc định.`);
+    }
+
+    cachedProfiles = { value, at: Date.now() };
+    return value;
+}
+
+/**
+ * Bù những bước chưa có dòng cấu hình, seed từ `DEFAULT_STEP_PROFILES`.
+ *
+ * Bù theo TỪNG BƯỚC chứ không phải "chỉ khi bảng rỗng" — cùng lý do
+ * `profileRepository` đã ghi: thêm một bước mới rồi deploy phải tới được môi
+ * trường đã chạy, chứ không im lặng bỏ qua vì bảng đã có dòng.
+ *
+ * Seed đúng bằng con số đang chạy, nên nó KHÔNG đổi hành vi — nó chỉ làm cho
+ * những con số đó nhìn thấy và sửa được trên màn hình, thay vì nằm trong code.
+ */
+export async function seedGraphStepParams(): Promise<void> {
+    try {
+        const db = await cds.connect.to('db');
+        const existing = (await db.run(
+            SELECT.from(GRAPH_STEP_PARAMS).columns('stepCode'),
+        )) as Array<{ stepCode: string }>;
+        const have = new Set(existing.map((r) => String(r.stepCode)));
+        const missing = STEP_CODES.filter((code) => !have.has(code));
+        if (!missing.length) return;
+
+        await db.run(INSERT.into(GRAPH_STEP_PARAMS).entries(
+            missing.map((code, i) => {
+                const p = DEFAULT_STEP_PROFILES[code];
+                return {
+                    stepCode: code,
+                    label: p.label,
+                    question: p.question,
+                    wWorkCenter: p.weights.workCenter ?? null,
+                    wMaterial: p.weights.material ?? null,
+                    wMaterialFamily: p.weights.materialFamily ?? null,
+                    wDefectCode: p.weights.defectCode ?? null,
+                    wKeywords: p.weights.keywords ?? null,
+                    wContainment: p.weights.containment ?? null,
+                    wCorrective: p.weights.corrective ?? null,
+                    wPreventive: p.weights.preventive ?? null,
+                    keywordCap: p.keywordCap,
+                    minScore: p.minScore,
+                    topN: p.topN,
+                    actionType: p.actionType ?? null,
+                    enabled: true,
+                    sortOrder: (STEP_CODES.indexOf(code) + 1) * 10 + i * 0,
+                };
+            }),
+        ));
+        resetStepProfilesCache();
+        LOG.info(`Đã seed trọng số graph cho ${missing.length} bước: ${missing.join(', ')}`);
+    } catch (e: any) {
+        LOG.error(`Seed GraphStepParams thất bại (app vẫn chạy với mặc định): ${e.message}`);
+    }
 }

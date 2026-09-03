@@ -36,12 +36,12 @@ import {
     type EvidenceHit,
 } from './probes';
 import {
-    DEFAULT_STEP_PROFILES,
     STEP_CODES,
     scoreEvidence,
+    type GraphStepProfile,
     type StepCode,
 } from './stepProfiles';
-import { getGraphSettings } from './settings';
+import { getGraphSettings, getStepProfiles } from './settings';
 import {
     emptyPerStepPrecedents,
     findPrecedentsByStep as findPrecedentsByScoring,
@@ -87,14 +87,14 @@ async function collectEvidence(anchor: GraphAnchor): Promise<EvidenceHit[]> {
 
 function toResult(
     code: StepCode,
+    profile: GraphStepProfile,
     precedents: Awaited<ReturnType<typeof hydratePrecedents>>,
     evidenceCount: number,
     libraryCount: number,
 ): PrecedentResult {
-    const profile = DEFAULT_STEP_PROFILES[code];
     return {
         precedents,
-        reason: precedents.length ? null : reasonFor(code, evidenceCount, libraryCount),
+        reason: precedents.length ? null : reasonFor(code, profile, evidenceCount, libraryCount),
         // Bằng chứng graph không có trần cố định, nên `maxScore` báo điểm THỰC của
         // case mạnh nhất. Bịa ra một mẫu số cố định sẽ làm mọi tỉ lệ trên UI vô nghĩa.
         maxScore: precedents[0]?.score ?? 0,
@@ -109,8 +109,12 @@ function toResult(
     };
 }
 
-function reasonFor(code: StepCode, evidenceCount: number, libraryCount: number): string {
-    const profile = DEFAULT_STEP_PROFILES[code];
+function reasonFor(
+    code: StepCode,
+    profile: GraphStepProfile,
+    evidenceCount: number,
+    libraryCount: number,
+): string {
     if (libraryCount === 0) {
         return 'The case library is empty — no historical cases have been loaded yet. '
             + 'Run the library seed before expecting precedent-based suggestions.';
@@ -141,10 +145,12 @@ export async function findPrecedentsByStepGraph(
     )) as Array<{ N: number }>;
 
     const evidence = await collectEvidence(anchor);
+    // Trọng số đọc từ `GraphStepParams`; thiếu dòng thì rơi về hằng số trong code.
+    const profiles = await getStepProfiles();
 
     const byStep = {} as Record<StepCode, PrecedentResult>;
     for (const code of STEP_CODES) {
-        const profile = DEFAULT_STEP_PROFILES[code];
+        const profile = profiles[code];
         // Bước có khai `actionType` chỉ nhận bằng chứng hành động của ĐÚNG loại đó.
         // Không lọc thì D3 (chặn tạm) ăn điểm từ hành động phòng ngừa của case khác —
         // một câu trả lời trông hợp lý cho một câu hỏi không ai đặt ra.
@@ -155,7 +161,7 @@ export async function findPrecedentsByStepGraph(
             return true;
         });
         const scored = scoreEvidence(relevant, profile);
-        byStep[code] = toResult(code, await hydratePrecedents(scored), relevant.length, Number(libraryCount));
+        byStep[code] = toResult(code, profile, await hydratePrecedents(scored), relevant.length, Number(libraryCount));
     }
 
     const union = mergeStepPrecedents(byStep);

@@ -14,6 +14,7 @@ import { registerIdentityHandlers } from './src/services/identityService';
 import { registerEightDHandlers, sweepOnStartup } from './src/services/eightDService';
 import { seedRetrievalConfig } from './src/domain/eightd/precedent/configRepository';
 import { seedRetrievalProfiles } from './src/domain/eightd/precedent/profileRepository';
+import { seedGraphStepParams } from './src/domain/eightd/graph/settings';
 import {
     embedLibraryInBackground,
     seedLibraryFromBundle,
@@ -203,6 +204,10 @@ async function startupTasks(): Promise<void> {
         // trọng số toàn cục đang có trong DB, nên bảng đó phải tồn tại trước. Đảo thứ
         // tự thì trên một DB mới, profile mặc định sinh ra rỗng.
         await seedRetrievalProfiles();
+        // Trọng số của engine graph, seed đúng bằng con số đang chạy trong code.
+        // Không đổi hành vi — chỉ đưa những con số đó lên chỗ sửa được mà không
+        // phải deploy lại, đúng như `GraphStepParams` được thiết kế để làm.
+        await seedGraphStepParams();
     } catch (e: any) {
         logger.error('Khởi tạo dữ liệu lúc boot thất bại:', e?.message ?? e);
     }

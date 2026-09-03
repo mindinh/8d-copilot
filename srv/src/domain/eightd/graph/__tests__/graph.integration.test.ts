@@ -32,6 +32,7 @@ import {
     sharedKeywords,
 } from '../probes';
 import { DEFAULT_STEP_PROFILES, STEP_CODES, scoreEvidence } from '../stepProfiles';
+import { GRAPH_STEP_PARAMS, getStepProfiles, resetStepProfilesCache, seedGraphStepParams } from '../settings';
 import { NODE } from '../model';
 
 const ENABLED = process.env.GRAPH_INTEGRATION === '1';
@@ -59,6 +60,25 @@ const anchorOf = (over: Partial<GraphAnchor> = {}): GraphAnchor => ({
 
 describeGraph('graph retrieval (HANA)', () => {
     beforeAll(async () => {
+        /**
+         * Nạp CDS model TRƯỚC khi chạm DB.
+         *
+         * ── Vì sao phải làm tay ở đây ──
+         * `cds.connect.to('db')` KHÔNG tự nạp model. Server thật luôn có model vì
+         * `cds.serve` nạp nó, nhưng một tiến trình jest thì không — và hậu quả im
+         * lặng đến mức nguy hiểm: raw SQL vẫn chạy bình thường, còn CQN thì mất
+         * khả năng ánh xạ tên. `UPDATE(...).set({ topN: 1 })` không map được
+         * `topN` sang cột `TOPN` nên KHÔNG ghi gì cả, không lỗi, không cảnh báo.
+         *
+         * Nghĩa là mọi test cấu hình sẽ đọc lại đúng giá trị mặc định và xanh —
+         * chứng minh một điều không hề đúng. Chính cái bẫy đó đã suýt được ghi
+         * vào repo như một kết luận.
+         */
+        if (!cds.model) {
+            const model = await cds.load(cds.resolve('*') as any);
+            cds.model = cds.linked(cds.compile.for.nodejs(model as any) as any);
+        }
+
         const available = await isGraphAvailable();
         if (!available) {
             throw new Error(
@@ -346,6 +366,86 @@ describeGraph('graph retrieval (HANA)', () => {
         expect(top.explanation).toMatch(/điểm —/);
         expect(Array.isArray(top.team)).toBe(true);
         expect(Array.isArray(top.actions)).toBe(true);
+    }, TIMEOUT);
+
+    // ── Cấu hình admin ───────────────────────────────────────────────────────
+
+    it('seedGraphStepParams bù đủ tám dòng và không đổi hành vi', async () => {
+        await seedGraphStepParams();
+        resetStepProfilesCache();
+
+        const profiles = await getStepProfiles();
+        expect(Object.keys(profiles).sort()).toEqual([...STEP_CODES].sort());
+
+        // Seed đúng bằng con số trong code, nên đọc lại phải ra chính nó. Nếu
+        // chỗ này lệch thì việc "seed không đổi hành vi" là một lời hứa suông.
+        for (const code of STEP_CODES) {
+            expect(profiles[code].weights).toEqual(DEFAULT_STEP_PROFILES[code].weights);
+            expect(profiles[code].minScore).toBe(DEFAULT_STEP_PROFILES[code].minScore);
+            expect(profiles[code].keywordCap).toBe(DEFAULT_STEP_PROFILES[code].keywordCap);
+            expect(profiles[code].actionType).toBe(DEFAULT_STEP_PROFILES[code].actionType);
+        }
+    }, TIMEOUT);
+
+    /**
+     * Chỉnh trọng số phải có hiệu lực NGAY, không cần deploy — đó là toàn bộ lý
+     * do bảng này tồn tại. Sửa xong khôi phục lại trong `finally`, vì một test
+     * để lại cấu hình lạ sẽ làm mọi test sau đó sai theo một cách rất khó lần.
+     */
+    it('trọng số sửa trong DB có hiệu lực ngay ở lượt truy hồi kế tiếp', async () => {
+        await seedGraphStepParams();
+        const db = await cds.connect.to('db');
+        const before = await db.run(
+            SELECT.one.from(GRAPH_STEP_PARAMS).where({ stepCode: 'D1' }),
+        ) as Record<string, unknown>;
+
+        try {
+            await db.run(UPDATE(GRAPH_STEP_PARAMS).set({ topN: 1 }).where({ stepCode: 'D1' }));
+            resetStepProfilesCache();
+            expect((await getStepProfiles()).D1.topN).toBe(1);
+        } finally {
+            await db.run(
+                UPDATE(GRAPH_STEP_PARAMS).set({ topN: before.topN }).where({ stepCode: 'D1' }),
+            );
+            resetStepProfilesCache();
+        }
+
+        expect((await getStepProfiles()).D1.topN).toBe(DEFAULT_STEP_PROFILES.D1.topN);
+    }, TIMEOUT);
+
+    /**
+     * Bất biến chống R3 phải sống sót qua cả đường cấu hình, không chỉ trong unit
+     * test. Ghi một dòng vi phạm vào DB thật rồi kiểm rằng nó bị từ chối.
+     */
+    it('cấu hình để một từ khoá chung tự qua ngưỡng bị TỪ CHỐI trên DB thật', async () => {
+        await seedGraphStepParams();
+        const db = await cds.connect.to('db');
+        const before = await db.run(
+            SELECT.one.from(GRAPH_STEP_PARAMS).where({ stepCode: 'D4' }),
+        ) as Record<string, unknown>;
+
+        try {
+            await db.run(
+                UPDATE(GRAPH_STEP_PARAMS).set({ wKeywords: 9, minScore: 2 }).where({ stepCode: 'D4' }),
+            );
+            resetStepProfilesCache();
+
+            const profile = (await getStepProfiles()).D4;
+            expect(profile.weights.keywords).toBe(DEFAULT_STEP_PROFILES.D4.weights.keywords);
+            expect(profile.minScore).toBe(DEFAULT_STEP_PROFILES.D4.minScore);
+
+            // Và bất biến vẫn đứng: một từ khoá chung không đủ điểm.
+            const single = scoreEvidence(
+                [{ notificationId: 'X', kind: 'keywords', detail: 'flange', count: 1 }],
+                profile,
+            );
+            expect(single).toEqual([]);
+        } finally {
+            await db.run(UPDATE(GRAPH_STEP_PARAMS).set({
+                wKeywords: before.wKeywords, minScore: before.minScore,
+            }).where({ stepCode: 'D4' }));
+            resetStepProfilesCache();
+        }
     }, TIMEOUT);
 
     it('buildAnchor gộp defectText và symptomShortText thành cùng một tập token', () => {

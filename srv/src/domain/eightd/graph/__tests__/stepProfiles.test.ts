@@ -3,6 +3,7 @@ import {
     STEP_CODES,
     explainEvidence,
     scoreEvidence,
+    normalizeStepParams,
     type GraphStepProfile,
 } from '../stepProfiles';
 import type { EvidenceHit } from '../probes';
@@ -127,5 +128,91 @@ describe('explainEvidence', () => {
         expect(explainEvidence(scored)).toBe(
             '10 điểm — 3 từ khoá chung (burr, edge, limit), cùng họ vật tư MG-HOUSING',
         );
+    });
+});
+
+describe('normalizeStepParams', () => {
+    const row = {
+        label: 'Root Cause Analysis', question: 'Cơ chế hỏng?',
+        wKeywords: 3, wMaterialFamily: 1, wWorkCenter: 1,
+        keywordCap: 4, minScore: 5, topN: 3, actionType: null, enabled: true,
+    };
+
+    it('không có dòng cấu hình ⇒ dùng mặc định, không phải lỗi', () => {
+        for (const empty of [null, undefined, 'x', 42]) {
+            expect(normalizeStepParams('D4', empty)).toEqual({
+                profile: DEFAULT_STEP_PROFILES.D4, violation: null,
+            });
+        }
+    });
+
+    it('dòng bị tắt ⇒ dùng mặc định', () => {
+        expect(normalizeStepParams('D4', { ...row, enabled: false }).profile)
+            .toEqual(DEFAULT_STEP_PROFILES.D4);
+    });
+
+    it('đọc trọng số, trần, ngưỡng và topN từ dòng cấu hình', () => {
+        const { profile, violation } = normalizeStepParams('D4', row);
+        expect(violation).toBeNull();
+        expect(profile.weights).toEqual({ keywords: 3, materialFamily: 1, workCenter: 1 });
+        expect(profile.keywordCap).toBe(4);
+        expect(profile.minScore).toBe(5);
+        expect(profile.topN).toBe(3);
+        expect(profile.actionType).toBeUndefined();
+    });
+
+    it('trọng số null hoặc 0 ⇒ bước KHÔNG cân loại đó', () => {
+        const { profile } = normalizeStepParams('D4', { ...row, wWorkCenter: 0, wMaterial: null });
+        expect(profile.weights.workCenter).toBeUndefined();
+        expect(profile.weights.material).toBeUndefined();
+    });
+
+    it('chỉ nhận đúng ba loại hành động', () => {
+        expect(normalizeStepParams('D3', { ...row, actionType: 'Containment' }).profile.actionType)
+            .toBe('Containment');
+        expect(normalizeStepParams('D3', { ...row, actionType: 'containment' }).profile.actionType)
+            .toBeUndefined();
+        expect(normalizeStepParams('D3', { ...row, actionType: 'Anything' }).profile.actionType)
+            .toBeUndefined();
+    });
+
+    /**
+     * Đây là lý do tồn tại của hàm này. Không có phép kiểm này, một admin gõ
+     * wKeywords=5 với minScore=4 sẽ mở lại R3 — một từ khoá chung tự nó đủ điểm —
+     * qua đường cấu hình, ở đúng một bước, và không có gì báo.
+     */
+    it('TỪ CHỐI cấu hình để một từ khoá chung tự nó qua ngưỡng', () => {
+        const { profile, violation } = normalizeStepParams('D4', { ...row, wKeywords: 5, minScore: 4 });
+        expect(profile).toEqual(DEFAULT_STEP_PROFILES.D4);
+        expect(violation).toMatch(/R3/);
+        expect(violation).toMatch(/wKeywords=5/);
+    });
+
+    it('từ chối cả trường hợp bằng nhau, không chỉ lớn hơn', () => {
+        expect(normalizeStepParams('D4', { ...row, wKeywords: 5, minScore: 5 }).violation)
+            .toMatch(/R3/);
+    });
+
+    it('cấu hình đã từ chối vẫn giữ được bất biến khi đem đi chấm điểm', () => {
+        const { profile } = normalizeStepParams('D4', { ...row, wKeywords: 9, minScore: 2 });
+        const single = scoreEvidence(
+            [{ notificationId: 'X', kind: 'keywords', detail: 'flange', count: 1 }],
+            profile,
+        );
+        expect(single).toEqual([]);
+    });
+
+    it('từ chối dòng không có trọng số nào — bước đó sẽ không bao giờ tìm được gì', () => {
+        const { profile, violation } = normalizeStepParams('D4', {
+            ...row, wKeywords: 0, wMaterialFamily: 0, wWorkCenter: 0,
+        });
+        expect(profile).toEqual(DEFAULT_STEP_PROFILES.D4);
+        expect(violation).toMatch(/không có trọng số/);
+    });
+
+    it('số không dùng được rơi về mặc định của chính bước đó', () => {
+        const { profile } = normalizeStepParams('D4', { ...row, keywordCap: -1, topN: 'ba' });
+        expect(profile.keywordCap).toBe(DEFAULT_STEP_PROFILES.D4.keywordCap);
+        expect(profile.topN).toBe(DEFAULT_STEP_PROFILES.D4.topN);
     });
 });
