@@ -372,7 +372,7 @@ export function CodeCataloguesTab() {
                                     ) : catalogue === 'coordinator' ? (
                                         <>
                                             <th className="py-3 px-4 w-32">Partner ID</th>
-                                            <th className="py-3 px-4 min-w-[180px]">Coordinator Name</th>
+                                            <th className="py-3 px-4 min-w-[180px]">Partner Name</th>
                                             <th className="py-3 px-4 min-w-[180px]">Department</th>
                                             <th className="py-3 px-4 min-w-[180px]">Function / Role</th>
                                             <th className="py-3 px-4 min-w-[200px]">Contact Info</th>

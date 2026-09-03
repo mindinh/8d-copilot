@@ -385,6 +385,234 @@ function backfillD2IsIsNot(
     }
 }
 
+interface TeamMemberCandidate {
+    name: string;
+    role: string;
+    responsibility: string;
+}
+
+function extractTeamCandidates(
+    context: CaseContext,
+    disciplines: DisciplineDraft[],
+    previousDisciplines?: readonly DisciplineDraft[],
+): TeamMemberCandidate[] {
+    const candidates: TeamMemberCandidate[] = [];
+    const seenNames = new Set<string>();
+
+    const addCandidate = (name: string, role = '', responsibility = '') => {
+        const cleanName = String(name || '').trim();
+        if (!cleanName || cleanName.toLowerCase() === 'unassigned' || seenNames.has(cleanName.toLowerCase())) {
+            return;
+        }
+        seenNames.add(cleanName.toLowerCase());
+        candidates.push({ name: cleanName, role, responsibility });
+    };
+
+    // 1. From context.team
+    if (context.team?.leader) {
+        const l = context.team.leader;
+        const leaderName = typeof l === 'string' ? l : ((l as any).partnerName || (l as any).name || '');
+        if (leaderName) {
+            addCandidate(leaderName, 'Team Leader', 'Overall 8D coordination and lead');
+        }
+    }
+    for (const m of context.team?.members ?? []) {
+        const memName = typeof m === 'string' ? m : ((m as any)?.partnerName || (m as any)?.name || '');
+        if (memName) {
+            const role = (m as any)?.partnerRole || (m as any)?.role || (m as any)?.functionTitle || '';
+            addCandidate(memName, role, '');
+        }
+    }
+
+    // 2. From D1 draft in disciplines or previousDisciplines
+    const allDrafts = [...disciplines, ...(previousDisciplines ?? [])];
+    const d1 = allDrafts.find((d) => d?.code === 'D1');
+    if (d1?.data) {
+        const team = (d1.data as Record<string, unknown>).team || d1.data;
+        const roster = Array.isArray((team as Record<string, unknown>)?.assignedRoster)
+            ? (team as Record<string, unknown>).assignedRoster as unknown[]
+            : Array.isArray((team as Record<string, unknown>)?.roster)
+                ? (team as Record<string, unknown>).roster as unknown[]
+                : [];
+        for (const row of roster) {
+            const r = row as Record<string, unknown>;
+            if (r?.name && String(r.name).toLowerCase() !== 'unassigned') {
+                addCandidate(
+                    String(r.name),
+                    String(r.organizationalRole || r.assigned8DRole || ''),
+                    String(r.caseResponsibility || ''),
+                );
+            }
+        }
+    }
+
+    return candidates;
+}
+
+const DOMAIN_RULES: Array<{
+    actionKeywords: string[];
+    roleKeywords: string[];
+}> = [
+    {
+        // Quality assurance, inspection, containment, measurements, FMEA
+        actionKeywords: [
+            'quarantine', 'hold', 'sort', 'containment', 'inspect', 'inspection', 'check', 'measurement',
+            'measure', 'gauge', 'cmm', 'roughness', 'burr', 'tolerance', 'dimension', 'sampling',
+            'audit', 'defect', 'nonconforming', 'quality', 'qe', 'fai', 'first-article', 'fmea', 'incoming', 'outgoing', 'dock',
+        ],
+        roleKeywords: ['quality', 'qe', 'inspector', 'inspection', 'qa', 'audit', 'fmea'],
+    },
+    {
+        // Maintenance, tooling, calibration, machine repair
+        actionKeywords: [
+            'maintenance', 'pm', 'tool', 'tooling', 'fixture', 'clamp', 'spindle', 'wheel', 'grind',
+            'calibrate', 'calibration', 'dressing', 'clean', 'service', 'repair', 'lubricate', 'recondition',
+            'wear', 'sensor', 'hydraulics', 'mechanic', 'preventive',
+        ],
+        roleKeywords: ['maintenance', 'technician', 'tooling', 'mechanic', 'planner', 'equipment'],
+    },
+    {
+        // Production, machinist, machining, setup, NC program
+        actionKeywords: [
+            'production', 'operator', 'machinist', 'machining', 'milling', 'turning', 'lathe',
+            'feed rate', 'speed', 'cutting', 'parameter', 'nc program', 'setup', 'run', 'batch',
+            'line', 'shift', 'work center', 'assembly', 'weld',
+        ],
+        roleKeywords: ['production', 'operator', 'machinist', 'line', 'shift', 'manufacturing'],
+    },
+    {
+        // Process engineering, industrial engineering, SOP, specification
+        actionKeywords: [
+            'process', 'engineering', 'specification', 'drawing', 'procedure', 'sop', 'instruction',
+            'standardize', 'parameter', 'fmea', 'control plan', 'training',
+        ],
+        roleKeywords: ['process', 'engineer', 'engineering', 'methods', 'industrial'],
+    },
+];
+
+const STOP_WORDS = new Set(['and', 'the', 'for', 'with', 'from', 'that', 'this', 'have', 'has', 'per', 'all', 'into', 'each', 'after', 'over', 'out']);
+
+function resolveAssigneeFromTeam(
+    currentOwner: string,
+    actionText: string,
+    candidates: TeamMemberCandidate[],
+): string | null {
+    if (!candidates.length) return null;
+
+    const trimmed = String(currentOwner ?? '').trim();
+    // If it's already an exact match to a candidate's name, keep it
+    const exactMatch = candidates.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (exactMatch) return exactMatch.name;
+
+    // Clean currentOwner (strip "Unassigned", parentheses, etc.)
+    const cleanedOwner = trimmed
+        .replace(/^Unassigned\s*\(/i, '')
+        .replace(/\)$/, '')
+        .trim();
+
+    const searchBlob = `${cleanedOwner} ${actionText}`.toLowerCase();
+
+    // Score candidates based on keyword overlap with their role, responsibility, and name
+    let bestCandidate: TeamMemberCandidate | null = null;
+    let highestScore = 0;
+
+    for (const c of candidates) {
+        let score = 0;
+        const roleLower = c.role.toLowerCase();
+        const respLower = c.responsibility.toLowerCase();
+        const nameLower = c.name.toLowerCase();
+
+        // 1. Direct mention of member name
+        if (nameLower && searchBlob.includes(nameLower)) score += 30;
+
+        // 2. Direct keyword in role / resp mentioned in searchBlob
+        const roleTokens = `${roleLower} ${respLower}`
+            .split(/[\s,./·()_-]+/)
+            .map((t) => t.trim())
+            .filter((t) => t.length > 2 && !STOP_WORDS.has(t));
+
+        for (const token of roleTokens) {
+            if (searchBlob.includes(token)) {
+                score += 6;
+            }
+        }
+
+        // 3. Domain clustering rules (weighted by number of action keywords)
+        for (const rule of DOMAIN_RULES) {
+            const matchesRole = rule.roleKeywords.some((rk) => roleLower.includes(rk) || respLower.includes(rk));
+            if (matchesRole) {
+                const matchedActionKws = rule.actionKeywords.filter((kw) => searchBlob.includes(kw));
+                score += matchedActionKws.length * 8;
+            }
+        }
+
+        if (score > highestScore) {
+            highestScore = score;
+            bestCandidate = c;
+        }
+    }
+
+    return highestScore > 0 ? bestCandidate?.name ?? null : null;
+}
+
+function backfillActionOwners(
+    disciplines: DisciplineDraft[],
+    context: CaseContext,
+    previousDisciplines?: readonly DisciplineDraft[],
+    repairs?: string[],
+): void {
+    const candidates = extractTeamCandidates(context, disciplines, previousDisciplines);
+    if (!candidates.length) return;
+
+    for (const d of disciplines) {
+        if (!['D3', 'D5', 'D7'].includes(d.code) || !d.data) continue;
+
+        let actionArray: Array<Record<string, unknown>> | null = null;
+        if (d.code === 'D3') {
+            if (Array.isArray((d.data as any)['containment.actions'])) {
+                actionArray = (d.data as any)['containment.actions'];
+            } else if (Array.isArray((d.data as any).containment?.actions)) {
+                actionArray = (d.data as any).containment.actions;
+            }
+        } else if (d.code === 'D5') {
+            if (Array.isArray((d.data as any)['corrective.actions'])) {
+                actionArray = (d.data as any)['corrective.actions'];
+            } else if (Array.isArray((d.data as any).corrective?.actions)) {
+                actionArray = (d.data as any).corrective.actions;
+            }
+        } else if (d.code === 'D7') {
+            if (Array.isArray((d.data as any)['preventive.actions'])) {
+                actionArray = (d.data as any)['preventive.actions'];
+            } else if (Array.isArray((d.data as any).preventive?.actions)) {
+                actionArray = (d.data as any).preventive.actions;
+            }
+        }
+
+        if (!actionArray) continue;
+
+        let assignedCount = 0;
+        for (const act of actionArray) {
+            if (!act || typeof act !== 'object') continue;
+            const currentOwner = String(act.owner ?? '').trim();
+            const actionText = String(act.action || act.actionText || '').trim();
+
+            const isGenericOrUnassigned = !currentOwner || currentOwner.toLowerCase() === 'unassigned' || currentOwner.toLowerCase().startsWith('unassigned') || currentOwner.includes('·') || !candidates.some((c) => c.name.toLowerCase() === currentOwner.toLowerCase());
+
+            if (isGenericOrUnassigned) {
+                const resolved = resolveAssigneeFromTeam(currentOwner, actionText, candidates);
+                if (resolved && resolved !== currentOwner) {
+                    act.owner = resolved;
+                    assignedCount += 1;
+                }
+            }
+        }
+
+        if (assignedCount > 0 && repairs) {
+            repairs.push(`${d.code}: gán người phụ trách cho ${assignedCount} hành động từ danh sách đội ngũ D1.`);
+        }
+    }
+}
+
 export function postProcess(
     result: EightDResult,
     context: CaseContext,
@@ -402,6 +630,7 @@ export function postProcess(
      * bên gọi lấy `disciplines[0]` sẽ luôn nhận ô D1 thay vì bước vừa sinh.
      */
     only?: readonly DisciplineCode[],
+    previousDisciplines?: readonly DisciplineDraft[],
 ): { result: EightDResult; repairs: string[] } {
     const repairs: string[] = [];
     const incoming = Array.isArray(result?.disciplines) ? result.disciplines : [];
@@ -516,6 +745,9 @@ export function postProcess(
     // là hai nguồn code tự chiếu lại được.
     const d4 = disciplines.find((discipline) => discipline.code === 'D4');
     if (d4) backfillRootCause(d4, context, independent, repairs);
+
+    // Gán assignee từ đội ngũ D1 cho các hành động D3, D5, D7
+    backfillActionOwners(disciplines, context, previousDisciplines, repairs);
 
     // ── Discipline nào không có fact nào chống lưng thì không được tự tin ──
     // Ánh xạ từ mã discipline sang chỗ chứa fact tương ứng trong CaseContext.

@@ -172,7 +172,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
     const [notificationId, setNotificationId] = useState('');
     const [origin, setOrigin] = useState('Q3 - Internal Defect');
     const [symptomShortText, setSymptomShortText] = useState('');
-    const [status] = useState('In Process');
+    const [status] = useState('Open');
     const [foundDate, setFoundDate] = useState(() => new Date().toISOString().split('T')[0]);
     // Lượng ảnh hưởng: SỐ + đơn vị, không phải một câu.
     //

@@ -600,6 +600,7 @@ const HUMAN_WRITABLE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = Obj
         'whyChain',
         'ishikawaCustomFindings',
         'selectedRootCategory',
+        'confirmedRootCategory',
         'rootCause.whyChain',
         'rootCause.ishikawa',
         'rootCause.fiveWhy',

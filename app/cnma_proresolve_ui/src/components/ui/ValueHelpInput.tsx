@@ -70,6 +70,7 @@ export interface ValueHelpInputProps {
     maintenanceHint?: string;
     disabled?: boolean;
     className?: string;
+    inputClassName?: string;
     /** Chọn gán 'key' hay 'text' vào ô nhập khi commit. Mặc định là 'key'. */
     pickKey?: 'key' | 'text';
     /** Hướng mở danh sách dropdown: 'bottom' (mặc định) hoặc 'top' (sổ lên trên). */
@@ -91,6 +92,7 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
         value, onChange, onPick, entries, loading = false,
         placeholder, id, quiet = false, scoringNote, catalogLabel = 'the value help',
         strict = false, maintenanceHint = 'Add it in Master Data first.', disabled = false, className,
+        inputClassName,
         pickKey = 'key', dropdownPlacement = 'bottom',
     } = props;
     const generatedId = useId();
@@ -192,6 +194,7 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
                         // Chừa chỗ cho nút xoá và mũi tên ở mép phải.
                         hasClear ? 'pr-14' : 'pr-8',
                         showUnknown && (strict ? 'border-destructive' : 'border-warning/60'),
+                        inputClassName,
                     )}
                     onChange={(e) => {
                         onChange(e.target.value);

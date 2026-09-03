@@ -184,10 +184,9 @@ export function DisciplineReviewBox({
             } else if (discipline.code === 'D7') {
                 const assigned = parsed?.preventive?.assignedActions || parsed?.assignedActions;
                 const actions = parsed?.preventive?.actions;
-                const fmea = parsed?.preventive?.fmea;
-                const hasPreventive = (Array.isArray(assigned) && assigned.length > 0) || (Array.isArray(actions) && actions.length > 0) || fmea?.fmeaId;
+                const hasPreventive = (Array.isArray(assigned) && assigned.length > 0) || (Array.isArray(actions) && actions.length > 0);
                 if (!hasPreventive) {
-                    toast.error('Cannot complete D7: Please define at least one preventive action or link an FMEA item before completing this step.');
+                    toast.error('Cannot complete D7: Please add or accept at least one preventive action before completing this step.');
                     return;
                 }
             }
@@ -195,6 +194,7 @@ export function DisciplineReviewBox({
 
         try {
             if (value === 'Completed') {
+
                 if (['D3', 'D5', 'D7'].includes(discipline.code)) {
                     // Khi các bước D3, D5, D7 hoàn thành: chuyển task chưa Verified -> Done
                     const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
@@ -260,7 +260,7 @@ export function DisciplineReviewBox({
                             <span className="text-xs font-medium text-foreground">
                                 Completed by <strong className="font-semibold text-foreground">{discipline.reviewedBy}</strong>
                             </span>
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                            <span className="text-xs text-muted-foreground tabular-nums">
                                 {new Date(discipline.reviewedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                         </div>

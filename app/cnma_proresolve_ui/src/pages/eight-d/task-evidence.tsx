@@ -206,9 +206,9 @@ export function TaskEvidenceSection({
     return (
         <div className="space-y-2 rounded-lg border bg-muted/10 p-3.5">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                    Completion Evidence
+                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                    <Paperclip className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span>Completion Evidence</span>
                 </div>
                 {taskEvidences.length > 0 && (
                     <span className="text-[11px] font-medium text-success">
@@ -313,7 +313,7 @@ export function TaskEvidenceSection({
                                         onClick={() => fileInputRef.current?.click()}
                                         className="h-7 text-xs gap-1.5"
                                     >
-                                        {isBusy ? <Spinner className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                                        {isBusy ? <Spinner className="h-3.5 w-3.5" /> : <UploadCloud className="h-3.5 w-3.5" />}
                                         Upload evidence (PDF)
                                     </Button>
                                     <p className="text-[11px] text-muted-foreground">

@@ -876,6 +876,77 @@ export function registerEightDHandlers(srv: any): void {
     });
 
     /**
+     * Chuẩn hoá trạng thái Defect:
+     * Một defect chưa được start 8D (không có Reports gắn với nó) và chưa Completed
+     * thì trạng thái bắt buộc phải là 'Open' (không thể là 'In Process').
+     */
+    srv.after('READ', 'Defects', async (data: any) => {
+        if (!data) return;
+        const rows = Array.isArray(data) ? data : [data];
+        if (rows.length === 0) return;
+
+        const candidateRows = rows.filter((r) => r && r.defectId && r.status !== 'Completed' && r.status !== 'Open');
+        if (candidateRows.length === 0) return;
+
+        try {
+            const activeReports = await cds.run(
+                SELECT.from('cnma.proresolve.Reports')
+                    .columns('sourceDefectId')
+                    .where({ sourceDefectId: { '!=': null } })
+            );
+            const startedDefectIds = new Set(
+                (activeReports ?? []).map((r: any) => String(r.sourceDefectId ?? '').trim()).filter(Boolean)
+            );
+
+            const toFixIds: string[] = [];
+            for (const r of candidateRows) {
+                if (!startedDefectIds.has(String(r.defectId).trim())) {
+                    r.status = 'Open';
+                    if (r.ID) toFixIds.push(r.ID);
+                }
+            }
+
+            if (toFixIds.length > 0) {
+                cds.run(
+                    UPDATE('cnma.proresolve.Defects')
+                        .set({ status: 'Open' })
+                        .where({ ID: { in: toFixIds } })
+                ).catch((err: any) => {
+                    LOG.warn('Không thể tự động đồng bộ status Open cho Defects:', err?.message);
+                });
+            }
+        } catch (err: any) {
+            LOG.warn('Lỗi kiểm tra trạng thái Defect trong after READ:', err?.message);
+        }
+    });
+
+    cds.on('served', async () => {
+        try {
+            const activeReports = await cds.run(
+                SELECT.from('cnma.proresolve.Reports')
+                    .columns('sourceDefectId')
+                    .where({ sourceDefectId: { '!=': null } })
+            );
+            const startedDefectIds = (activeReports ?? [])
+                .map((r: any) => String(r.sourceDefectId ?? '').trim())
+                .filter(Boolean);
+
+            const q = UPDATE('cnma.proresolve.Defects')
+                .set({ status: 'Open' })
+                .where({ status: { in: ['In Process', 'InProcess'] } });
+
+            if (startedDefectIds.length > 0) {
+                await cds.run(q.and({ defectId: { notIn: startedDefectIds } }));
+            } else {
+                await cds.run(q);
+            }
+            LOG.info('Defect status self-healing complete: unstarted defects set to Open.');
+        } catch (err: any) {
+            LOG.warn('Defect status self-healing skipped:', err?.message);
+        }
+    });
+
+    /**
      * Sửa `defectText` trên một dòng kho thì phải tính lại từ khoá.
      *
      * `defectKeywords` là bản tách sẵn của `defectText`, và chấm điểm so CỘT ĐÓ

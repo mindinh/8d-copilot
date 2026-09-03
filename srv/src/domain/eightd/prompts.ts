@@ -198,11 +198,13 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     unknown. Keep every containment action description simple, direct and concise
     (e.g., "Quarantine remaining stock from batch B-49172 and 100% burr check before packing").
 
+    Assign an owner to each containment action by matching the nature of the task to the D1 team members (team.roster or team.leader/members) and their organizational roles and responsibilities.
+
     Work in this order:
       1. If this case already records containment actions, report them cleanly -
-         stating the action description and its status.
+         stating the action description, owner and its status.
       2. Only when nothing is recorded, propose the containment action from the
-         highest-scoring precedent cleanly and adapt the batch and quantity.
+         highest-scoring precedent cleanly, assign the appropriate D1 team member as owner, and adapt the batch and quantity.
 
     Do not write long verbose paragraphs inside the action text.`,
 
@@ -276,12 +278,14 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     action that ties to no step is aimed either at a symptom or at a cause you
     have not established - say which.
 
-    Report the corrective actions on record with their status. Then state plainly
+    Assign an owner to each corrective action by matching the technical work to the D1 team members (team.roster or team.leader/members) based on their organizational role and case responsibility. Do not output generic "Unassigned" when a matching member is in the D1 team.
+
+    Report the corrective actions on record with their owner and status. Then state plainly
     which part of the root cause no recorded action covers. That gap is the most
     useful line on this page.
 
     When nothing is recorded, propose the corrective action from the
-    highest-scoring precedent, cite the case and its score, and tie it to the
+    highest-scoring precedent, assign the suitable D1 team member as owner, cite the case and its score, and tie it to the
     hypothesis it would fix.
 
     Corrective is not containment. An action that only limits damage while the
@@ -292,18 +296,20 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
 
     Do two things:
       1. List every recorded action with its current status, so the engineer sees
-         what is outstanding. Status changes are theirs to make, not yours.
+          what is outstanding. Status changes are theirs to make, not yours.
       2. Write the verification PLAN the case still needs: what to measure, on
-         what sample size, over what period, against what acceptance criterion,
-         and who signs it off. Anchor the criterion to the actual specification
-         value in inspections - "back within the 0.50mm tolerance on 30
-         consecutive parts" is a plan, "monitor the process" is not.`,
+          what sample size, over what period, against what acceptance criterion,
+          and who signs it off. Anchor the criterion to the actual specification
+          value in inspections - "back within the 0.50mm tolerance on 30
+          consecutive parts" is a plan, "monitor the process" is not.`,
 
     D7: `Preventive action stops the same cause reaching a different part, line or
     shift. An action that only protects this material or this batch is corrective
     and belongs in D5.
 
-    Report the preventive actions on record, then say which FMEA entry must
+    Assign an owner to each preventive action from the D1 team roster (team.roster or team.leader/members) based on who is responsible for the affected process, tooling, maintenance, or quality system.
+
+    Report the preventive actions on record with owner, then say which FMEA entry must
     change and how: the occurrence rating, the detection rating, or the control
     itself. Name the FMEA entry by ID when the case links one.
 
