@@ -63,48 +63,48 @@ export function MasterDataPage() {
                         value="inspection-lots"
                         className={cn(
                             'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-                            'hover:text-foreground text-muted-foreground',
-                            'data-[state=active]:!bg-transparent data-[state=active]:!shadow-none data-[state=active]:!text-red-600 dark:data-[state=active]:!text-red-500 data-[state=active]:border-transparent',
-                            activeTab === 'inspection-lots' && '!text-red-600 dark:!text-red-500 !bg-transparent !shadow-none',
+                            'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                            'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
+                            activeTab === 'inspection-lots' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <Layers className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'inspection-lots' ? 'text-red-600 dark:text-red-500' : 'text-current')} />
+                        <Layers className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'inspection-lots' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Inspection History</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="defects"
                         className={cn(
                             'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-                            'hover:text-foreground text-muted-foreground',
-                            'data-[state=active]:!bg-transparent data-[state=active]:!shadow-none data-[state=active]:!text-red-600 dark:data-[state=active]:!text-red-500 data-[state=active]:border-transparent',
-                            activeTab === 'defects' && '!text-red-600 dark:!text-red-500 !bg-transparent !shadow-none',
+                            'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                            'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
+                            activeTab === 'defects' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <ClipboardList className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'defects' ? 'text-red-600 dark:text-red-500' : 'text-current')} />
+                        <ClipboardList className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'defects' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Defect Records</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="historical-cases"
                         className={cn(
                             'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-                            'hover:text-foreground text-muted-foreground',
-                            'data-[state=active]:!bg-transparent data-[state=active]:!shadow-none data-[state=active]:!text-red-600 dark:data-[state=active]:!text-red-500 data-[state=active]:border-transparent',
-                            activeTab === 'historical-cases' && '!text-red-600 dark:!text-red-500 !bg-transparent !shadow-none',
+                            'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                            'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
+                            activeTab === 'historical-cases' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <FolderKanban className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'historical-cases' ? 'text-red-600 dark:text-red-500' : 'text-current')} />
+                        <FolderKanban className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'historical-cases' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Closed Case Library</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="code-catalogues"
                         className={cn(
                             'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
-                            'hover:text-foreground text-muted-foreground',
-                            'data-[state=active]:!bg-transparent data-[state=active]:!shadow-none data-[state=active]:!text-red-600 dark:data-[state=active]:!text-red-500 data-[state=active]:border-transparent',
-                            activeTab === 'code-catalogues' && '!text-red-600 dark:!text-red-500 !bg-transparent !shadow-none',
+                            'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                            'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
+                            activeTab === 'code-catalogues' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <Tags className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'code-catalogues' ? 'text-red-600 dark:text-red-500' : 'text-current')} />
+                        <Tags className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'code-catalogues' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Value Help</span>
                     </TabsTrigger>
                 </TabsList>
