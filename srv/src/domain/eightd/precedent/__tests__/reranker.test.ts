@@ -48,14 +48,18 @@ describe('normalizeRerankOutput', () => {
 
     it('đọc đúng output tử tế', () => {
         const out = normalizeRerankOutput(
-            { rankings: [
-                { notificationId: '8D-2', score: 85, reason: 'same worn tool mechanism' },
-                { notificationId: '8D-3', score: 20, reason: 'unrelated cause' },
+            { queryAnalysis: 'tool wear on a milled flange', rankings: [
+                { notificationId: '8D-2', analysis: 'same worn insert, same flange', score: 85, reason: 'same worn tool mechanism' },
+                { notificationId: '8D-3', analysis: 'material porosity, not tool wear', score: 20, reason: 'unrelated cause' },
             ] },
             sent,
         );
-        expect(out.get('8D-2')).toEqual({ score: 85, reason: 'same worn tool mechanism' });
-        expect(out.get('8D-3')).toEqual({ score: 20, reason: 'unrelated cause' });
+        expect(out.get('8D-2')).toEqual({
+            score: 85, reason: 'same worn tool mechanism', analysis: 'same worn insert, same flange',
+        });
+        expect(out.get('8D-3')).toEqual({
+            score: 20, reason: 'unrelated cause', analysis: 'material porosity, not tool wear',
+        });
     });
 
     it('BỎ id lạ — model không được thêm case vào danh sách', () => {
@@ -125,7 +129,7 @@ describe('applyRerank', () => {
     it('đạt sàn: điểm = weight × score/100, cộng vào tổng, lý do vào matchedOn', () => {
         const item = stage1();
         const verdicts = new Map<string, RerankVerdict>([
-            ['8D-2', { score: 80, reason: 'same mechanism' }],
+            ['8D-2', { score: 80, reason: 'same mechanism', analysis: 'both show clamp slip on a thin flange' }],
         ]);
         applyRerank([item], RERANK, verdicts);
 
@@ -140,7 +144,7 @@ describe('applyRerank', () => {
 
     it('dưới sàn: 0 điểm, matchedOn nói rõ dưới sàn', () => {
         const item = stage1();
-        applyRerank([item], RERANK, new Map([['8D-2', { score: 30, reason: 'weak' }]]));
+        applyRerank([item], RERANK, new Map([['8D-2', { score: 30, reason: 'weak', analysis: 'different mechanism' }]]));
         const row = item.result.breakdown.find((b) => b.criterionKey === 'rerank')!;
         expect(row.points).toBe(0);
         expect(item.result.score).toBe(4);
@@ -162,5 +166,25 @@ describe('applyRerank', () => {
         expect(row.points).toBe(0);
         expect(item.result.score).toBe(4);
         expect(row.matchedOn).toBe('rerank unavailable');
+    });
+});
+
+describe('normalizeRerankOutput — phần chain-of-thought', () => {
+    it('giữ lập luận của model, cắt ở 400 ký tự', () => {
+        const long = 'x'.repeat(500);
+        const out = normalizeRerankOutput(
+            { queryAnalysis: 'clamp slip', rankings: [{ notificationId: 'A', analysis: long, score: 70, reason: 'r' }] },
+            ['A'],
+        );
+        expect(out.get('A')!.analysis).toHaveLength(400);
+    });
+
+    /**
+     * Output của bản prompt cũ (chưa có CoT) vẫn phải đọc được — nếu không thì
+     * một lần đổi prompt sẽ làm mọi lượt re-rank đang chạy dở trở thành vô giá trị.
+     */
+    it('thiếu analysis ⇒ rỗng, KHÔNG loại dòng', () => {
+        const out = normalizeRerankOutput({ rankings: [{ notificationId: 'A', score: 70, reason: 'r' }] }, ['A']);
+        expect(out.get('A')).toEqual({ score: 70, reason: 'r', analysis: '' });
     });
 });

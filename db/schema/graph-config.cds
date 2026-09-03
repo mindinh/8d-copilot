@@ -122,6 +122,36 @@ entity GraphStepParams : managed {
         minScore        : Integer;
         topN            : Integer;
 
+        // ── Tầng 2: re-rank bằng model ───────────────────────────────────────
+        //
+        // Dùng CHUNG `srv/src/domain/eightd/precedent/reranker.ts` với engine chấm
+        // điểm. Hai engine khác nhau ở chỗ TÌM, không ở chỗ đọc hai đoạn văn xem
+        // chúng có cùng cơ chế hỏng hay không — nên tầng 2 chỉ nên có một bản.
+
+        /**
+         * Điểm tối đa re-rank cộng vào. Null hoặc 0 ⇒ bước này KHÔNG re-rank.
+         *
+         * Tắt mặc định vì nó tốn một lượt gọi model mỗi lần tìm, và vì không ai
+         * nên bật một tầng mới trước khi đối chiếu nó — `npm run shadow:graph`.
+         *
+         * Ràng buộc: phải NHỎ HƠN `minScore`, cùng luật với `wKeywords`. Bằng hoặc
+         * lớn hơn nghĩa là chỉ cần model thích một case là case đó thành tiền lệ,
+         * kể cả khi nó không chung một quan hệ nào trong graph — tức là vứt bỏ
+         * đúng thứ đã chọn graph để có: mỗi kết quả phải có một đường đi giải
+         * thích được.
+         */
+        wRerank           : Integer;
+
+        /** Sàn trên thang 0–1 của điểm model (0.5 = dưới 50/100 thì 0 điểm). */
+        rerankFloor       : Decimal(3, 2);
+
+        /**
+         * Câu hỏi gửi cho model. Đây là chỗ mỗi bước D hỏi câu của riêng nó —
+         * D4 hỏi cơ chế hỏng, D5 hỏi hành động có gỡ được nguyên nhân không.
+         * Trống ⇒ dùng câu mặc định trong `graph/stepProfiles.ts`.
+         */
+        rerankInstruction : String(1000);
+
         /**
          * Loại hành động bước này quan tâm: Containment | Corrective | Preventive.
          *

@@ -47,6 +47,27 @@ export interface GraphStepProfile {
     topN: number;
     /** Loại hành động bước này quan tâm. Bỏ trống ⇒ không dò hành động. */
     actionType?: 'Containment' | 'Corrective' | 'Preventive';
+
+    /**
+     * Tầng 2: re-rank bằng model đọc CẢ HAI văn bản. Bỏ trống ⇒ bước này không re-rank.
+     *
+     * ── Vì sao dùng lại đúng tầng của engine chấm điểm ──
+     * `precedent/reranker.ts` đã trả lời đúng câu hỏi này rồi, đã có test, và đã
+     * có khế ước "điểm = trọng số × score/100, kèm lý do đọc được". Viết một
+     * reranker thứ hai cho graph nghĩa là hai prompt, hai cách chuẩn hoá output,
+     * hai chỗ phải sửa khi model đổi hành vi — và không ai biết bản nào đang chạy.
+     *
+     * Graph khác engine cũ ở chỗ TÌM, không ở chỗ đọc hai đoạn văn xem chúng có
+     * cùng cơ chế hỏng hay không. Nên tầng 1 khác nhau, tầng 2 dùng chung.
+     */
+    rerank?: {
+        /** Điểm tối đa re-rank cộng vào. Phải nhỏ hơn `minScore` — xem `normalizeStepParams`. */
+        weight: number;
+        /** Sàn trên thang 0–1 của điểm model. Dưới sàn ⇒ 0 điểm. */
+        floor: number;
+        /** Câu hỏi gửi cho model. Đây là chỗ mỗi bước D hỏi câu của riêng nó. */
+        instruction: string;
+    };
 }
 
 /**
@@ -92,12 +113,33 @@ export const DEFAULT_STEP_PROFILES: Record<StepCode, GraphStepProfile> = {
         // Ngưỡng 5 vì trọng số từ khoá là 3: một từ chung (3) không thể tự nó qua,
         // hai từ chung (6) thì qua. Đổi trọng số mà quên đổi ngưỡng là mở lại R3.
         keywordCap: 4, minScore: 5, topN: 3,
+        // Câu hỏi của D4 là câu hỏi mà mọi phép so tách rời đều trả lời tệ: hai
+        // case cùng cơ chế hỏng thường mang mã lỗi khác nhau và mô tả khác hẳn
+        // nhau. Trọng số 0 = TẮT — bật lên là một con số trong `GraphStepParams`,
+        // không phải một lần deploy. Cùng thái độ Thanh đã đặt cho D4/D5 ở
+        // engine chấm điểm: seed sẵn nhưng không tự bật.
+        rerank: {
+            weight: 0,
+            floor: 0.5,
+            instruction:
+                'Rank each candidate by whether it fails by the SAME PHYSICAL MECHANISM as the open '
+                + 'case. Sharing a defect code or a work centre is not evidence of a shared mechanism, '
+                + 'and differing on both does not rule one out. Judge the described physics.',
+        },
     },
     D5: {
         label: 'Permanent Corrective Actions',
         question: 'Cách sửa nào đã thật sự đóng được nguyên nhân này?',
         weights: { keywords: 2, materialFamily: 2, corrective: 3 },
         keywordCap: 3, minScore: 4, topN: 3, actionType: 'Corrective',
+        rerank: {
+            weight: 0,
+            floor: 0.5,
+            instruction:
+                "Rank each candidate by whether ITS corrective action would remove THIS case's root "
+                + 'cause. An action that only screens or reworks output does not remove a cause, however '
+                + 'similar the two cases look.',
+        },
     },
     D6: {
         label: 'Verify Effectiveness',
@@ -141,6 +183,23 @@ export function scoreEvidence(
     hits: readonly EvidenceHit[],
     profile: GraphStepProfile,
 ): ScoredCase[] {
+    return finalizeScores(accumulateEvidence(hits, profile), profile);
+}
+
+/**
+ * Cộng điểm và sắp xếp — KHÔNG cắt ngưỡng, KHÔNG cắt top-N.
+ *
+ * ── Vì sao phải tách khỏi bước cắt ──
+ * Tầng re-rank chen vào GIỮA hai việc đó. Cắt theo `minScore` trước khi re-rank
+ * sẽ loại oan đúng những case mà tầng 2 sinh ra để cứu: một case chỉ chung một
+ * từ khoá nhưng cùng cơ chế hỏng thì tầng 1 cho điểm thấp, và nó chỉ vượt ngưỡng
+ * NHỜ re-rank. Đây là bài học của `scoreWithProfile` ở engine chấm điểm, chép
+ * sang vì lý do y hệt.
+ */
+export function accumulateEvidence(
+    hits: readonly EvidenceHit[],
+    profile: GraphStepProfile,
+): ScoredCase[] {
     const byCase = new Map<string, ScoredCase>();
 
     for (const hit of hits) {
@@ -160,19 +219,78 @@ export function scoreEvidence(
         byCase.set(hit.notificationId, entry);
     }
 
-    return [...byCase.values()]
+    return [...byCase.values()].map(sortEvidence).sort(byScore);
+}
+
+/** Bằng chứng nặng nhất đứng trước — dòng đầu của đường bằng chứng phải là lý do CHÍNH. */
+function sortEvidence(c: ScoredCase): ScoredCase {
+    return {
+        ...c,
+        evidence: [...c.evidence].sort((a, b) => b.points - a.points || a.kind.localeCompare(b.kind)),
+    };
+}
+
+/**
+ * Chốt bằng mã case khi điểm bằng nhau — cùng input phải cho cùng thứ tự, nếu
+ * không thì `precedents#1` đổi giữa hai lần chạy trên cùng một dữ liệu.
+ */
+const byScore = (a: ScoredCase, b: ScoredCase) =>
+    b.score - a.score || a.notificationId.localeCompare(b.notificationId);
+
+/** Áp ngưỡng và cắt top-N. Chạy SAU re-rank, trên điểm cuối cùng. */
+export function finalizeScores(
+    scored: readonly ScoredCase[],
+    profile: GraphStepProfile,
+): ScoredCase[] {
+    return scored
         .filter((c) => c.score >= profile.minScore)
-        .map((c) => ({
-            ...c,
-            // Bằng chứng nặng nhất đứng trước: dòng đầu tiên của đường bằng chứng
-            // phải là lý do CHÍNH, không phải lý do tình cờ được dò trước.
-            evidence: [...c.evidence].sort((a, b) => b.points - a.points || a.kind.localeCompare(b.kind)),
-        }))
-        // Chốt bằng mã case để kết quả tất định khi điểm bằng nhau — cùng input
-        // phải cho cùng thứ tự, nếu không thì `precedents#1` đổi giữa hai lần chạy
-        // trên cùng một dữ liệu.
-        .sort((a, b) => b.score - a.score || a.notificationId.localeCompare(b.notificationId))
+        .map(sortEvidence)
+        .sort(byScore)
         .slice(0, profile.topN);
+}
+
+/**
+ * Gắn phán quyết re-rank vào các case đã chấm ở tầng 1 — HÀM THUẦN.
+ *
+ * Cùng công thức với `applyRerank` của engine chấm điểm, và cố ý như vậy: điểm
+ * `= trọng số × score/100`, có sàn, lý do đọc được. Hai engine cho cùng một con
+ * số trên cùng một phán quyết, nên so kết quả hai bên mới có nghĩa.
+ *
+ * Khác một chỗ: ở đây bằng chứng là một MỤC được THÊM VÀO, không phải một dòng
+ * giữ chỗ được điền — graph không biết trước case nào sẽ vào pool, nên không có
+ * chỗ nào để giữ.
+ *
+ * `verdicts` null (cả lượt re-rank hỏng) ⇒ không thêm gì, xếp hạng tầng 1 đứng
+ * nguyên. Mất một tầng vẫn còn tầng kia; đổi cả lượt tìm lấy một sự cố của model
+ * thì không đáng.
+ */
+export function applyRerankToScored(
+    scored: readonly ScoredCase[],
+    rerank: NonNullable<GraphStepProfile['rerank']>,
+    verdicts: ReadonlyMap<string, { score: number; reason: string }> | null,
+): ScoredCase[] {
+    if (!verdicts) return [...scored];
+
+    return scored.map((c) => {
+        const verdict = verdicts.get(c.notificationId);
+        // Model bỏ sót case này, hoặc chấm dưới sàn ⇒ không cộng, và KHÔNG thêm
+        // một mục 0 điểm: đường bằng chứng chỉ được nói tới thứ thật sự ăn điểm.
+        if (!verdict || verdict.score / 100 < rerank.floor) return c;
+
+        const points = Math.round(rerank.weight * (verdict.score / 100) * 10) / 10;
+        if (points <= 0) return c;
+
+        return sortEvidence({
+            ...c,
+            score: Math.round((c.score + points) * 10) / 10,
+            evidence: [...c.evidence, {
+                kind: 'rerank' as const,
+                detail: `${verdict.score}/100 — ${verdict.reason}`,
+                count: 1,
+                points,
+            }],
+        });
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +365,19 @@ export function normalizeStepParams(
         };
     }
 
+    // Re-rank chịu ĐÚNG ràng buộc như từ khoá, và vì cùng một lý do: không tín
+    // hiệu đơn lẻ nào được phép tự mình biến một case thành tiền lệ.
+    const rerankWeight = positiveInt(r.wRerank) ?? 0;
+    if (rerankWeight >= minScore) {
+        return {
+            profile: fallback,
+            violation:
+                `${code}: wRerank=${rerankWeight} ≥ minScore=${minScore}, nên chỉ cần model thích một `
+                + 'case là case đó thành tiền lệ, kể cả khi nó không chung một quan hệ nào trong graph. '
+                + 'Như vậy là vứt bỏ đúng thứ đã chọn graph để có. Dùng mặc định.',
+        };
+    }
+
     const keywordWeight = weights.keywords ?? 0;
     if (keywordWeight >= minScore) {
         return {
@@ -260,6 +391,25 @@ export function normalizeStepParams(
 
     const actionType = ACTION_TYPES.find((t) => t === String(r.actionType ?? '').trim());
 
+    // Trọng số 0 hoặc null ⇒ không re-rank. Sàn và câu hỏi vẫn rơi về mặc định
+    // của bước, nên bật lại chỉ là gõ một con số chứ không phải nhớ lại cả bộ.
+    // `Number(null)` là 0, và 0 lọt mọi phép kiểm khoảng — nhưng sàn 0 nghĩa là
+    // KHÔNG CÓ SÀN, tức mọi phán quyết của model đều được tính, đúng ngược với ý
+    // định. Ô trống phải rơi về mặc định, không phải rơi về 0.
+    const hasFloor = r.rerankFloor !== null && r.rerankFloor !== undefined && r.rerankFloor !== '';
+    const rawFloor = Number(r.rerankFloor);
+    const rerank = rerankWeight > 0
+        ? {
+            weight: rerankWeight,
+            floor: hasFloor && Number.isFinite(rawFloor) && rawFloor >= 0 && rawFloor <= 1
+                ? rawFloor
+                : fallback.rerank?.floor ?? 0.5,
+            instruction: String(r.rerankInstruction ?? '').trim()
+                || fallback.rerank?.instruction
+                || 'Rank candidates by overall relevance to the open case.',
+        }
+        : undefined;
+
     return {
         profile: {
             label: String(r.label ?? fallback.label),
@@ -269,6 +419,7 @@ export function normalizeStepParams(
             minScore,
             topN,
             ...(actionType ? { actionType } : {}),
+            ...(rerank ? { rerank } : {}),
         },
         violation: null,
     };
@@ -286,6 +437,7 @@ export function explainEvidence(scored: ScoredCase): string {
             case 'containment': return `đã chặn tạm bằng ${e.detail}`;
             case 'corrective': return `đã khắc phục bằng ${e.detail}`;
             case 'preventive': return `đã phòng ngừa bằng ${e.detail}`;
+            case 'rerank': return `model xếp hạng ${e.detail}`;
             default: return e.detail;
         }
     });

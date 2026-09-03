@@ -4,6 +4,9 @@ import {
     explainEvidence,
     scoreEvidence,
     normalizeStepParams,
+    accumulateEvidence,
+    applyRerankToScored,
+    finalizeScores,
     type GraphStepProfile,
 } from '../stepProfiles';
 import type { EvidenceHit } from '../probes';
@@ -214,5 +217,132 @@ describe('normalizeStepParams', () => {
         const { profile } = normalizeStepParams('D4', { ...row, keywordCap: -1, topN: 'ba' });
         expect(profile.keywordCap).toBe(DEFAULT_STEP_PROFILES.D4.keywordCap);
         expect(profile.topN).toBe(DEFAULT_STEP_PROFILES.D4.topN);
+    });
+});
+
+describe('accumulateEvidence / finalizeScores — tách ra để re-rank chen vào giữa', () => {
+    const profile: GraphStepProfile = {
+        label: 't', question: 't',
+        weights: { keywords: 3, materialFamily: 1 },
+        keywordCap: 4, minScore: 5, topN: 2,
+    };
+
+    /**
+     * Đây là lý do việc tách tồn tại: case dưới ngưỡng ở tầng 1 vẫn phải sống tới
+     * tầng 2, vì nó chính là loại case re-rank sinh ra để cứu — chung ít từ khoá
+     * nhưng cùng cơ chế hỏng.
+     */
+    it('accumulate GIỮ case dưới ngưỡng; finalize mới là chỗ cắt', () => {
+        const hits = [hit('weak', 'keywords', 'flange', 1)];
+        expect(accumulateEvidence(hits, profile).map((c) => c.notificationId)).toEqual(['weak']);
+        expect(finalizeScores(accumulateEvidence(hits, profile), profile)).toEqual([]);
+    });
+
+    it('scoreEvidence vẫn là accumulate rồi finalize — hành vi cũ nguyên vẹn', () => {
+        const hits = [hit('A', 'keywords', 'a, b', 2), hit('B', 'keywords', 'x', 1)];
+        expect(scoreEvidence(hits, profile))
+            .toEqual(finalizeScores(accumulateEvidence(hits, profile), profile));
+    });
+});
+
+describe('applyRerankToScored', () => {
+    const rerank = { weight: 4, floor: 0.5, instruction: 'same mechanism?' };
+    const base = () => accumulateEvidence(
+        [hit('8D-2', 'keywords', 'flange', 1)],
+        { label: 't', question: 't', weights: { keywords: 3 }, keywordCap: 4, minScore: 5, topN: 3 },
+    );
+
+    it('đạt sàn: cộng weight × score/100 và thêm một mục bằng chứng đọc được', () => {
+        const [out] = applyRerankToScored(base(), rerank, new Map([
+            ['8D-2', { score: 80, reason: 'same clamp slip' }],
+        ]));
+        expect(out.score).toBe(6.2);                        // 3 + 4×0.8
+        const entry = out.evidence.find((e) => e.kind === 'rerank')!;
+        expect(entry.points).toBe(3.2);
+        expect(entry.detail).toBe('80/100 — same clamp slip');
+    });
+
+    /**
+     * Điểm re-rank dùng CÙNG công thức với `applyRerank` của engine chấm điểm.
+     * Hai engine phải cho cùng một con số trên cùng một phán quyết, nếu không thì
+     * so kết quả hai bên bằng shadow run là so hai thang đo khác nhau.
+     */
+    it('cùng công thức weight × score/100 với engine chấm điểm', () => {
+        const [out] = applyRerankToScored(base(), { ...rerank, weight: 3 }, new Map([
+            ['8D-2', { score: 80, reason: 'r' }],
+        ]));
+        expect(out.evidence.find((e) => e.kind === 'rerank')!.points).toBe(2.4);
+    });
+
+    it('dưới sàn: không cộng điểm và KHÔNG thêm mục — đường bằng chứng chỉ nói thứ ăn điểm', () => {
+        const [out] = applyRerankToScored(base(), rerank, new Map([
+            ['8D-2', { score: 30, reason: 'weak' }],
+        ]));
+        expect(out.score).toBe(3);
+        expect(out.evidence.some((e) => e.kind === 'rerank')).toBe(false);
+    });
+
+    it('model bỏ sót case ⇒ giữ nguyên tầng 1', () => {
+        const [out] = applyRerankToScored(base(), rerank, new Map());
+        expect(out.score).toBe(3);
+    });
+
+    it('cả lượt re-rank hỏng (null) ⇒ giữ nguyên xếp hạng tầng 1', () => {
+        expect(applyRerankToScored(base(), rerank, null)).toEqual(base());
+    });
+});
+
+describe('normalizeStepParams — cấu hình re-rank', () => {
+    const row = {
+        wKeywords: 3, wMaterialFamily: 1, keywordCap: 4, minScore: 5, topN: 3, enabled: true,
+    };
+
+    it('trọng số 0 hoặc null ⇒ bước KHÔNG re-rank', () => {
+        expect(normalizeStepParams('D4', { ...row, wRerank: 0 }).profile.rerank).toBeUndefined();
+        expect(normalizeStepParams('D4', { ...row, wRerank: null }).profile.rerank).toBeUndefined();
+    });
+
+    it('bật bằng đúng một con số; sàn và câu hỏi rơi về mặc định của bước', () => {
+        const { profile } = normalizeStepParams('D4', { ...row, wRerank: 3 });
+        expect(profile.rerank!.weight).toBe(3);
+        expect(profile.rerank!.floor).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.floor);
+        expect(profile.rerank!.instruction).toBe(DEFAULT_STEP_PROFILES.D4.rerank!.instruction);
+    });
+
+    it('sàn ngoài [0,1] rơi về mặc định thay vì tạo ra một ngưỡng vô nghĩa', () => {
+        for (const rerankFloor of [-1, 1.5, 'nửa', null]) {
+            expect(normalizeStepParams('D4', { ...row, wRerank: 3, rerankFloor }).profile.rerank!.floor)
+                .toBe(DEFAULT_STEP_PROFILES.D4.rerank!.floor);
+        }
+        expect(normalizeStepParams('D4', { ...row, wRerank: 3, rerankFloor: 0.7 }).profile.rerank!.floor)
+            .toBe(0.7);
+    });
+
+    /**
+     * Cùng bất biến với `wKeywords`, và cùng lý do: không tín hiệu đơn lẻ nào
+     * được phép tự mình biến một case thành tiền lệ. Với re-rank, để lọt nghĩa là
+     * model thích case nào thì case đó vào, kể cả khi nó không chung một quan hệ
+     * nào trong graph — tức là vứt bỏ đúng thứ đã chọn graph để có.
+     */
+    it('TỪ CHỐI cấu hình để riêng re-rank tự nó qua ngưỡng', () => {
+        const { profile, violation } = normalizeStepParams('D4', { ...row, wRerank: 5, minScore: 5 });
+        expect(profile).toEqual(DEFAULT_STEP_PROFILES.D4);
+        expect(violation).toMatch(/wRerank=5/);
+        expect(violation).toMatch(/graph/);
+    });
+});
+
+describe('mặc định re-rank của D4 và D5', () => {
+    it('seed sẵn câu hỏi nhưng TẮT — bật là một con số, không phải một lần deploy', () => {
+        for (const code of ['D4', 'D5'] as const) {
+            expect(DEFAULT_STEP_PROFILES[code].rerank).toBeDefined();
+            expect(DEFAULT_STEP_PROFILES[code].rerank!.weight).toBe(0);
+            expect(DEFAULT_STEP_PROFILES[code].rerank!.instruction.length).toBeGreaterThan(40);
+        }
+    });
+
+    it('chỉ D4 và D5 có re-rank — cùng hai bước Thanh chọn ở engine chấm điểm', () => {
+        const withRerank = STEP_CODES.filter((c) => DEFAULT_STEP_PROFILES[c].rerank);
+        expect(withRerank).toEqual(['D4', 'D5']);
     });
 });

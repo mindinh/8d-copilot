@@ -168,6 +168,12 @@ export async function seedGraphStepParams(): Promise<void> {
                     minScore: p.minScore,
                     topN: p.topN,
                     actionType: p.actionType ?? null,
+                    // Seed câu hỏi và sàn kể cả khi trọng số là 0 (= tắt): bật
+                    // re-rank cho một bước phải là sửa MỘT con số, không phải nhớ
+                    // lại cả một đoạn instruction.
+                    wRerank: p.rerank?.weight || null,
+                    rerankFloor: p.rerank?.floor ?? null,
+                    rerankInstruction: p.rerank?.instruction ?? null,
                     enabled: true,
                     sortOrder: (STEP_CODES.indexOf(code) + 1) * 10 + i * 0,
                 };

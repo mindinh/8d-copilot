@@ -48,6 +48,40 @@ const TIMEOUT = 90_000;
  */
 const ANCHOR = '8D-10048412';
 
+/**
+ * `CaseContext` đủ trường để `buildQueryText` chạy được.
+ *
+ * Stub tối giản từng làm test đỏ ở đúng chỗ đáng học: tầng 2 đọc sâu vào
+ * `ishikawa`/`actions`/`fiveWhy`, những phần mà một object ba trường không có.
+ * Giữ stub nghèo nàn nghĩa là không bao giờ chạy qua đường thật.
+ */
+const contextOf = (over: Record<string, unknown> = {}): any => ({
+    notificationId: '8D-LIVE-TEST',
+    origin: 'Q3 - Internal Defect',
+    isCustomerFacing: false,
+    header: {
+        symptomShortText: 'Flange edge burr above limit after milling',
+        status: 'Open', foundDate: null, completionDate: null,
+        quantityExtent: '85 units affected', defectQuantity: 85,
+        defectQuantityUom: 'PC', teamSize: null,
+    },
+    product: {
+        plant: '1000', materialId: 'MAT-10247', materialDesc: 'Bracket housing',
+        materialGroup: 'MG-HOUSING', workCenterId: 'WC-MILL-07',
+        workCenterDesc: 'CNC milling cell 07', defectCode: 'DEF-0489',
+        defectText: 'Burr on flange edge', batchId: null,
+    },
+    ishikawa: [{ category: 'Machine', description: 'Clamp pad worn 0.2 mm' }],
+    actions: {
+        containment: [{ actionText: 'Quarantine 85 housings at the outgoing dock' }],
+        corrective: [], preventive: [],
+    },
+    fiveWhy: [{ question: 'Why is the burr above limit?', answer: 'The clamp slips during the finish pass.' }],
+    rootCause: { category: 'Machine', description: 'Worn clamp pad lets the part shift' },
+    team: { leader: null, members: [] },
+    ...over,
+});
+
 const anchorOf = (over: Partial<GraphAnchor> = {}): GraphAnchor => ({
     notificationId: ANCHOR,
     workCenterId: 'WC-MILL-07',
@@ -311,19 +345,7 @@ describeGraph('graph retrieval (HANA)', () => {
     // ── Toàn engine ──────────────────────────────────────────────────────────
 
     it('trả về đủ tám bước, và các bước KHÔNG cho ra cùng một danh sách', async () => {
-        const context = {
-            notificationId: '8D-LIVE-TEST',
-            header: { symptomShortText: 'Flange edge burr above limit after milling' },
-            product: {
-                workCenterId: 'WC-MILL-07',
-                defectCode: 'DEF-0489',
-                defectText: 'Burr on flange edge',
-                materialId: 'MAT-10247',
-                materialGroup: 'MG-HOUSING',
-            },
-        } as any;
-
-        const result = await findPrecedentsByStepGraph(context);
+        const result = await findPrecedentsByStepGraph(contextOf());
 
         expect(Object.keys(result.byStep).sort()).toEqual([...STEP_CODES].sort());
         for (const code of STEP_CODES) {
@@ -348,16 +370,13 @@ describeGraph('graph retrieval (HANA)', () => {
     }, TIMEOUT);
 
     it('tiền lệ mang theo nội dung thật lấy từ bảng quan hệ, không chỉ có khoá', async () => {
-        const context = {
-            notificationId: '8D-LIVE-TEST',
-            header: { symptomShortText: 'Bracket housing pocket depth reading shallow' },
-            product: {
-                workCenterId: 'WC-MILL-07', defectCode: null, defectText: 'Pocket depth out of spec',
-                materialId: 'MAT-10247', materialGroup: 'MG-HOUSING',
+        const result = await findPrecedentsByStepGraph(contextOf({
+            header: {
+                symptomShortText: 'Bracket housing pocket depth reading shallow',
+                status: 'Open', foundDate: null, completionDate: null,
+                quantityExtent: '12 units', defectQuantity: 12, defectQuantityUom: 'PC', teamSize: null,
             },
-        } as any;
-
-        const result = await findPrecedentsByStepGraph(context);
+        }));
         const top = result.union[0];
 
         expect(top).toBeDefined();
@@ -448,15 +467,66 @@ describeGraph('graph retrieval (HANA)', () => {
         }
     }, TIMEOUT);
 
+    // ── Tầng 2: re-rank ──────────────────────────────────────────────────────
+
+    /**
+     * Bật re-rank cho D4 trên DB thật rồi chạy cả hai tầng.
+     *
+     * ── Vì sao KHÔNG assert "phải có mục rerank" ──
+     * Tầng 2 gọi model, và nó được phép hỏng: hết giờ, AI Core trục trặc, output
+     * không parse được. Khi đó xếp hạng tầng 1 đứng nguyên — đó là hành vi ĐÚNG,
+     * nên một test đòi phải có mục rerank sẽ đỏ vì một sự cố bên ngoài chứ không
+     * vì code sai. Cái phải luôn đúng là: chạy xong không hỏng, và NẾU có điểm
+     * re-rank thì nó đúng khuôn.
+     */
+    it('bật re-rank D4: chạy trọn hai tầng, và điểm model đúng khuôn', async () => {
+        await seedGraphStepParams();
+        const db = await cds.connect.to('db');
+        const before = await db.run(
+            SELECT.one.from(GRAPH_STEP_PARAMS).where({ stepCode: 'D4' }),
+        ) as Record<string, unknown>;
+
+        try {
+            await db.run(UPDATE(GRAPH_STEP_PARAMS).set({ wRerank: 4 }).where({ stepCode: 'D4' }));
+            resetStepProfilesCache();
+
+            const profile = (await getStepProfiles()).D4;
+            expect(profile.rerank?.weight).toBe(4);
+            expect(profile.rerank!.weight).toBeLessThan(profile.minScore);
+
+            const result = await findPrecedentsByStepGraph(contextOf());
+
+            for (const p of result.byStep.D4.precedents) {
+                const rerankRow = p.breakdown.find((b) => b.criterionKey === 'rerank');
+                if (!rerankRow) continue;
+                expect(rerankRow.points).toBeGreaterThan(0);
+                expect(rerankRow.points).toBeLessThanOrEqual(4);
+                expect(rerankRow.matchedOn).toMatch(/^\d{1,3}\/100 — /);
+                expect(p.explanation).toContain('model xếp hạng');
+            }
+        } finally {
+            await db.run(
+                UPDATE(GRAPH_STEP_PARAMS).set({ wRerank: before.wRerank ?? null }).where({ stepCode: 'D4' }),
+            );
+            resetStepProfilesCache();
+        }
+    }, TIMEOUT);
+
+    it('re-rank TẮT (mặc định) ⇒ không bước nào sinh bằng chứng rerank', async () => {
+        await seedGraphStepParams();
+        resetStepProfilesCache();
+        const profiles = await getStepProfiles();
+        for (const code of STEP_CODES) expect(profiles[code].rerank).toBeUndefined();
+    }, TIMEOUT);
+
     it('buildAnchor gộp defectText và symptomShortText thành cùng một tập token', () => {
-        const anchor = buildAnchor({
-            notificationId: '8D-LIVE-TEST',
-            header: { symptomShortText: 'Pocket depth reading shallow' },
-            product: {
-                workCenterId: 'WC-MILL-07', defectCode: 'DEF-0489', defectText: 'Burr on flange edge',
-                materialId: 'MAT-10247', materialGroup: 'MG-HOUSING',
+        const anchor = buildAnchor(contextOf({
+            header: {
+                symptomShortText: 'Pocket depth reading shallow',
+                status: 'Open', foundDate: null, completionDate: null,
+                quantityExtent: '', defectQuantity: null, defectQuantityUom: null, teamSize: null,
             },
-        } as any);
+        }));
 
         // `depth` chỉ có ở triệu chứng, `flange` chỉ có ở mô tả lỗi. Cả hai phải
         // cùng vào — đó chính là R3(b).

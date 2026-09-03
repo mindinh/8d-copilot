@@ -42,7 +42,13 @@ export type EvidenceKind =
     | 'keywords'
     | 'containment'
     | 'corrective'
-    | 'preventive';
+    | 'preventive'
+    /**
+     * Không đến từ graph — đến từ tầng 2 (`precedent/reranker.ts`) đọc cả hai
+     * đoạn văn. Nằm chung kiểu này để nó đi đúng một đường với mọi bằng chứng
+     * khác: cùng chấm điểm, cùng vào đường bằng chứng, cùng hiện trên UI.
+     */
+    | 'rerank';
 
 const CLOSED_LIST = CLOSED_STATUSES.map(() => '?').join(', ');
 

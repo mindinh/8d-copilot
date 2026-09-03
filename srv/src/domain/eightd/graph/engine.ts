@@ -37,10 +37,15 @@ import {
 } from './probes';
 import {
     STEP_CODES,
-    scoreEvidence,
+    accumulateEvidence,
+    applyRerankToScored,
+    finalizeScores,
     type GraphStepProfile,
+    type ScoredCase,
     type StepCode,
 } from './stepProfiles';
+import { rerankCandidates } from '../precedent/reranker';
+import { buildQueryText } from '../precedent/searchText';
 import { getGraphSettings, getStepProfiles } from './settings';
 import {
     emptyPerStepPrecedents,
@@ -134,6 +139,64 @@ function reasonFor(
  * Cùng chữ ký và cùng kiểu trả về với `findPrecedentsByStep` của engine cũ — đó là
  * điều kiện để đổi engine chỉ là đổi một cờ.
  */
+/**
+ * Kích thước pool đưa sang tầng 2. Cùng công thức với engine chấm điểm.
+ *
+ * Đủ rộng để tầng 2 có cái mà đảo, đủ hẹp để một lượt gọi model không phình.
+ */
+function poolSize(topN: number): number {
+    return Math.min(20, Math.max(topN * 4, 12));
+}
+
+/**
+ * Tầng 2 cho một bước: model đọc case đang mở CÙNG các ứng viên rồi chấm lại.
+ *
+ * Pool nhận vào theo KHẢ NĂNG ĐẠT NGƯỠNG, không theo ngưỡng thật: một case chỉ
+ * chung một từ khoá nhưng cùng cơ chế hỏng sẽ ở dưới `minScore` sau tầng 1, và
+ * nó chỉ vượt lên NHỜ re-rank. Lọc theo ngưỡng thật ở đây là loại oan đúng những
+ * case mà tầng này sinh ra để cứu.
+ */
+async function rerankStep(
+    profile: GraphStepProfile,
+    scored: readonly ScoredCase[],
+    queryText: string,
+): Promise<ScoredCase[]> {
+    const rerank = profile.rerank;
+    if (!rerank || rerank.weight <= 0 || !queryText.trim()) return [...scored];
+
+    const pool = scored
+        .filter((c) => c.score + rerank.weight >= profile.minScore)
+        .slice(0, poolSize(profile.topN));
+    if (!pool.length) return [...scored];
+
+    const db = await cds.connect.to('db');
+    const ids = pool.map((c) => c.notificationId);
+    const rows = (await db.run(
+        `SELECT "NOTIFICATIONID", "SYMPTOMSHORTTEXT", "SEARCHTEXT"
+         FROM "CNMA_PRORESOLVE_HISTORICALCASES" WHERE "NOTIFICATIONID" IN (${ids.map(() => '?').join(', ')})`,
+        ids,
+    )) as Array<{ NOTIFICATIONID: string; SYMPTOMSHORTTEXT: string | null; SEARCHTEXT: string | null }>;
+    const textById = new Map(rows.map((r) => [r.NOTIFICATIONID, r]));
+
+    try {
+        const verdicts = await rerankCandidates(
+            rerank.instruction,
+            queryText,
+            pool.map((c) => ({
+                notificationId: c.notificationId,
+                symptomShortText: textById.get(c.notificationId)?.SYMPTOMSHORTTEXT ?? null,
+                searchText: textById.get(c.notificationId)?.SEARCHTEXT ?? null,
+            })),
+        );
+        return applyRerankToScored(pool, rerank, verdicts);
+    } catch (e: any) {
+        // Cùng triết lý với embedding hỏng ở `embedQuery`: giữ xếp hạng tầng 1
+        // thay vì đổi cả lượt tìm lấy một sự cố tạm thời của model.
+        LOG.warn(`Re-rank ${profile.label} hỏng (${e.message}) — giữ xếp hạng tầng 1.`);
+        return [...pool];
+    }
+}
+
 export async function findPrecedentsByStepGraph(
     context: CaseContext,
 ): Promise<PerStepPrecedents> {
@@ -147,6 +210,26 @@ export async function findPrecedentsByStepGraph(
     const evidence = await collectEvidence(anchor);
     // Trọng số đọc từ `GraphStepParams`; thiếu dòng thì rơi về hằng số trong code.
     const profiles = await getStepProfiles();
+    /**
+     * Văn bản của case đang mở, cho tầng 2.
+     *
+     * Ghép bằng CHÍNH hàm mà kho tiền lệ dùng lúc nhúng — tầng 2 phải đọc case
+     * đang mở dưới đúng dạng văn bản mà nó đọc các ứng viên.
+     *
+     * Chỉ dựng khi thật sự có bước bật re-rank: `buildQueryText` đọc sâu vào
+     * `ishikawa`, `actions`, `fiveWhy`, nên trên một `CaseContext` chưa đủ trường
+     * nó ném — và không đáng để một tầng TUỲ CHỌN làm hỏng cả lượt tìm. Hỏng thì
+     * mất re-rank, không mất tiền lệ.
+     */
+    const needsQueryText = STEP_CODES.some((code) => (profiles[code].rerank?.weight ?? 0) > 0);
+    let queryText = '';
+    if (needsQueryText) {
+        try {
+            queryText = buildQueryText(context);
+        } catch (e: any) {
+            LOG.warn(`Không dựng được văn bản truy vấn cho re-rank (${e.message}) — bỏ tầng 2.`);
+        }
+    }
 
     const byStep = {} as Record<StepCode, PrecedentResult>;
     for (const code of STEP_CODES) {
@@ -160,7 +243,11 @@ export async function findPrecedentsByStepGraph(
             if (hit.kind === 'preventive') return profile.actionType === 'Preventive';
             return true;
         });
-        const scored = scoreEvidence(relevant, profile);
+        // Tầng 1 (graph) → tầng 2 (re-rank, nếu bước này bật) → ngưỡng + top-N.
+        // Ngưỡng áp SAU cùng, trên điểm cuối — xem `rerankStep`.
+        const stage1 = accumulateEvidence(relevant, profile);
+        const reranked = await rerankStep(profile, stage1, queryText);
+        const scored = finalizeScores(reranked, profile);
         byStep[code] = toResult(code, profile, await hydratePrecedents(scored), relevant.length, Number(libraryCount));
     }
 

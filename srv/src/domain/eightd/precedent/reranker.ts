@@ -33,8 +33,24 @@ const LOG = cds.log('precedent-rerank');
 /** Activity dùng chung với chẩn đoán mù: chấm theo tiêu chí cố định, temp 0. */
 const ACTIVITY_RERANK = 'reviewQuality';
 
-/** Quá số này thì lượt gọi bị coi là treo — giữ xếp hạng tầng 1 thay vì chờ. */
-const RERANK_TIMEOUT_MS = 20_000;
+/**
+ * Quá số này thì lượt gọi bị coi là treo — giữ xếp hạng tầng 1 thay vì chờ.
+ *
+ * ── Vì sao 45s chứ không phải 20s như bản đầu ──
+ * 20s được chọn cho prompt CHƯA có chain-of-thought. Sau khi thêm `queryAnalysis`
+ * và `analysis` cho từng ứng viên, model phải sinh thêm vài trăm token trước khi
+ * tới con số đầu tiên. Đo trên chính bộ dữ liệu này: 10 ứng viên mất **23.9s** —
+ * tức bản 20s KHÔNG BAO GIỜ về kịp, và nó thất bại theo cách dễ bỏ qua nhất:
+ * xếp hạng tầng 1 vẫn đứng, kết quả vẫn hợp lý, chỉ là tầng 2 chưa từng chạy.
+ *
+ * 45s cho pool đầy (20 ứng viên) một khoảng dự phòng gần gấp đôi mức đã đo. Đây
+ * là một tầng TUỲ CHỌN chạy song song với các pha khác của lượt phân tích, nên
+ * chờ thêm 25s không kéo dài tổng thời gian theo tỉ lệ đó.
+ *
+ * `RERANK_TIMEOUT_MS` ghi đè được để đo lại khi đổi model hoặc đổi prompt — và
+ * PHẢI đo lại khi làm hai việc đó.
+ */
+const RERANK_TIMEOUT_MS = Number(process.env.RERANK_TIMEOUT_MS ?? 45_000);
 
 /** Mỗi ứng viên chỉ đưa chừng này ký tự văn bản — đủ để phán, không phình prompt. */
 const CANDIDATE_TEXT_CHARS = 700;
@@ -51,17 +67,53 @@ export interface RerankVerdict {
     score: number;
     /** Lý do một dòng của model — đi thẳng vào `breakdown.matchedOn`. */
     reason: string;
+    /**
+     * Lập luận của model TRƯỚC khi nó chấm điểm — phần chain-of-thought.
+     *
+     * Không đi vào `matchedOn` (dòng đó phải ngắn để đọc được trên UI) nhưng có
+     * mặt ở đây để log và để soi khi một thứ hạng trông vô lý. Rỗng khi model bỏ
+     * trường này, hoặc khi output đến từ một bản prompt cũ.
+     */
+    analysis: string;
 }
 
+/**
+ * ── Vì sao thứ tự trường trong schema này quan trọng ──
+ * Model sinh JSON theo thứ tự trường. `queryAnalysis` đứng trước `rankings`, và
+ * trong mỗi mục `analysis` đứng trước `score`, nên con số được sinh RA SAU khi
+ * lập luận đã nằm trong ngữ cảnh — đó chính là chain-of-thought. Đảo lại thì
+ * `analysis` chỉ còn là lời biện minh viết sau cho một con số đã trót chọn, và
+ * nhìn output thì hai đằng giống hệt nhau.
+ *
+ * ── Vì sao CoT bằng trường output chứ không bằng extended thinking ──
+ * `thinkingBudget` hợp lệ (≥1024) sẽ làm CDK xoá `temperature` — Anthropic cấm
+ * temperature đi kèm extended thinking (xem `effectiveThinkingBudget`). Mất
+ * temperature 0 là mất tính tất định, đúng thứ tầng này cần nhất. Lập luận bằng
+ * trường output giữ được cả hai: model vẫn suy nghĩ ra chữ, mà vẫn temp 0.
+ */
 const RERANK_SCHEMA = {
     type: 'object',
     properties: {
+        queryAnalysis: {
+            type: 'string',
+            maxLength: 600,
+            description:
+                'FIRST: state what failure mechanism the OPEN CASE shows, from its evidence alone. '
+                + 'Do not mention any candidate here. This is the reference every score is measured against.',
+        },
         rankings: {
             type: 'array',
             items: {
                 type: 'object',
                 properties: {
                     notificationId: { type: 'string' },
+                    analysis: {
+                        type: 'string',
+                        maxLength: 400,
+                        description:
+                            'Reason BEFORE scoring: what mechanism this candidate shows, and where it agrees '
+                            + 'or differs from queryAnalysis. Name the evidence. Then the score must follow it.',
+                    },
                     score: {
                         type: 'number',
                         description: 'Relevance 0-100 against the instruction. 0 = unrelated, 100 = textbook match.',
@@ -69,14 +121,14 @@ const RERANK_SCHEMA = {
                     reason: {
                         type: 'string',
                         maxLength: 200,
-                        description: 'One short sentence naming the evidence for the score.',
+                        description: 'One short sentence summarising the analysis, for the audit trail.',
                     },
                 },
-                required: ['notificationId', 'score', 'reason'],
+                required: ['notificationId', 'analysis', 'score', 'reason'],
             },
         },
     },
-    required: ['rankings'],
+    required: ['queryAnalysis', 'rankings'],
 } as const;
 
 const SYSTEM_PROMPT = `You are re-ranking historical quality-management (8D) cases against one open case.
@@ -85,9 +137,18 @@ Score every candidate from 0 to 100 for how relevant it is UNDER THE GIVEN INSTR
 not for generic similarity. Two cases can share a defect code and still score low, or share
 nothing on paper and score high, when the instruction asks about the underlying mechanism.
 
+Work in this order, and do not shortcut it:
+1. queryAnalysis — read the open case ALONE and state the mechanism it shows. Mention no candidate.
+2. For each candidate, write analysis FIRST: what mechanism it shows, and where it agrees or
+   differs from queryAnalysis. Then let the score follow from what you just wrote.
+
+A score that does not follow from its own analysis is the failure this stage exists to prevent:
+two cases can share a defect code and still be different mechanisms, and two cases can share
+nothing on paper and be the same one.
+
 Rules:
 - Score every candidate exactly once, using its notificationId verbatim.
-- Give one short factual reason per candidate, citing what in the texts drove the score.
+- reason is a one-line summary of analysis, not a separate judgement.
 - Return ONLY JSON matching the schema. No prose, no code fences.`;
 
 function clip(text: string | null | undefined, max: number): string {
@@ -144,7 +205,9 @@ export function normalizeRerankOutput(
         const score = Math.min(100, Math.max(0, rawScore));
 
         const reason = String((row as any)?.reason ?? '').trim().slice(0, 200);
-        out.set(id, { score, reason });
+        // Bản prompt cũ không có trường này — thiếu thì để rỗng, không loại dòng.
+        const analysis = String((row as any)?.analysis ?? '').trim().slice(0, 400);
+        out.set(id, { score, reason, analysis });
     }
     return out;
 }
@@ -196,12 +259,19 @@ export async function rerankCandidates(
         return { content: res.content, finishReason: res.finishReason };
     });
 
+    const started = Date.now();
     const { value } = await Promise.race([call, timeout]);
+    const elapsed = Date.now() - started;
     const verdicts = normalizeRerankOutput(value, sentIds);
 
+    // Lập luận về CASE ĐANG MỞ là mốc mà mọi điểm số được đo theo. Không log nó
+    // thì khi một thứ hạng trông vô lý, chẳng còn gì để soi ngoài con số.
+    const queryAnalysis = String((value as { queryAnalysis?: unknown } | null)?.queryAnalysis ?? '').trim();
+
     LOG.info(
-        `Re-rank: ${verdicts.size}/${candidates.length} ứng viên được chấm`
-        + (verdicts.size < candidates.length ? ' (phần thiếu giữ mức none)' : ''),
+        `Re-rank: ${verdicts.size}/${candidates.length} ứng viên được chấm trong ${elapsed}ms`
+        + (verdicts.size < candidates.length ? ' (phần thiếu giữ mức none)' : '')
+        + (queryAnalysis ? ` · cơ chế model đọc ra: ${queryAnalysis.slice(0, 200)}` : ''),
     );
     return verdicts;
 }
