@@ -299,7 +299,40 @@ rows backfill.
 repointed the team's profile at the graph container. `npm run deploy:graph` pins
 `--for graph`. Anyone deploying by hand must pass it too.
 
-### 10.7 Still open
+### 10.7 Gaps found by review, and closed
+
+Three things the first implementation pass owed the design and did not deliver.
+All three are now done.
+
+**Integration tests.** The 26 unit tests could not tell whether a Cypher query
+was valid, a view returned the right rows, or the workspace deployed at all — a
+typo in `probes.ts` passed `tsc` and `jest` and failed only at runtime. There are
+now 17 tests that run against the container, gated on `GRAPH_INTEGRATION=1`
+through a static `describe.skip` so `npm test` reports them as *skipped*, never
+as passed. `npm run test:graph`: 56 passed.
+
+Writing them surfaced a bug in the harness itself: `cds.connect.to('db')` does
+not load the CDS model, so CQN loses name mapping and
+`UPDATE(...).set({topN: 1})` silently wrote nothing. Every config test would have
+read back the default and gone green, proving something untrue. It had already
+corrupted a seeded row before anyone noticed.
+
+**`GraphStepParams`.** Decision D-3 promised admins could tune parameters without
+a deployment; the first pass left the weights as code constants. They are now
+eight rows, seeded from those same constants so nothing changes until a number is
+edited. `normalizeStepParams` **rejects** any row where `wKeywords >= minScore`,
+because that is R3 returning through the config path — one shared keyword would
+qualify a precedent alone. Rejecting the row beats clamping the value: clamping
+shows one number on screen while running another.
+
+**The silently inert screen.** With `engine = 'graph'`, the whole Similarity
+configuration stops applying — the graph engine reads none of it and never calls
+embedding — while the screen still saves and still says "saved". Saving a config
+the running engine ignores now returns a message saying so and naming the entity
+that does apply, symmetric in both directions. `req.info`, not `req.reject`: the
+configuration is valid and may be staged ahead of an engine switch.
+
+### 10.8 Still open
 
 - Embedding is **not yet wired as a booster**; `semanticUsed` reports `false`
   rather than claiming otherwise. D-4 remains the intended design.
@@ -309,3 +342,32 @@ repointed the team's profile at the graph container. `npm run deploy:graph` pins
 - `prompts.ts:137-139` still hardcodes the old scoring formula (finding R2).
 - `mta.yaml` still has one HDI container; the graph container is added only when
   this branch is deployed to CF, as a second resource beside the existing one.
+- A UI banner on the Similarity screen would be better than a post-save message.
+  The backend now exposes what the screen needs to render one.
+
+### 10.9 What the full shadow run showed
+
+25 cases × 8 steps = 200 cells, both engines on the same input:
+
+| | |
+|---|---|
+| both engines found it | 98 |
+| graph only | 372 |
+| scoring only | 78 |
+| graph said "nothing" | 27 / 200 |
+| scoring said "nothing" | 104 / 200 |
+
+Read carefully, because "more results" is not automatically better — R4 is a
+warning about exactly that. Two things are worth stating.
+
+Scoring returns the **identical list for all eight steps**, because all eight are
+bound to one profile. That is the defect this work exists to fix, and it is
+visible in every case block.
+
+Graph is more permissive overall, but nothing surfaces without a named
+relationship crossing a threshold, and each hit carries the path that justified
+it. Where it matters it is also more willing to decline: on several cases graph
+returns nothing for D4 while scoring offers two cases at exactly the minimum
+score of 3 — bare-threshold matches of the kind R4 describes. The 372 figure
+still deserves tuning scrutiny against `topN` and `minScore`; it is not yet
+evidence that the defaults are right.
