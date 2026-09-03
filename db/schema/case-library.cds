@@ -67,6 +67,31 @@ entity HistoricalCases : cuid, managed {
     defectKeywords    : String(500);
 
     /**
+     * Token của `defectText` **và** `symptomShortText` gộp lại — nguồn của đỉnh
+     * `Keyword` trong graph.
+     *
+     * ── Vì sao không dùng lại `defectKeywords` ──
+     * Cột kia chỉ tách từ `defectText`, tức là văn bản của DANH MỤC mã lỗi. Câu
+     * chữ của người vận hành nằm ở `symptomShortText` và chưa bao giờ được đọc.
+     * Hậu quả đo được: case `8D-10048880` mang tiêu đề *"Bracket housing pocket
+     * depth varying unit to unit"* ăn 0 điểm trước một case mô tả *"pocket depth
+     * reading shallow"* — cụm từ khớp rõ nhất trong cả phép thử vô hình với engine,
+     * vì nó nằm ở đúng cái trường không ai so. Đây là phát hiện R3(b) trong
+     * `docs/PRECEDENT-RETRIEVAL-REVIEW.md`.
+     *
+     * ── Vì sao là cột chứ không tách trong SQL của view ──
+     * View graph chỉ được phép cắt chuỗi theo khoảng trắng. Nếu nó tự hạ chữ hoa,
+     * tự loại stopword, tự lọc độ dài thì đó là BẢN THỨ HAI của
+     * `tokenizeDefectText` — và hai bản sẽ lệch nhau ngay lần đầu ai đó thêm một
+     * stopword, một cách âm thầm: không bao giờ khớp mà cũng không bao giờ báo lỗi.
+     * Cột này được tính bằng CHÍNH hàm đó lúc nạp kho, nên view chỉ còn việc
+     * `SUBSTR_REGEXPR('[^ ]+' …)`.
+     *
+     * Dài 1000 vì nó gộp hai nguồn; `defectKeywords` 500 chỉ gánh một.
+     */
+    searchKeywords    : String(1000);
+
+    /**
      * Dòng này vào kho bằng đường nào.
      *
      *   closed-in-app  case do chính app này đóng ở D8

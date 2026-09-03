@@ -127,6 +127,14 @@ export async function writeHistoricalCase(
             // khác nhau ở hai đầu là lỗi không bao giờ báo.
             defectKeywords: tokenizeDefectText(ctx.product.defectText),
 
+            // Gộp câu chữ của NGƯỜI VẬN HÀNH vào cùng tập token. `defectText` là
+            // văn bản danh mục; `symptomShortText` là thứ người ta thật sự viết ra,
+            // và nó chưa bao giờ được đem so — xem R3(b) và chú thích của cột.
+            // Cùng một hàm, một lời gọi, nên hai nguồn không thể lệch cách tách.
+            searchKeywords: tokenizeDefectText(
+                `${ctx.product.defectText ?? ''} ${ctx.header.symptomShortText ?? ''}`,
+            ),
+
             // Ghép sẵn; vector sinh sau ở `embedLibrary` để việc nạp kho
             // không phụ thuộc AI Core có thông hay không.
             searchText: buildSearchText(ctx),
@@ -447,7 +455,9 @@ export async function seedLibraryFromBundle(): Promise<SeedReport | null> {
     if (!files.length) return null;
 
     const existing = await db.run(
-        SELECT.from(HISTORICAL_CASES).columns('notificationId', 'searchText', 'attributesJson'),
+        SELECT.from(HISTORICAL_CASES).columns(
+            'notificationId', 'searchText', 'attributesJson', 'searchKeywords',
+        ),
     );
     /**
      * Chỉ coi là "đã có" khi dòng đó CÓ ĐỦ dữ liệu của schema hiện tại.
@@ -461,11 +471,16 @@ export async function seedLibraryFromBundle(): Promise<SeedReport | null> {
      * và mọi tiêu chí trỏ vào một đường dẫn payload sẽ lặng lẽ ăn 0 điểm trên
      * đúng những case đó — nhìn ra ngoài giống hệt "không có case nào giống".
      *
+     * `searchKeywords` vào danh sách này cùng một lý do, và hậu quả còn kín hơn:
+     * dòng thiếu nó không sinh ra đỉnh `Keyword` nào trong graph, nên case đó
+     * đơn giản là KHÔNG BAO GIỜ được tìm thấy qua từ khoá — không lỗi, không log,
+     * chỉ là một case lặng lẽ biến mất khỏi mọi kết quả của D4.
+     *
      * Nạp lại từ bundle là an toàn: case thật không nằm trong bundle.
      */
     const complete = new Set(
         existing
-            .filter((r: any) => r.searchText && r.attributesJson)
+            .filter((r: any) => r.searchText && r.attributesJson && r.searchKeywords)
             .map((r: any) => String(r.notificationId)),
     );
     const stale = existing.length - complete.size;
