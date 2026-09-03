@@ -55,3 +55,6 @@ app/cnma_proresolve_ui/public/samples/
 
 # added by cds
 .cdsrc-private.json
+
+# Backup của binding, giữ cục bộ để revert profile khi cds deploy ghi đè.
+.cdsrc-private.json*

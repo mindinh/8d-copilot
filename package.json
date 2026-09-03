@@ -8,10 +8,13 @@
   "scripts": {
     "start": "cds-serve",
     "deploy:sqlite": "cds deploy --to sqlite",
+    "deploy:graph": "cds deploy --to hana --profile graph --for graph",
+    "seed:graph": "cds bind --exec --profile graph -- node --import ./node_modules/tsx/dist/loader.mjs scripts/seed-graph-library.mjs",
     "dev": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:local": "concurrently -k -p \"[{name}]\" -c \"cyan.bold,magenta.bold\" -n \"BE,FE\" \"npm run dev:backend:local\" \"npm run dev:frontend\"",
     "dev:backend": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources,db.sqlite,db.sqlite-wal,db.sqlite-shm < NUL",
     "dev:backend:local": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile local --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources,db.sqlite,db.sqlite-wal,db.sqlite-shm < NUL",
+    "dev:backend:graph": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile graph --port 4009 --exclude app,dist,gen,mock-data,docs,plans,resources,db.sqlite,db.sqlite-wal,db.sqlite-shm < NUL",
     "dev:frontend": "node scripts/wait-backend.mjs && npm run dev --prefix app/cnma_proresolve_ui",
     "dev:backend:serve": "powershell -Command \"while($true){ node node_modules/tsx/dist/cli.mjs node_modules/@sap/cds-dk/bin/cds-tsx.js serve all --profile local --port 4008; Start-Sleep -Seconds 2 }\"",
     "watch": "tsx node_modules/@sap/cds-dk/bin/cds-tsx.js watch --profile hybrid --port 4008 --exclude app,dist,gen,mock-data,docs,plans,resources",
