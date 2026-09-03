@@ -39,7 +39,8 @@
     "cf:target": "cf target",
     "cf:logs": "cf logs cnma_proresolve_srv",
     "cf:logs:last": "cf logs cnma_proresolve_srv --recent",
-    "shadow:graph": "cds bind --exec --profile graph -- node --import ./node_modules/tsx/dist/loader.mjs scripts/shadow-retrieval.mjs"
+    "shadow:graph": "cds bind --exec --profile graph -- node --import ./node_modules/tsx/dist/loader.mjs scripts/shadow-retrieval.mjs",
+    "test:graph": "cds bind --exec --profile graph -- node scripts/run-graph-tests.mjs"
   },
   "dependencies": {
     "@cnma/cap-core": "^1.0.0",
