@@ -20,6 +20,7 @@
  * offline, không cần credential, không cần mạng.
  */
 
+import cds from '@sap/cds';
 import { buildAnchor, keywordPredicate, type GraphAnchor } from '../anchor';
 import { isGraphAvailable, runGraphQuery } from '../graphClient';
 import { findPrecedentsByStepGraph } from '../engine';
@@ -66,6 +67,17 @@ describeGraph('graph retrieval (HANA)', () => {
                 + 'và `npm run seed:graph`.',
             );
         }
+    }, TIMEOUT);
+
+    /**
+     * Trả connection pool của CAP về, nếu không jest chạy xong vẫn treo.
+     *
+     * Không dùng `--forceExit`: cờ đó giết tiến trình bất kể còn gì đang mở, nên
+     * nó che luôn cả những chỗ rò thật mà lần sau ta sẽ muốn biết.
+     */
+    afterAll(async () => {
+        const db = (cds as any).db;
+        await db?.disconnect?.().catch(() => { /* pool đã đóng */ });
     }, TIMEOUT);
 
     // ── Nền tảng ─────────────────────────────────────────────────────────────
