@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import axiosInstance from './core/axios-instance';
 import { BaseODataService } from './core/base-service';
 import { ODataQueryBuilder } from './core/odata-helper';
 import type { ODataResponse } from './types/odata.types';
@@ -160,3 +162,26 @@ class InspectionLotsService extends BaseODataService<InspectionLotItem> {
 
 export const historicalCasesService = new HistoricalCasesService();
 export const inspectionLotsService = new InspectionLotsService();
+
+/**
+ * Lấy trước số thứ tự tiếp theo cho một đối tượng ('DEFECT', 'INSPLOT') từ NumberRanges.
+ */
+export async function fetchNextNumber(object: 'DEFECT' | 'INSPLOT'): Promise<string> {
+    try {
+        const res = await axiosInstance.get<{ value: string }>(
+            `api/cnma/EIGHTD_SRV/peekNextNumber(object='${object}')`,
+        );
+        return res.data?.value || (object === 'DEFECT' ? '8D-10049121' : '0010000109');
+    } catch {
+        return object === 'DEFECT' ? '8D-10049121' : '0010000109';
+    }
+}
+
+export function useNextNumber(object: 'DEFECT' | 'INSPLOT', enabled = true) {
+    return useQuery({
+        queryKey: ['number-range', 'next', object],
+        queryFn: () => fetchNextNumber(object),
+        enabled,
+        staleTime: 5000,
+    });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Button,
     Dialog,
@@ -8,19 +8,12 @@ import {
     DialogHeader,
     DialogTitle,
     Input,
-    Label,
     Spinner,
     Textarea,
-    cn,
 } from '@cnma/react-ui';
-import { AlertCircle, ArrowLeft, Braces, Search, Upload, X } from 'lucide-react';
+import { AlertCircle, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { eightDService } from '@/services/eightd-service';
-import { defectsService, type DefectItem } from '@/services/defect-service';
-import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
-import { useValueHelp } from '@/hooks/use-value-help';
-import { VALUE_HELP_IDS } from '@/services/value-help-service';
-import { ORIGIN_CUSTOMER } from '@/pages/create-defect';
 
 /**
  * Mở một báo cáo 8D.
@@ -126,51 +119,12 @@ interface SampleIssue {
     investigated: boolean;
 }
 
-/** Số ngày kể từ khi phát hiện lỗi. `null` khi không có ngày để đếm. */
-function daysSince(isoDate: string | null | undefined): number | null {
-    if (!isoDate) return null;
-    const then = Date.parse(isoDate);
-    if (Number.isNaN(then)) return null;
-    return Math.max(0, Math.floor((Date.now() - then) / 86_400_000));
-}
-
-/** Một dòng của bảng xem trước. Để trống thì không vẽ — thà thiếu dòng còn hơn thừa dấu gạch. */
-function PreviewRow({ label, value }: { label: string; value: string | null | undefined }) {
-    if (!value) return null;
-    return (
-        <div className="flex min-w-0 gap-2 py-0.5">
-            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{label}</span>
-            <span className="min-w-0 flex-1 break-words text-[11px] font-medium">{value}</span>
-        </div>
-    );
-}
-
 export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
     const [text, setText] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [samples, setSamples] = useState<SampleIssue[]>([]);
-    const [defects, setDefects] = useState<DefectItem[] | null>(null);
-    const [search, setSearch] = useState('');
-    const [showImport, setShowImport] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
-
-    // Lỗi đang được xem trước, và bản chi tiết của nó. `selected` đến từ danh sách
-    // (đủ để vẽ tiêu đề ngay), `detail` đến sau qua một lượt gọi riêng — danh sách
-    // không mang nhóm mã, hạn SLA hay kết quả đo.
-    const [selected, setSelected] = useState<DefectItem | null>(null);
-    const [detail, setDetail] = useState<DefectItem | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-
-    // Hai cam kết của con người. Không suy ra được từ bản ghi lỗi — xem
-    // `startEightD` ở `EightDService.cds`.
-    const [dueDate, setDueDate] = useState('');
-    const [coordinator, setCoordinator] = useState('');
-
-    // Danh mục đối tác chỉ nạp khi hộp thoại mở: không ai cần nó ở màn hình danh
-    // sách case, và nạp sẵn là một lượt gọi mạng cho một ô có thể không bao giờ
-    // hiện ra.
-    const partnerVh = useValueHelp(VALUE_HELP_IDS.partner, { enabled: open });
 
     useEffect(() => {
         if (!open || samples.length) return;
@@ -180,102 +134,6 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
             .then(setSamples)
             .catch(() => setSamples([]));
     }, [open, samples.length]);
-
-    // Nạp lại MỖI LẦN mở, không cache: danh sách này là "lỗi chưa có 8D", và một
-    // 8D vừa được người khác mở ra sẽ làm nó sai ngay. Hiện một dòng đã bị chiếm
-    // thì người dùng bấm vào chỉ để nhận 409.
-    useEffect(() => {
-        if (!open) return;
-        let alive = true;
-        setDefects(null);
-        defectsService
-            .listStartable()
-            .then((rows) => { if (alive) setDefects(rows); })
-            .catch(() => { if (alive) setDefects([]); });
-        return () => { alive = false; };
-    }, [open]);
-
-    /**
-     * Lọc ở phía client, không gọi lại server.
-     *
-     * `listStartable` có tham số `search`, nhưng dùng nó ở đây sẽ đánh đổi sai
-     * hướng: mỗi phím gõ là hai lượt gọi mạng (Defects + Reports) để lọc một danh
-     * sách vốn đã nằm sẵn trong bộ nhớ và có trần 100 dòng. Khi nào danh sách vượt
-     * trần đó thì mới đáng chuyển sang lọc phía server — và lúc đó phải chống rung
-     * phím, chứ không chỉ đổi chỗ gọi.
-     */
-    const visibleDefects = useMemo(() => {
-        if (!defects) return null;
-        const q = search.trim().toLowerCase();
-        if (!q) return defects;
-        return defects.filter((d) =>
-            [d.defectId, d.symptomShortText, d.materialId, d.materialDesc, d.workCenterId, d.workCenterDesc, d.defectCode, d.defectText]
-                .some((f) => String(f ?? '').toLowerCase().includes(q)));
-    }, [defects, search]);
-
-    /**
-     * Chọn một lỗi để xem trước. KHÔNG mở 8D — xem chú thích đầu file.
-     *
-     * Bản chi tiết nạp ở nền: tiêu đề và những trường danh sách đã có thì vẽ ngay,
-     * phần còn lại điền vào khi về. Chặn cả khối cho đến khi mạng trả lời là bắt
-     * người dùng nhìn một ô trống trong khi dữ liệu họ cần đã có sẵn một nửa.
-     */
-    function selectDefect(d: DefectItem) {
-        setSelected(d);
-        setDetail(null);
-        setError(null);
-        setDetailLoading(true);
-        // Mặc định từ những gì danh sách đã biết; lượt chi tiết sẽ ghi đè.
-        setDueDate('');
-        setCoordinator(d.coordinator ?? '');
-
-        defectsService
-            .getWithCharacteristics(d.ID)
-            .then((full) => {
-                setDetail(full);
-                // Hạn mặc định LẤY TỪ SLA và chỉ ở case hướng khách hàng (Q1). Case
-                // nội bộ để trống: quyết định Q12 cấm hệ thống bịa một hạn không ai
-                // hứa. Người dùng vẫn tự đặt được — ô này để trống chứ không khoá.
-                setDueDate(full.origin === ORIGIN_CUSTOMER ? (full.slaResponseDue ?? '') : '');
-                setCoordinator(full.coordinator ?? '');
-            })
-            .catch(() => { /* xem trước thiếu vẫn hơn không xem được */ })
-            .finally(() => setDetailLoading(false));
-    }
-
-    /**
-     * Mở 8D từ lỗi đang xem trước.
-     *
-     * Không dựng payload ở đây: server đọc thẳng bảng `Defects`. Đó là khác biệt
-     * thật giữa nút này và đường nhập JSON — dữ liệu case không đi qua trình
-     * duyệt, nên không có gì để sai lệch trên đường truyền. Hai trường gửi kèm là
-     * ngoại lệ duy nhất, vì chúng không tồn tại ở đâu để mà đọc.
-     */
-    async function startFromDefect(d: DefectItem) {
-        setBusy(true);
-        setError(null);
-        try {
-            const reportID = await defectsService.startEightD(d.defectId, { dueDate, coordinator });
-            toast.success(`Analysis scheduled for defect ${d.defectId}`, {
-                description: 'This takes about 3 minutes. The page updates automatically.',
-            });
-            reset();
-            onOpenChange(false);
-            onScheduled(reportID);
-        } catch (e: any) {
-            setError(
-                e?.response?.data?.error?.message ??
-                e?.message ??
-                'Could not start the 8D for this defect.',
-            );
-            setBusy(false);
-            // 409 nghĩa là danh sách đã cũ — nạp lại để dòng đó biến mất, và bỏ
-            // luôn phần xem trước: nó đang mô tả một lỗi không còn chọn được nữa.
-            setSelected(null);
-            setDetail(null);
-            defectsService.listStartable().then(setDefects).catch(() => { /* giữ nguyên */ });
-        }
-    }
 
     async function loadSample(s: SampleIssue) {
         setError(null);
@@ -294,12 +152,6 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         setText('');
         setError(null);
         setBusy(false);
-        setSearch('');
-        setShowImport(false);
-        setSelected(null);
-        setDetail(null);
-        setDueDate('');
-        setCoordinator('');
     };
 
     async function handleFile(file: File) {
@@ -321,17 +173,12 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         try {
             const reportID = await eightDService.analyzeFromJson(text);
             toast.success(`Analysis scheduled for ${result.caseId}`, {
-                // Con số đo được, không phải ước lượng: ~3 phút cho một case điển
-                // hình. Hứa 60-90 giây thì đúng lúc chạy bình thường người dùng
-                // đã tưởng hệ thống treo và bấm lại.
                 description: 'This takes about 3 minutes. The page updates automatically.',
             });
             reset();
             onOpenChange(false);
             onScheduled(reportID);
         } catch (e: any) {
-            // Backend trả về lý do rất cụ thể khi dataset vi phạm ràng buộc —
-            // hiện nguyên văn, đừng thay bằng "Something went wrong".
             const message =
                 e?.response?.data?.error?.message ??
                 e?.message ??
@@ -341,11 +188,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         }
     }
 
-    // Bản chi tiết khi đã về, nếu chưa thì bản danh sách. Xem trước phải vẽ được
-    // từ cả hai, chỉ khác ở chỗ bản danh sách thiếu vài dòng.
-    const preview = detail ?? selected;
-    const age = daysSince(preview?.foundDate);
-    const errorText = error ?? (showImport && text && check && !check.ok ? check.reason : null);
+    const errorText = error ?? (text && check && !check.ok ? check.reason : null);
 
     return (
         <Dialog
@@ -359,360 +202,96 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
         >
             <DialogContent className="w-[calc(100%-2rem)] max-w-2xl overflow-hidden">
                 <DialogHeader>
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <DialogTitle>Create 8D Report</DialogTitle>
-                            <DialogDescription>
-                                {showImport
-                                    ? 'Import a defect case from another system as JSON, or pick a sample issue.'
-                                    : 'Pick the defect this 8D will investigate. A defect can have only one 8D.'}
-                            </DialogDescription>
-                        </div>
-
-                        {/*
-                          * Ba đường nhập JSON gộp sau một nút. Đặt ở header chứ
-                          * không trong vùng cuộn để nó không trôi mất khi danh
-                          * sách lỗi dài — đây là lối ra, và một lối ra cuộn mất
-                          * thì không phải lối ra.
-                          */}
-                        <Button
-                            type="button"
-                            variant={showImport ? 'secondary' : 'ghost'}
-                            size="icon"
-                            disabled={busy}
-                            aria-label={showImport ? 'Back to defect list' : 'Import a case as JSON'}
-                            title={showImport ? 'Back to defect list' : 'Import a case as JSON'}
-                            onClick={() => { setShowImport((v) => !v); setError(null); }}
-                            className="mt-0.5 shrink-0"
-                        >
-                            {showImport ? <X className="h-4 w-4" /> : <Braces className="h-4 w-4" />}
-                        </Button>
+                    <div>
+                        <DialogTitle>Create 8D Report</DialogTitle>
+                        <DialogDescription>
+                            Import a defect case from another system as JSON, or pick a sample issue.
+                        </DialogDescription>
                     </div>
                 </DialogHeader>
 
                 <div className="min-w-0 space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-                    {/* ── Đường phụ: nhập JSON ─────────────────────────────── */}
-                    {showImport && (
-                        <>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    ref={fileRef}
-                                    type="file"
-                                    accept="application/json,.json"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) void handleFile(f);
-                                        e.target.value = '';
-                                    }}
-                                />
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() => fileRef.current?.click()}
-                                >
-                                    <Upload className="w-4 h-4" />
-                                    Upload file
-                                </Button>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            ref={fileRef}
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) void handleFile(f);
+                                e.target.value = '';
+                            }}
+                        />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => fileRef.current?.click()}
+                            className="border-primary text-primary hover:bg-primary/10"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Upload file
+                        </Button>
 
-                                {text && (
-                                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => setText('')}>
-                                        Clear
-                                    </Button>
-                                )}
+                        {text && (
+                            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setText('')}>
+                                Clear
+                            </Button>
+                        )}
 
-                                {check?.ok && (
-                                    <span className="text-xs text-success ml-auto">
-                                        Case {check.caseId} · {(text.length / 1024).toFixed(0)} KB
-                                    </span>
-                                )}
-                            </div>
+                        {check?.ok && (
+                            <span className="text-xs text-success ml-auto">
+                                Case {check.caseId} · {(text.length / 1024).toFixed(0)} KB
+                            </span>
+                        )}
+                    </div>
 
-                            {samples.length > 0 && (
-                                <div className="min-w-0 rounded-lg border border-dashed p-3">
-                                    <p className="text-xs font-medium">Or start from an incoming issue</p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                        Freshly logged cases — symptom and context only, no root cause, no
-                                        actions, no team. That is what the Copilot is for.
-                                    </p>
-                                    <div className="mt-2 space-y-1">
-                                        {samples.map((s) => (
-                                            <Button
-                                                key={s.file}
-                                                type="button"
-                                                variant="ghost"
-                                                disabled={busy}
-                                                onClick={() => void loadSample(s)}
-                                                className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
-                                            >
-                                                <span className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                                    {s.notificationId}
-                                                </span>
-                                                <span className="min-w-0 flex-1 text-left">
-                                                    <span className="block break-words text-xs font-normal text-foreground">{s.symptom}</span>
-                                                    <span className="block break-words text-xs font-normal text-muted-foreground">
-                                                        {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
-                                                        {s.workCenter && ` · ${s.workCenter}`}
-                                                        {s.material && ` · ${s.material}`}
-                                                    </span>
-                                                </span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <Textarea
-                                value={text}
-                                onChange={(e) => { setText(e.target.value); setError(null); }}
-                                disabled={busy}
-                                placeholder='{ "notificationId": "8D-10048412", "symptomShortText": "…", "inspections": [ … ] }'
-                                className="h-56 w-full min-w-0 max-w-full resize-none font-mono text-xs"
-                            />
-
-                            <p className="text-xs text-muted-foreground">
-                                Sample datasets live in <code className="font-mono">mock-data/</code> in the repository.
+                    {samples.length > 0 && (
+                        <div className="min-w-0 rounded-lg border border-dashed p-3">
+                            <p className="text-xs font-medium">Or start from an incoming issue</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                Freshly logged cases — symptom and context only, no root cause, no
+                                actions, no team. That is what the Copilot is for.
                             </p>
-                        </>
-                    )}
-
-                    {/* ── Đường chính, nhịp 1: chọn lỗi ────────────────────── */}
-                    {!showImport && !selected && (
-                        <div className="min-w-0 space-y-2">
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    disabled={busy || defects === null}
-                                    placeholder="Search by defect number, material, work centre or symptom"
-                                    className="h-8 pl-8 text-xs"
-                                />
-                            </div>
-
-                            {defects === null && (
-                                <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
-                                    <Spinner className="w-3.5 h-3.5" />
-                                    Loading defects…
-                                </div>
-                            )}
-
-                            {defects?.length === 0 && (
-                                <p className="py-6 text-xs text-muted-foreground">
-                                    No open defect is waiting for an 8D. Record one from the Defects screen first.
-                                </p>
-                            )}
-
-                            {visibleDefects?.length === 0 && defects && defects.length > 0 && (
-                                <p className="py-6 text-xs text-muted-foreground">
-                                    No open defect matches “{search.trim()}”.
-                                </p>
-                            )}
-
-                            {visibleDefects && visibleDefects.length > 0 && (
-                                <div className="min-w-0 max-h-[46vh] space-y-1 overflow-y-auto rounded-lg border p-1">
-                                    {visibleDefects.map((d) => {
-                                        const days = daysSince(d.foundDate);
-                                        return (
-                                            <Button
-                                                key={d.ID}
-                                                type="button"
-                                                variant="ghost"
-                                                disabled={busy}
-                                                onClick={() => selectDefect(d)}
-                                                className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
-                                            >
-                                                <span className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                                    {d.defectId}
-                                                </span>
-                                                <span className="min-w-0 flex-1 text-left">
-                                                    <span className="block break-words text-xs font-normal text-foreground">
-                                                        {d.symptomShortText || '(no symptom recorded)'}
-                                                    </span>
-                                                    <span className="block break-words text-xs font-normal text-muted-foreground">
-                                                        {[
-                                                            d.materialId && `${d.materialId}${d.materialDesc ? ` · ${d.materialDesc}` : ''}`,
-                                                            d.workCenterId,
-                                                            d.defectCode && `${d.defectCodeGroup ? `${d.defectCodeGroup}/` : ''}${d.defectCode}`,
-                                                            // "Severity", không phải "Defect Class" (S7).
-                                                            d.defectClass && `${d.defectClass} severity`,
-                                                            days != null && `${days}d ago`,
-                                                        ].filter(Boolean).join(' · ')}
-                                                    </span>
-                                                </span>
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ── Đường chính, nhịp 2: xem trước rồi mới cam kết ───── */}
-                    {!showImport && selected && preview && (
-                        <div className="min-w-0 space-y-3">
-                            <div className="flex min-w-0 items-start gap-2">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() => { setSelected(null); setDetail(null); setError(null); }}
-                                    className="h-7 shrink-0 px-2 text-xs"
-                                >
-                                    <ArrowLeft className="h-3.5 w-3.5" />
-                                    Change
-                                </Button>
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-mono text-xs text-muted-foreground">{preview.defectId}</p>
-                                    <p className="break-words text-sm font-semibold">
-                                        {preview.symptomShortText || '(no symptom recorded)'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/*
-                              * Xem trước CHỈ ĐỌC. Sửa ở đây sẽ tạo ra một bản ghi
-                              * lỗi và một payload 8D nói hai điều khác nhau — sửa
-                              * lỗi là việc của màn hình Defects.
-                              */}
-                            <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                        What this 8D will analyse
-                                    </p>
-                                    {detailLoading && <Spinner className="h-3 w-3" />}
-                                </div>
-
-                                <div className="mt-2 min-w-0 divide-y divide-border/60">
-                                    <div className="pb-1">
-                                        <PreviewRow label="Origin" value={preview.origin} />
-                                        <PreviewRow
-                                            label="Found"
-                                            value={preview.foundDate ? `${preview.foundDate}${age != null ? ` · ${age} days ago` : ''}` : null}
-                                        />
-                                        <PreviewRow label="Reference" value={preview.referenceNumber} />
-                                    </div>
-
-                                    <div className="py-1">
-                                        <PreviewRow
-                                            label="Material"
-                                            value={preview.materialId ? `${preview.materialId}${preview.materialDesc ? ` — ${preview.materialDesc}` : ''}` : null}
-                                        />
-                                        <PreviewRow label="Batch" value={preview.batchId} />
-                                        <PreviewRow label="Plant" value={preview.plant} />
-                                        <PreviewRow
-                                            label="Work centre"
-                                            value={preview.workCenterId ? `${preview.workCenterId}${preview.workCenterDesc ? ` — ${preview.workCenterDesc}` : ''}` : null}
-                                        />
-                                    </div>
-
-                                    <div className="py-1">
-                                        <PreviewRow
-                                            label="Defect code"
-                                            value={preview.defectCode ? `${preview.defectCodeGroup ? `${preview.defectCodeGroup} / ` : ''}${preview.defectCode}${preview.defectText ? ` — ${preview.defectText}` : ''}` : null}
-                                        />
-                                        {/* S7: một khái niệm, một tên. Nhãn là Severity. */}
-                                        <PreviewRow label="Severity" value={preview.defectClass} />
-                                        <PreviewRow
-                                            label="Quantity"
-                                            value={preview.defectQuantity != null ? `${preview.defectQuantity}${preview.defectQuantityUom ? ` ${preview.defectQuantityUom}` : ''}` : null}
-                                        />
-                                        <PreviewRow label="Inspection lot" value={preview.inspectionLotId} />
-                                    </div>
-
-                                    {/*
-                                      * Kết quả đo chỉ có ở bản chi tiết. Nói rõ
-                                      * "không có" thay vì bỏ trắng cả khối: một
-                                      * case không đo gì và một case chưa nạp xong
-                                      * trông giống hệt nhau nếu im lặng.
-                                      */}
-                                    {!detailLoading && (
-                                        <div className="pt-1">
-                                            <p className="py-0.5 text-[11px] text-muted-foreground">
-                                                {detail?.characteristics?.length
-                                                    ? `Inspection results (${detail.characteristics.length})`
-                                                    : 'No inspection results recorded.'}
-                                            </p>
-                                            {detail?.characteristics?.map((c, i) => (
-                                                <div key={c.ID ?? i} className="flex min-w-0 gap-2 py-0.5">
-                                                    <span className="w-28 shrink-0 truncate text-[11px] text-muted-foreground">
-                                                        {c.characteristic}
-                                                    </span>
-                                                    <span className="min-w-0 flex-1 break-words text-[11px] font-medium">
-                                                        {c.measuredValue || '—'}
-                                                        {c.specUom ? ` ${c.specUom}` : ''}
-                                                        {(c.specLowerLimit != null || c.specUpperLimit != null)
-                                                            && ` (spec ${c.specLowerLimit ?? '−∞'} … ${c.specUpperLimit ?? '+∞'})`}
-                                                        {c.valuation ? ` · ${c.valuation}` : ''}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/*
-                              * Hai ô duy nhất được nhập ở đây. Đội, phát biểu vấn
-                              * đề và biện pháp ngăn chặn CỐ Ý không có mặt: chúng
-                              * là nội dung của D1/D2/D3, và điền trước khi phân
-                              * tích chạy là đoán thay Copilot.
-                              */}
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="min-w-0 space-y-1.5">
-                                    <Label htmlFor="ad-due" className="text-xs font-semibold">
-                                        Required completion date
-                                    </Label>
-                                    <Input
-                                        id="ad-due"
-                                        type="date"
-                                        value={dueDate}
+                            <div className="mt-2 space-y-1">
+                                {samples.map((s) => (
+                                    <Button
+                                        key={s.file}
+                                        type="button"
+                                        variant="ghost"
                                         disabled={busy}
-                                        onChange={(e) => setDueDate(e.target.value)}
-                                        className="h-8 text-xs"
-                                    />
-                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
-                                        {preview.origin === ORIGIN_CUSTOMER
-                                            ? 'Defaults to the customer SLA on this complaint.'
-                                            : 'Optional. Internal defects carry no SLA, so nothing is filled in — set a date only if the team commits to one.'}
-                                    </p>
-                                </div>
-
-                                <div className="min-w-0 space-y-1.5">
-                                    <Label htmlFor="ad-coord" className="text-xs font-semibold">
-                                        Coordinator
-                                    </Label>
-                                    <ValueHelpInput
-                                        id="ad-coord"
-                                        value={coordinator}
-                                        onChange={setCoordinator}
-                                        // Ô này giữ TÊN, còn `entry.key` là mã đối
-                                        // tác `BP-xxx`. `commit` dán key vào trước,
-                                        // `onPick` chạy sau và ghi đè bằng tên —
-                                        // thứ mà cột `coordinator` thật sự lưu.
-                                        onPick={(entry) => setCoordinator(String(entry.partnerName ?? entry.text ?? entry.key ?? '').trim())}
-                                        entries={partnerVh.entries}
-                                        loading={partnerVh.loading}
-                                        // `quiet`: giá trị ở đây là tên người, còn
-                                        // danh mục so khớp theo mã đối tác — bật
-                                        // cảnh báo lên thì mọi tên hợp lệ đều bị
-                                        // gạch đỏ. Người điều phối cũng không tham
-                                        // gia chấm điểm tiền lệ, nên không có gì
-                                        // mất đi khi gõ một cái tên ngoài danh mục.
-                                        quiet
-                                        placeholder="e.g. Minh Dinh"
-                                        className={cn(busy && 'pointer-events-none opacity-50')}
-                                    />
-                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
-                                        Defaults to the coordinator on the defect. Both fields stay editable
-                                        after the 8D is created.
-                                    </p>
-                                </div>
+                                        onClick={() => void loadSample(s)}
+                                        className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                                    >
+                                        <span className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                            {s.notificationId}
+                                        </span>
+                                        <span className="min-w-0 flex-1 text-left">
+                                            <span className="block break-words text-xs font-normal text-foreground">{s.symptom}</span>
+                                            <span className="block break-words text-xs font-normal text-muted-foreground">
+                                                {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
+                                                {s.workCenter && ` · ${s.workCenter}`}
+                                                {s.material && ` · ${s.material}`}
+                                            </span>
+                                        </span>
+                                    </Button>
+                                ))}
                             </div>
                         </div>
                     )}
+
+                    <Textarea
+                        value={text}
+                        onChange={(e) => { setText(e.target.value); setError(null); }}
+                        disabled={busy}
+                        placeholder='{ "notificationId": "8D-10048412", "symptomShortText": "…", "inspections": [ … ] }'
+                        className="h-56 w-full min-w-0 max-w-full resize-none font-mono text-xs"
+                    />
+
+                    <p className="text-xs text-muted-foreground">
+                        Sample datasets live in <code className="font-mono">mock-data/</code> in the repository.
+                    </p>
 
                     {errorText && (
                         <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
@@ -730,22 +309,14 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     >
                         Cancel
                     </Button>
-                    {showImport ? (
-                        <Button onClick={submit} disabled={busy || !check?.ok}>
-                            {busy && <Spinner className="w-4 h-4" />}
-                            {busy ? 'Creating…' : 'Create & Analyze'}
-                        </Button>
-                    ) : (
-                        <Button
-                            onClick={() => selected && void startFromDefect(selected)}
-                            disabled={busy || !selected}
-                        >
-                            {busy && <Spinner className="w-4 h-4" />}
-                            {busy ? 'Creating…' : 'Create & Analyze'}
-                        </Button>
-                    )}
+                    <Button onClick={submit} disabled={busy || !check?.ok}>
+                        {busy && <Spinner className="w-4 h-4" />}
+                        {busy ? 'Creating…' : 'Create & Analyze'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+
+export default AnalyzeDialog;

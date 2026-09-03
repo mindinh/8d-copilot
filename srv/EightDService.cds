@@ -155,6 +155,12 @@ service EightDService {
      */
     action reanalyzeDownstream(reportID : String, fromStep : String) returns String;
 
+    /**
+     * Lấy trước số kế tiếp sẽ được cấp cho một đối tượng ('DEFECT', 'INSPLOT').
+     * Dùng để hiển thị mã tự động trên form trước khi lưu.
+     */
+    function peekNextNumber(object : String) returns String;
+
     // ── Kho case lịch sử ─────────────────────────────────────────────────────
 
     /**

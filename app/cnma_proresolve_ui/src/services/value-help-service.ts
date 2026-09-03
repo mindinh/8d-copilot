@@ -30,6 +30,14 @@ export const VALUE_HELP_IDS = {
     taskCode: 'TASK_CODE',
     /** Tầng cha của `taskCode`. */
     taskCodeGroup: 'TASK_CODE_GROUP',
+    /** Quản lý lô hàng (SAP MCHA/MCH1). Con của Material. */
+    batch: 'BATCH',
+    /** Danh mục phòng ban chịu trách nhiệm (SAP QMEL-ABTEI). */
+    department: 'DEPARTMENT',
+    /** Điều phối viên thông báo lỗi (SAP QMEL-PARNR). */
+    coordinator: 'COORDINATOR',
+    /** Đặc tính đo kiểm chuẩn (SAP QPMK Master Inspection Characteristics). */
+    characteristic: 'INSPECTION_CHARACTERISTIC',
 } as const;
 
 export type ValueHelpId = (typeof VALUE_HELP_IDS)[keyof typeof VALUE_HELP_IDS];
@@ -138,7 +146,13 @@ function dedupeByKey(entries: ValueHelpEntry[]): ValueHelpEntry[] {
 export function findEntry(entries: ValueHelpEntry[], value: string): ValueHelpEntry | null {
     const needle = value.trim().toUpperCase();
     if (!needle) return null;
-    return entries.find((e) => String(e.key ?? '').trim().toUpperCase() === needle) ?? null;
+    return (
+        entries.find(
+            (e) =>
+                String(e.key ?? '').trim().toUpperCase() === needle ||
+                String(e.text ?? '').trim().toUpperCase() === needle,
+        ) ?? null
+    );
 }
 
 /**

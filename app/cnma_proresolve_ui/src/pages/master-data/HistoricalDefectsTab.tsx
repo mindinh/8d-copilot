@@ -28,7 +28,6 @@ import {
     FileText,
     FolderKanban,
     Layers,
-    Lock,
     Microscope,
     Plus,
     RefreshCw,
@@ -40,6 +39,7 @@ import {
 import { toast } from 'sonner';
 import {
     historicalCasesService,
+    useNextNumber,
     type HistoricalCaseItem,
 } from '@/services/master-data-service';
 import { eightDService } from '@/services/eightd-service';
@@ -377,12 +377,21 @@ function CaseFormDialog({
     // Trống khi tạo mới: server cấp số lúc lưu. Có sẵn khi sửa — số đã cấp rồi.
     const [notificationId, setNotificationId] = useState(() => initialValues?.notificationId || '');
     const isEdit = Boolean(initialValues?.notificationId);
+    const nextDefectIdQuery = useNextNumber('DEFECT', open && !isEdit);
 
     useEffect(() => {
         if (open) {
-            setNotificationId(initialValues?.notificationId || '');
+            if (isEdit) {
+                setNotificationId(initialValues?.notificationId || '');
+            } else if (nextDefectIdQuery.data && !notificationId) {
+                setNotificationId(nextDefectIdQuery.data);
+            }
         }
-    }, [open, initialValues]);
+    }, [open, initialValues, isEdit, nextDefectIdQuery.data, notificationId]);
+
+    const displayedNotificationId = isEdit
+        ? notificationId
+        : (notificationId || nextDefectIdQuery.data || 'Allocating ID...');
     const [origin, setOrigin] = useState(initialValues?.origin || parsedPayload?.origin || 'Q3 - Internal Defect');
     const [sapStatus, setSapStatus] = useState(initialValues?.sapStatus || parsedPayload?.status || 'Closed');
     const [foundDate, setFoundDate] = useState(initialValues?.foundDate || parsedPayload?.foundDate || '');
@@ -541,11 +550,9 @@ function CaseFormDialog({
             } : parsedPayload?.costCopq,
         };
 
+        const finalNotifId = isEdit ? notificationId.trim() : (notificationId.trim() || nextDefectIdQuery.data?.trim());
         onSubmit({
-            // Bỏ khoá khỏi payload khi trống thay vì gửi '': chuỗi rỗng cũng là một
-            // giá trị, và server sẽ tôn trọng nó thay vì cấp số. Server cũng vá lại
-            // `sourcePayload.notificationId` sau khi cấp, nên chỗ này khỏi đoán.
-            ...(notificationId.trim() ? { notificationId: notificationId.trim() } : {}),
+            ...(finalNotifId ? { notificationId: finalNotifId } : {}),
             origin,
             symptomShortText: symptomShortText.trim(),
             materialId: materialId.trim(),
@@ -593,34 +600,15 @@ function CaseFormDialog({
                                 <div className="space-y-1">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs font-semibold">Notification ID (QMNUM)</Label>
-                                        {isEdit ? (
-                                            <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
-                                                <Lock className="w-3 h-3 text-muted-foreground" />
-                                                Assigned
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10.5px] font-medium text-muted-foreground">
-                                                Optional — external number
-                                            </span>
-                                        )}
+                                        <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                            {isEdit ? 'Assigned' : 'System Assigned'}
+                                        </Badge>
                                     </div>
-                                    {/*
-                                      Sửa thì khoá: số đã cấp, và mọi trích dẫn tiền lệ
-                                      đều trỏ bằng nó. Tạo mới thì để trống — số có lúc
-                                      lưu, không phải lúc mở form.
-                                    */}
                                     <Input
-                                        value={notificationId}
-                                        onChange={(e) => setNotificationId(e.target.value)}
-                                        disabled={isEdit}
-                                        readOnly={isEdit}
-                                        placeholder="Assigned on save"
-                                        className={cn(
-                                            'font-mono text-xs h-8 font-semibold',
-                                            isEdit
-                                                ? 'bg-muted/60 text-muted-foreground cursor-not-allowed select-none'
-                                                : 'bg-background',
-                                        )}
+                                        value={displayedNotificationId}
+                                        disabled
+                                        readOnly
+                                        className="font-mono text-xs h-8 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
                                     />
                                 </div>
                                 <div className="space-y-1">

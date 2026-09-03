@@ -64,7 +64,7 @@ import { DISCIPLINE_CODES, STEP_CODES, PipelineError, type CaseContext, type Dis
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
 import { tokenizeDefectText } from '../domain/eightd/precedent/scoring';
-import { allocateNumber, numericPart, raiseNumberRange } from '../domain/numberRange';
+import { allocateNumber, numericPart, raiseNumberRange, peekNextNumber } from '../domain/numberRange';
 import { buildDefectPayload } from '../domain/defectPayload';
 
 const LOG = cds.log('eightd-service');
@@ -547,6 +547,38 @@ export function registerEightDHandlers(srv: any): void {
         if (!cases.length) return req.error(400, 'payload is empty — no cases to seed.');
 
         return JSON.stringify(await seedLibrary(cases));
+    });
+
+    // ── peekNextNumber ───────────────────────────────────────────────────────
+    //
+    // Lấy trước số kế tiếp sẽ được cấp cho DEFECT hoặc INSPLOT để hiển thị trên form.
+    srv.on('peekNextNumber', async (req: any) => {
+        const object = String(req.data?.object ?? '').trim().toUpperCase();
+        const tx: any = cds.tx(req);
+
+        if (object === 'DEFECT') {
+            return await peekNextNumber(tx, 'DEFECT', async (code) => {
+                const hit1 = await tx.run(
+                    SELECT.one.from('cnma.proresolve.Reports').columns('ID').where({ notificationId: code }),
+                );
+                if (hit1) return true;
+                const hit2 = await tx.run(
+                    SELECT.one.from('cnma.proresolve.Defects').columns('ID').where({ defectId: code }),
+                );
+                return !!hit2;
+            });
+        }
+
+        if (object === 'INSPLOT') {
+            return await peekNextNumber(tx, 'INSPLOT', async (code) => {
+                const hit = await tx.run(
+                    SELECT.one.from('cnma.proresolve.InspectionLots').columns('ID').where({ lotId: code }),
+                );
+                return !!hit;
+            });
+        }
+
+        return await peekNextNumber(tx, object);
     });
 
     // ── reviewDiscipline ─────────────────────────────────────────────────────

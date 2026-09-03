@@ -179,9 +179,18 @@ async function startupTasks(): Promise<void> {
         logger.error('Không dọn được report kẹt lúc boot:', e?.message ?? e);
     }
 
+    // F4 (Value Help) cho form ghi nhận lỗi và Master Data Catalogues.
+    // Chạy ở cả local dev để các F4 mới và danh mục catalogue luôn được đồng bộ ngay lập tức.
+    // Reconcile triggered for inspection characteristics.
+    try {
+        await seedValueHelps();
+    } catch (e: any) {
+        logger.error('Không seed được định nghĩa F4:', e?.message ?? e);
+    }
+
     const isLocalDev = cds.env.profiles?.includes('development');
     if (isLocalDev && process.env.CNMA_STARTUP_SEED !== '1') {
-        logger.info('Local dev — bỏ qua seed khởi động (ép chạy: CNMA_STARTUP_SEED=1).');
+        logger.info('Local dev — bỏ qua seed nặng (kho case & vector) (ép chạy: CNMA_STARTUP_SEED=1).');
         return;
     }
 
