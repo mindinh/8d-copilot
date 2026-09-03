@@ -27,6 +27,7 @@ import {
 import { explainScore, scoreCase, type ScorableCase } from '../domain/eightd/precedent/scoring';
 import { buildSourceFieldCatalog, parseAttributes } from '../domain/eightd/precedent/sourceFields';
 import { HISTORICAL_CASES } from '../domain/eightd/precedent/precedentRepository';
+import { getGraphSettings } from '../domain/eightd/graph/settings';
 
 const LOG = cds.log('ai-admin');
 
@@ -310,8 +311,65 @@ async function resetRetrievalConfig(scope = 'all'): Promise<string> {
   return JSON.stringify({ reset: wanted, profiles, bindings });
 }
 
+/**
+ * Các entity CHỈ có tác dụng khi engine truy hồi là `scoring`.
+ *
+ * Engine graph không đọc một dòng nào trong số này, và cũng không gọi embedding.
+ */
+const SCORING_ONLY_ENTITIES = [
+  'SimilarityCriteria', 'RetrievalSettings',
+  'RetrievalProfiles', 'ProfileCriteria', 'StepRetrievalBindings',
+] as const;
+
+/** Các entity chỉ có tác dụng khi engine là `graph`. Quan hệ ngược lại hoàn toàn. */
+const GRAPH_ONLY_ENTITIES = ['GraphStepParams'] as const;
+
+/**
+ * Nói cho admin biết khi thứ họ vừa lưu KHÔNG có tác dụng ở engine đang chạy.
+ *
+ * ── Vì sao cảnh báo lúc LƯU chứ không phải lúc mở màn hình ──
+ * Lúc mở màn hình, người ta chưa có ý định gì. Khoảnh khắc hiểu lầm xảy ra là
+ * khoảnh khắc bấm lưu và tin rằng mình vừa đổi được hành vi của hệ thống. Không
+ * có dòng này thì màn hình báo "đã lưu", dữ liệu đúng là đã lưu thật, mà kết quả
+ * phân tích không đổi một chút nào — không lỗi, không log, không manh mối.
+ *
+ * Dùng `req.info` chứ không `req.reject`: cấu hình vẫn hợp lệ và vẫn nên được
+ * lưu. Người ta có thể đang chuẩn bị trước cho lần đổi engine. Cái sai duy nhất
+ * là tưởng nó đang chạy.
+ */
+async function warnIfEngineMismatch(req: any): Promise<void> {
+  const entity = String(req.target?.name ?? '').split('.').pop() ?? '';
+  const scoringOnly = (SCORING_ONLY_ENTITIES as readonly string[]).includes(entity);
+  const graphOnly = (GRAPH_ONLY_ENTITIES as readonly string[]).includes(entity);
+  if (!scoringOnly && !graphOnly) return;
+
+  const { engine } = await getGraphSettings();
+
+  if (scoringOnly && engine === 'graph') {
+    req.info(
+      `Đã lưu, nhưng engine truy hồi đang là "graph" nên ${entity} KHÔNG có tác dụng: `
+      + 'engine graph không đọc trọng số chấm điểm và không dùng embedding. '
+      + 'Chỉnh trọng số của graph ở GraphStepParams, hoặc đổi '
+      + 'GraphRetrievalSettings.engine về "scoring".',
+    );
+  }
+  if (graphOnly && engine !== 'graph') {
+    req.info(
+      `Đã lưu, nhưng engine truy hồi đang là "${engine}" nên ${entity} chưa có tác dụng. `
+      + 'Đặt GraphRetrievalSettings.engine = "graph" để dùng.',
+    );
+  }
+}
+
 /** Gắn handler vào service. Gọi từ hook `serving` trong srv/server.ts. */
 export function registerAiAdminHandlers(srv: any): void {
+  // Sau khi lưu, không phải trước: cấu hình vẫn hợp lệ và vẫn được lưu bình thường.
+  for (const entity of [...SCORING_ONLY_ENTITIES, ...GRAPH_ONLY_ENTITIES]) {
+    srv.after(['CREATE', 'UPDATE', 'DELETE'], entity, async (_: unknown, req: any) => {
+      await warnIfEngineMismatch(req).catch(() => { /* cảnh báo hỏng không được làm hỏng lưu */ });
+    });
+  }
+
   srv.on('syncModels', async () => syncModels());
   srv.on('getAvailableModels', async (req: any) => getAvailableModels(req.data?.activity));
 

@@ -94,6 +94,43 @@ service AiAdminService {
     entity RetrievalSettings as projection on ns.RetrievalSettings;
 
     /**
+     * Engine truy hồi đang chạy. Đúng một dòng, khoá 'GLOBAL'.
+     *
+     * ── Vì sao entity này phải nằm CẠNH các entity chấm điểm ở trên ──
+     * Khi `engine = 'graph'`, toàn bộ `SimilarityCriteria`, `RetrievalSettings`,
+     * `RetrievalProfiles`, `ProfileCriteria` và `StepRetrievalBindings` KHÔNG còn
+     * tác dụng gì: engine graph không đọc một dòng nào trong số đó, và cũng không
+     * gọi embedding. Admin vẫn sửa được, vẫn thấy "đã lưu", và kết quả không đổi.
+     *
+     * Đó là kiểu sai tệ nhất mà một màn hình cấu hình có thể mắc, nên màn hình
+     * PHẢI đọc entity này và nói ra điều đó. Đặt nó ở đây, ngay giữa những entity
+     * mà nó vô hiệu hoá, để không ai thêm màn hình mới mà quên mất.
+     */
+    @restrict: [
+        { grant: 'READ',   to: ['admin', 'Admin'] },
+        { grant: 'UPDATE', to: ['admin', 'Admin'] }
+    ]
+    entity GraphRetrievalSettings as projection on ns.GraphRetrievalSettings;
+
+    /**
+     * Trọng số graph theo từng bước D. Tám dòng, D1…D8.
+     *
+     * Chỉ có tác dụng khi `GraphRetrievalSettings.engine = 'graph'` — quan hệ
+     * ngược lại chính xác với các entity chấm điểm ở trên. Xoá một dòng ⇒ bước đó
+     * rơi về hằng số trong `graph/stepProfiles.ts`, không phải mất cấu hình.
+     *
+     * Ràng buộc mà UI nên chặn tại chỗ nhập: `wKeywords` phải NHỎ HƠN `minScore`.
+     * Vi phạm thì backend từ chối cả dòng và dùng mặc định (xem
+     * `normalizeStepParams`), vì để lọt nghĩa là một từ khoá chung tự nó đủ điểm
+     * làm tiền lệ — đúng lỗi R3 mà cả đợt này sinh ra để đóng.
+     */
+    @restrict: [
+        { grant: 'READ',   to: ['admin', 'Admin'] },
+        { grant: 'UPDATE', to: ['admin', 'Admin'] }
+    ]
+    entity GraphStepParams as projection on ns.GraphStepParams;
+
+    /**
      * Prompt của từng bước D. Để trống `systemPrompt`/`userTemplate` nghĩa là
      * dùng hằng số trong `srv/src/domain/eightd/prompts.ts`.
      */
