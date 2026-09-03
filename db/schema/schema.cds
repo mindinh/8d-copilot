@@ -27,6 +27,9 @@ using from './case-library';
 // ── Cấu hình chấm điểm tương đồng + prompt từng bước D ───────────────────────
 using from './retrieval-config';
 
+// ── Công tắc engine truy hồi (chấm điểm ⟷ graph) ────────────────────────────
+using from './graph-config';
+
 // ── Lịch sử kiểm tra lô & Sổ FMEA ──────────────────────────────────────────
 using from './inspection-lots';
 

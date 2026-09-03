@@ -40,9 +40,9 @@ import {
 import { getDisciplineGuide, getStepPromptRuntimeConfig } from './precedent/configRepository';
 import {
     emptyPerStepPrecedents,
-    findPrecedentsByStep,
     type PerStepPrecedents,
 } from './precedent/findPrecedents';
+import { findPrecedents } from './graph/engine';
 import { STEP_CODES } from './precedent/profileRepository';
 import { planStepWaves } from './stepGraph';
 import { callAndParse, isTruncated } from './jsonExtract';
@@ -1068,7 +1068,7 @@ export async function analyze(
     ] = await Promise.all([
         phase('parse', () => enrichContext(raw, context)),
         phase('diagnose', () => diagnoseIndependently(context)),
-        phase('precedents', () => findPrecedentsByStep(context, raw)).catch((e: any) => {
+        phase('precedents', () => findPrecedents(context, raw)).catch((e: any) => {
             LOG.warn(`Tìm tiền lệ thất bại, viết báo cáo không có tiền lệ: ${e.message}`);
             return emptyPerStepPrecedents();
         }),
@@ -1165,7 +1165,10 @@ export async function analyzeDownstreamReport(
     ] = await Promise.all([
         enrichContext(raw, context),
         diagnoseIndependently(context),
-        findPrecedentsByStep(context, raw).catch(() => emptyPerStepPrecedents()),
+        // `findPrecedents` chọn engine: graph hay chấm điểm. Mặc định là chấm
+        // điểm, nên tới khi có người bật `GraphRetrievalSettings.engine = 'graph'`
+        // thì đây vẫn là đúng lời gọi cũ đi qua thêm một lớp mỏng.
+        findPrecedents(context, raw).catch(() => emptyPerStepPrecedents()),
     ]);
 
     const {

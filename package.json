@@ -38,7 +38,8 @@
     "cf:sandbox": "cf target -o proconarum-sandbox-system -s Training",
     "cf:target": "cf target",
     "cf:logs": "cf logs cnma_proresolve_srv",
-    "cf:logs:last": "cf logs cnma_proresolve_srv --recent"
+    "cf:logs:last": "cf logs cnma_proresolve_srv --recent",
+    "shadow:graph": "cds bind --exec --profile graph -- node --import ./node_modules/tsx/dist/loader.mjs scripts/shadow-retrieval.mjs"
   },
   "dependencies": {
     "@cnma/cap-core": "^1.0.0",
@@ -105,7 +106,9 @@
       "[local]": {
         "db": {
           "kind": "sqlite",
-          "credentials": { "url": "db.sqlite" }
+          "credentials": {
+            "url": "db.sqlite"
+          }
         }
       },
       "auth": {
