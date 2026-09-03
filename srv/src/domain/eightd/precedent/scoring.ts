@@ -140,8 +140,8 @@ export function cosineSimilarity(
     return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-/** Điểm ngữ nghĩa làm tròn 1 chữ số — đủ để đối chiếu tay, đủ để xếp hạng. */
-function round1(n: number): number {
+/** Điểm liên tục (cosine, re-rank) làm tròn 1 chữ số — đủ để đối chiếu tay, đủ để xếp hạng. */
+export function round1(n: number): number {
     return Math.round(n * 10) / 10;
 }
 
@@ -186,13 +186,23 @@ export interface ScorableCase {
 export interface Criterion {
     criterionKey: string;
     label: string;
+    /**
+     * Mô tả tiêu chí — với `matchType = 'rerank'` đây CHÍNH LÀ instruction gửi
+     * cho model xếp hạng lại (vd "Rank by same physical failure mechanism").
+     * Phải mang qua từ DB tới runtime, nếu không tầng re-rank chạy với câu hỏi
+     * rỗng.
+     */
+    description?: string | null;
     sourceField: string;
     matchType: string;
     weight: number;
     fallbackField?: string | null;
     fallbackMatch?: string | null;
     fallbackWeight?: number | null;
-    /** Sàn cosine cho tiêu chí ngữ nghĩa. Dưới sàn ⇒ 0 điểm. */
+    /**
+     * Sàn cosine cho tiêu chí ngữ nghĩa. Dưới sàn ⇒ 0 điểm.
+     * Với `rerank`: sàn trên thang 0-1 của điểm model (score/100).
+     */
     minSimilarity?: number | null;
     enabled: boolean;
     sortOrder?: number;
@@ -364,6 +374,24 @@ export function scoreCase(
                     maxPoints: weight,
                 });
             }
+            continue;
+        }
+
+        // ── Tiêu chí re-rank ─────────────────────────────────────────────────
+        // Tầng 1 KHÔNG chấm được tiêu chí này — nó cần một lượt model đọc cả
+        // hai case (xem `reranker.ts`). Ở đây chỉ giữ chỗ: một dòng 'none' với
+        // 0 điểm, và trọng số VẪN vào trần (tiêu chí bật thì trần gồm nó — luật
+        // chung). Tầng 2 trong `scoreWithProfile` sẽ thay dòng này bằng điểm
+        // thật; re-rank hỏng thì dòng 'none' ở lại và nói rõ vì sao.
+        if ((c.matchType || 'exact') === 'rerank') {
+            breakdown.push({
+                criterionKey: c.criterionKey,
+                label: c.label,
+                level: 'none',
+                matchedOn: null,
+                points: 0,
+                maxPoints: weight,
+            });
             continue;
         }
 

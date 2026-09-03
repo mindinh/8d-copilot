@@ -44,6 +44,7 @@ import {
 } from './precedentRepository';
 import { buildQueryText } from './searchText';
 import { embed, currentEmbeddingModel } from '../../../core/ai/llmClient';
+import { applyRerank, rerankCandidates } from './reranker';
 import type { CaseContext } from '../types';
 
 const LOG = cds.log('precedent');
@@ -171,6 +172,8 @@ async function scoreWithProfile(
     libraryCount: number,
     semanticAvailable: boolean,
     cache: Map<string, CandidateRow[]>,
+    /** Văn bản query cho tầng re-rank — null khi người gọi không có context. */
+    rerankQueryText: string | null = null,
 ): Promise<PrecedentResult> {
     const settings = {
         minScore: profile.minScore,
@@ -204,16 +207,63 @@ async function scoreWithProfile(
     const candidates = (await fetchCandidates(current, profile.criteria, settings, cache))
         .map(toCandidate);
 
-    const scored = candidates
-        .map((row) => ({ row, result: scoreCase(current, row, profile.criteria) }))
+    const byRank = (
+        a: { row: CandidateRow; result: ReturnType<typeof scoreCase> },
+        b: { row: CandidateRow; result: ReturnType<typeof scoreCase> },
+    ) =>
+        b.result.score - a.result.score
+        // Điểm bằng nhau thì lấy case đóng gần đây nhất: bài học mới phản ánh
+        // đúng dây chuyền hiện tại hơn. Chốt bằng mã case để kết quả tất định.
+        || String(b.row.completionDate ?? '').localeCompare(String(a.row.completionDate ?? ''))
+        || a.row.notificationId.localeCompare(b.row.notificationId);
+
+    let ranked = candidates.map((row) => ({ row, result: scoreCase(current, row, profile.criteria) }));
+
+    // ── Tầng 2: re-rank (chỉ khi profile bật tiêu chí `rerank`) ──────────────
+    // Pool giữ những case CÓ KHẢ NĂNG đạt ngưỡng sau re-rank (điểm tầng 1 +
+    // trọng số re-rank ≥ minScore) — lọc thẳng theo minScore ở đây sẽ loại oan
+    // đúng những case tầng 2 sinh ra để cứu. Ngưỡng thật áp SAU khi có điểm cuối.
+    const rerankCriterion = profile.criteria.find(
+        (c) => c.enabled && (c.matchType || 'exact') === 'rerank',
+    );
+    if (rerankCriterion) {
+        const rerankWeight = Number(rerankCriterion.weight) || 0;
+        const poolSize = Math.min(20, Math.max(settings.topN * 4, 12));
+        const pool = ranked
+            .filter((x) => x.result.score + rerankWeight >= settings.minScore)
+            .sort(byRank)
+            .slice(0, poolSize);
+
+        let verdicts: Awaited<ReturnType<typeof rerankCandidates>> | null = null;
+        if (rerankQueryText && pool.length) {
+            try {
+                verdicts = await rerankCandidates(
+                    rerankCriterion.description?.trim()
+                        || 'Rank candidates by overall relevance to the open case.',
+                    rerankQueryText,
+                    pool.map(({ row }) => ({
+                        notificationId: row.notificationId,
+                        symptomShortText: row.symptomShortText,
+                        searchText: row.searchText,
+                    })),
+                );
+            } catch (e: any) {
+                // Re-rank hỏng thì xếp hạng tầng 1 vẫn đứng — cùng triết lý với
+                // embedding hỏng: không đổi cả tính năng lấy một sự cố tạm thời.
+                LOG.warn(`Re-rank hỏng (${e.message}) — giữ xếp hạng tầng 1.`);
+            }
+        }
+        applyRerank(
+            pool.map(({ row, result }) => ({ notificationId: row.notificationId, result })),
+            rerankCriterion,
+            verdicts,
+        );
+        ranked = pool;
+    }
+
+    const scored = ranked
         .filter((x) => x.result.score >= settings.minScore)
-        .sort((a, b) =>
-            b.result.score - a.result.score
-            // Điểm bằng nhau thì lấy case đóng gần đây nhất: bài học mới phản ánh
-            // đúng dây chuyền hiện tại hơn. Chốt bằng mã case để kết quả tất định.
-            || String(b.row.completionDate ?? '').localeCompare(String(a.row.completionDate ?? ''))
-            || a.row.notificationId.localeCompare(b.row.notificationId),
-        )
+        .sort(byRank)
         .slice(0, settings.topN);
 
     if (!scored.length) {
@@ -300,7 +350,7 @@ export async function findPrecedents(
 
     const libraryCount = await countLibrary();
     const result = await scoreWithProfile(
-        current, profile, libraryCount, semanticAvailable, new Map(),
+        current, profile, libraryCount, semanticAvailable, new Map(), buildQueryText(context),
     );
 
     LOG.info(
@@ -434,11 +484,12 @@ export async function findPrecedentsByStep(
     // mỗi tenant, nên chạy song song không nhanh hơn — nó chỉ làm các câu truy vấn
     // xếp hàng bên trong transaction của nhau, và làm cache mất tác dụng vì hai
     // lượt cùng miss trước khi lượt nào kịp ghi.
+    const queryText = buildQueryText(context);
     const resultByKey = new Map<string, PrecedentResult>();
     for (const profile of usedProfiles) {
         resultByKey.set(
             profile.profileKey,
-            await scoreWithProfile(current, profile, libraryCount, semanticAvailable, cache),
+            await scoreWithProfile(current, profile, libraryCount, semanticAvailable, cache, queryText),
         );
     }
 

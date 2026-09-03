@@ -121,6 +121,87 @@ export const DEFAULT_RETRIEVAL_SETTINGS = Object.freeze({
 });
 
 /**
+ * Hai profile re-rank cho D4/D5, seed idempotent lúc khởi động.
+ *
+ * ── Vì sao phải TÁCH profile thay vì thêm tiêu chí vào `default` ──
+ * Cả tám bước đang bind chung `default`. Instruction re-rank của D4 ("cùng cơ
+ * chế hỏng") khác hẳn D5 ("action có gỡ được nguyên nhân không") — nhét vào
+ * `default` là bắt cả tám bước hỏi chung một câu, sai cho cả tám. Mỗi bước một
+ * profile riêng thì mỗi bước hỏi đúng câu của nó, và bật/tắt độc lập.
+ *
+ * ── Vì sao `enabled: false` ──
+ * Re-rank tốn một lượt model mỗi lần tìm và chưa có số đo trên kho thật. Seed
+ * tắt để admin THẤY nó tồn tại trên UI, đọc instruction hiểu nó làm gì, và tự
+ * quyết bật sau khi chạy eval — không âm thầm đổi hành vi ngay khi deploy.
+ *
+ * `description` chính là instruction gửi cho model (xem `reranker.ts`) — admin
+ * sửa được trên UI, không cần deploy lại.
+ */
+export const RERANK_PROFILE_SPECS: readonly {
+    profileKey: string;
+    label: string;
+    profileDescription: string;
+    stepCode: 'D4' | 'D5';
+    criterion: Criterion & { description: string; sourceTable: string };
+}[] = Object.freeze([
+    Object.freeze({
+        profileKey: 'diagnosis',
+        label: 'Diagnosis (D4)',
+        profileDescription:
+            'Cloned from Default for D4. Adds an optional LLM re-rank pass tuned to '
+            + '"same failure mechanism" — enable it on the rerank criterion after evaluating.',
+        stepCode: 'D4' as const,
+        criterion: Object.freeze({
+            criterionKey: 'rerank',
+            label: 'Mechanism re-rank',
+            description:
+                'Rank by same physical failure mechanism: judge whether the two cases fail '
+                + 'the same way for the same physical reason. Ignore superficial matches of '
+                + 'defect codes, part numbers or plant names.',
+            sourceTable: 'LLM re-rank (stage 2)',
+            sourceField: '',
+            matchType: 'rerank',
+            weight: 3,
+            fallbackField: null,
+            fallbackMatch: null,
+            fallbackWeight: null,
+            /** Sàn trên thang 0-1 của điểm model: dưới 50/100 coi như không liên quan. */
+            minSimilarity: 0.5,
+            enabled: false,
+            sortOrder: 50,
+        }),
+    }),
+    Object.freeze({
+        profileKey: 'corrective',
+        label: 'Corrective (D5)',
+        profileDescription:
+            'Cloned from Default for D5. Adds an optional LLM re-rank pass tuned to '
+            + '"does the candidate’s corrective action address this root cause" — '
+            + 'enable it on the rerank criterion after evaluating.',
+        stepCode: 'D5' as const,
+        criterion: Object.freeze({
+            criterionKey: 'rerank',
+            label: 'Action-fit re-rank',
+            description:
+                'Rank by whether the candidate case’s corrective action would remove the '
+                + 'root cause described in the query case. A case with the same defect but an '
+                + 'unrelated cause ranks low; a case with a different defect whose action '
+                + 'removes the same cause ranks high.',
+            sourceTable: 'LLM re-rank (stage 2)',
+            sourceField: '',
+            matchType: 'rerank',
+            weight: 3,
+            fallbackField: null,
+            fallbackMatch: null,
+            fallbackWeight: null,
+            minSimilarity: 0.5,
+            enabled: false,
+            sortOrder: 50,
+        }),
+    }),
+]);
+
+/**
  * Tám dòng hướng dẫn discipline, seed bằng CHÍNH nội dung đang chạy.
  *
  * ── Vì sao seed nội dung thật thay vì để trống ──

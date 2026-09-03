@@ -15,6 +15,8 @@ export interface CandidateRow extends ScorableCase {
     notificationId: string;
     /** Payload đã làm phẳng, dạng chuỗi. `findPrecedents` parse thành `attributes`. */
     attributesJson: string | null;
+    /** Đoạn văn đã ghép lúc nạp kho — tầng re-rank đưa nó cho model đọc. */
+    searchText: string | null;
     origin: string | null;
     symptomShortText: string | null;
     sapStatus: string | null;
@@ -97,6 +99,10 @@ function nonFilterableReach(criteria: readonly Criterion[]): number {
         .filter((c) => c.enabled)
         .reduce((sum, c) => {
             if ((c.matchType || 'exact') === 'cosine') return sum + (Number(c.weight) || 0);
+            // Re-rank chấm bằng model ở tầng 2 — WHERE không nhìn thấy được, y
+            // như cosine. Bỏ nhánh này thì bộ lọc SQL loại oan đúng những case
+            // chỉ thắng nhờ re-rank.
+            if ((c.matchType || 'exact') === 'rerank') return sum + (Number(c.weight) || 0);
             if (c.fallbackMatch === 'keyword') return sum + (Number(c.fallbackWeight) || 0);
             if (c.sourceField && !SQL_FILTERABLE_COLUMNS.has(c.sourceField)) return sum + (Number(c.weight) || 0);
             return sum;
