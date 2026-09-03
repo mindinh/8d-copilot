@@ -48,6 +48,13 @@ export interface RetrievalSettings {
     closedOnly: boolean;
 }
 
+export interface GraphRetrievalSettings {
+    ID: string;
+    engine: 'graph' | 'scoring';
+    maxKeywords: number;
+    fallbackEnabled: boolean;
+}
+
 export interface StepPrompt {
     stepCode: string;
     label: string;
@@ -196,6 +203,15 @@ export async function getSettings(): Promise<RetrievalSettings | null> {
 
 export async function updateSettings(patch: Partial<RetrievalSettings>): Promise<void> {
     await axiosInstance.patch(`${AI}/RetrievalSettings(ID='GLOBAL')`, patch);
+}
+
+export async function getGraphRetrievalSettings(): Promise<GraphRetrievalSettings | null> {
+    const res = await axiosInstance.get(`${AI}/GraphRetrievalSettings`);
+    return unwrapList<GraphRetrievalSettings>(res.data)[0] ?? null;
+}
+
+export async function updateGraphRetrievalSettings(patch: Partial<GraphRetrievalSettings>): Promise<void> {
+    await axiosInstance.patch(`${AI}/GraphRetrievalSettings(ID='GLOBAL')`, patch);
 }
 
 export async function previewScore(

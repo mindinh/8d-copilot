@@ -9,6 +9,7 @@ import { aiModelApi } from '@/services/ai-model-service';
 import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { GeneralSettingsTab } from '../ai-settings/general-settings-tab';
 import { DisciplineSection } from './discipline-section';
+import { RetrievalEngineSection } from './retrieval-engine-section';
 
 const DISCIPLINES = [
     { code: 'D1', title: 'Establish Team', engine: 'Rules + Precedents' },
@@ -69,7 +70,7 @@ export function WorkflowPage() {
                         { n: '1', label: 'Inspection result', hint: 'Recorded in Master Data', ai: false },
                         { n: '2', label: 'Defect recorded', hint: 'Master Data → Defect Records. No AI.', ai: false },
                         { n: '3', label: '8D opened', hint: 'A separate, deliberate decision — one 8D per defect, at most', ai: false },
-                        { n: '4', label: 'Precedents retrieved', hint: 'Embeddings + scoring', ai: true },
+                        { n: '4', label: 'Precedents retrieved', hint: 'Knowledge Graph / Scoring', ai: true },
                         { n: '5', label: 'D1 – D8 drafted', hint: 'Configured below', ai: true },
                         { n: '6', label: 'Case closed', hint: 'Joins the Closed Case Library', ai: false },
                     ].map((s, i, arr) => (
@@ -100,7 +101,7 @@ export function WorkflowPage() {
 
             {/* ── Top Level Category Switcher (Ordered from High-Level to Detailed) ── */}
             <div className="flex flex-wrap items-center gap-2 p-1.5 bg-muted/60 rounded-xl border">
-                {/* Tab 1: Global AI Model Routing */}
+                {/* Tab 1: Global AI & Retrieval Engine */}
                 <Button
                     variant={activeTab === 'global' ? 'default' : 'ghost'}
                     size="sm"
@@ -108,7 +109,7 @@ export function WorkflowPage() {
                     className="text-xs rounded-lg font-medium"
                 >
                     <Cpu className="h-3.5 w-3.5 mr-1.5" />
-                    Global AI Model Routing
+                    Global AI & Retrieval Engine
                 </Button>
 
                 {/* Tab 2: 8D Disciplines Configuration (D1 - D8) */}
@@ -134,17 +135,22 @@ export function WorkflowPage() {
                 </Button>
             </div>
 
-            {/* ─── TAB 1: GLOBAL AI MODEL ROUTING ─── */}
+            {/* ─── TAB 1: GLOBAL AI & RETRIEVAL ENGINE ─── */}
             {activeTab === 'global' && (
-                <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
-                    <div>
-                        <h2 className="text-lg font-semibold tracking-tight">Global AI Activity Bindings</h2>
-                        <p className="text-xs text-muted-foreground">
-                            Configure which AI models handle data parsing, defect analysis, and quality reviews across all 8D steps.
-                        </p>
-                    </div>
+                <div className="space-y-6">
+                    {/* Precedent Retrieval Engine (HANA Graph vs Vector Search) */}
+                    <RetrievalEngineSection />
 
-                    <GeneralSettingsTab />
+                    <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+                        <div>
+                            <h2 className="text-lg font-semibold tracking-tight">Global AI Activity Bindings</h2>
+                            <p className="text-xs text-muted-foreground">
+                                Configure which AI models handle data parsing, defect analysis, and quality reviews across all 8D steps.
+                            </p>
+                        </div>
+
+                        <GeneralSettingsTab />
+                    </div>
                 </div>
             )}
 

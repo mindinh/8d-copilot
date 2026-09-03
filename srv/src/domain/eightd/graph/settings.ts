@@ -33,7 +33,7 @@ export interface GraphSettings {
 }
 
 export const DEFAULT_SETTINGS: GraphSettings = Object.freeze({
-    engine: 'scoring',
+    engine: 'graph',
     maxKeywords: 30,
     fallbackEnabled: true,
 });
@@ -59,9 +59,8 @@ export function normalizeSettings(row: unknown): GraphSettings {
     const maxKeywords = Number(r.maxKeywords);
 
     return {
-        // Giá trị lạ ⇒ `scoring`. Một chuỗi gõ sai không được phép bật engine mới,
-        // và cũng không được phép làm hỏng lượt phân tích.
-        engine: engine === 'graph' ? 'graph' : 'scoring',
+        // Mặc định là `graph`. Chỉ khi khai rõ 'scoring' mới rơi về engine cũ.
+        engine: engine === 'scoring' ? 'scoring' : 'graph',
         maxKeywords: Number.isFinite(maxKeywords) && maxKeywords > 0
             ? Math.floor(maxKeywords)
             : DEFAULT_SETTINGS.maxKeywords,
@@ -78,7 +77,7 @@ export async function getGraphSettings(): Promise<GraphSettings> {
         const rows = (await db.run(SELECT.from(GRAPH_SETTINGS))) as unknown[];
         if (rows.length) value = normalizeSettings(rows[0]);
     } catch (e: any) {
-        LOG.warn(`Không đọc được GraphRetrievalSettings (${e.message}) — dùng engine chấm điểm.`);
+        LOG.warn(`Không đọc được GraphRetrievalSettings (${e.message}) — dùng engine graph.`);
     }
 
     cached = { value, at: Date.now() };

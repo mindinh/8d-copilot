@@ -27,10 +27,9 @@ entity GraphRetrievalSettings : managed {
         /**
          * `scoring` = engine chấm điểm cũ · `graph` = truy hồi bằng graph.
          *
-         * Mặc định `scoring`: ngày đầu tiên sau khi deploy, hành vi phải giống hệt
-         * hôm trước. Một tính năng tự bật lên là một tính năng không ai kịp đối chiếu.
+         * Mặc định `graph` — truy hồi tiền lệ qua SAP HANA Graph Engine.
          */
-        engine          : String(10) default 'scoring';
+        engine          : String(10) default 'graph';
 
         /**
          * Trần số từ khoá của case đang mở được đem đi truy vấn.

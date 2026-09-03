@@ -3,6 +3,7 @@
 **Date:** 2026-09-03
 **Branch:** `feat/graph-retrieval` (cut from `dev/Thien`, includes `feature/re-rank` by cherry-pick)
 **Status:** implemented · **off by default** — this branch changes no behaviour until someone sets a config value
+**Vietnamese:** `docs/GRAPH-RETRIEVAL-AND-RERANK.vi.md` (same content; edit both when you edit one)
 **Related:** `docs/RERANK-PRECEDENT-RETRIEVAL.md` (Thanh, stage 2 for the scoring engine) · `docs/PRECEDENT-RETRIEVAL-REVIEW.md` (findings R2/R3/R4) · `docs/superpowers/specs/2026-09-03-graph-retrieval-design.md` (design + amendments)
 
 **Audience:** anyone working on precedent retrieval, or reviewing this branch.

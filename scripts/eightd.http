@@ -20,6 +20,31 @@ GET {{srv}}/$metadata
 Authorization: {{auth}}
 
 
+### [GRAPH DB] Xem trạng thái engine hiện tại
+GET {{host}}/api/cnma/AI_SRV/GraphRetrievalSettings('GLOBAL')
+Authorization: {{auth}}
+
+
+### [GRAPH DB] Gạt sang GRAPH engine (HANA OpenCypher)
+PATCH {{host}}/api/cnma/AI_SRV/GraphRetrievalSettings('GLOBAL')
+Authorization: {{auth}}
+Content-Type: application/json
+
+{
+  "engine": "graph"
+}
+
+
+### [GRAPH DB] Gạt về SCORING engine (Vector Search cũ)
+PATCH {{host}}/api/cnma/AI_SRV/GraphRetrievalSettings('GLOBAL')
+Authorization: {{auth}}
+Content-Type: application/json
+
+{
+  "engine": "scoring"
+}
+
+
 ### Danh sách report, mới nhất trước
 GET {{srv}}/Reports?$orderby=createdAt desc&$count=true
 Authorization: {{auth}}
