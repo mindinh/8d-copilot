@@ -48,18 +48,17 @@ describe('fieldConfirm domain module', () => {
         it('excludes discipline-specific excluded fields (e.g. gaps, sources in D3)', () => {
             const schema = {
                 fields: [
-                    { key: 'containment.objective', label: 'Objective', widget: 'callout' },
                     { key: 'containment.actions', label: 'Actions', widget: 'action-cards' },
                     { key: 'containment.gaps', label: 'Open containment gaps', widget: 'warning-list' },
                     { key: 'sources', label: 'Sources', widget: 'evidence-list' },
                 ],
                 groups: [
-                    { id: 'g1', fieldKeys: ['containment.objective', 'containment.actions', 'containment.gaps', 'sources'] },
+                    { id: 'g1', fieldKeys: ['containment.actions', 'containment.gaps', 'sources'] },
                 ],
             };
 
             const fields = getRequiredConfirmFields(JSON.stringify(schema), 'D3');
-            expect(fields).toEqual(['containment.objective', 'containment.actions']);
+            expect(fields).toEqual(['containment.actions']);
         });
     });
 

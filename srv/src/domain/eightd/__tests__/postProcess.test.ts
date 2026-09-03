@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { mapCase } from '../caseMapper';
 import { postProcess } from '../postProcess';
-import { DISCIPLINE_CODES, type DisciplineDraft, type EightDResult } from '../types';
+import { DISCIPLINE_CODES, type CaseContext, type DisciplineDraft, type EightDResult } from '../types';
 
 const MOCK_DIR = path.resolve(__dirname, '../../../../../mock-data/clean');
 const load = (n: string) => JSON.parse(fs.readFileSync(path.join(MOCK_DIR, n), 'utf-8'));
@@ -572,5 +572,110 @@ describe('postProcess — D4 dựng từ chẩn đoán độc lập khi case ch�
         expect(marked).toHaveLength(1);
         expect(marked[0].category).toBe(ctxQ3.rootCause!.category);
         expect(marked[0].source).toBe('recorded');
+    });
+});
+
+describe('postProcess — D3/D5/D7 Action Assignee Matching', () => {
+    const mockTeamCtx = {
+        ...ctxQ3,
+        team: {
+            leader: 'DungTruonghyhy',
+            members: [
+                { name: 'Karl Wagner', role: 'Maintenance Planner', functionTitle: 'Maintenance' },
+                { name: 'Minh Dinh', role: 'Production Engineer', functionTitle: 'Production' },
+                { name: 'Anna Schmidt', role: 'Quality Engineer', functionTitle: 'Quality' },
+            ],
+            gaps: [],
+        },
+    } as unknown as CaseContext;
+
+    it('tự động gán assignee từ D1 team roster cho hành động D3, D5, D7 khi owner unassigned hoặc generic role', () => {
+        const d1Draft: DisciplineDraft = {
+            ...draft('D1'),
+            data: {
+                team: {
+                    roster: [
+                        { name: 'Karl Wagner', organizationalRole: 'Maintenance Planner', caseResponsibility: 'Tooling and machine calibration' },
+                        { name: 'Minh Dinh', organizationalRole: 'Production Engineer', caseResponsibility: 'NC program and machining parameters' },
+                        { name: 'Anna Schmidt', organizationalRole: 'Quality Engineer', caseResponsibility: 'Inspection, CMM measurements, FMEA update' },
+                    ],
+                },
+            },
+        };
+
+        const d3Draft: DisciplineDraft = {
+            ...draft('D3'),
+            data: {
+                'containment.actions': [
+                    { action: 'Quarantine 26 rotor shafts from batch B-61200 and perform 100% roughness check', status: 'Planned' },
+                    { action: 'Remove grinding wheel WC-GRIND-04-WHEEL1 and tag for maintenance evaluation', status: 'Planned' },
+                ],
+            },
+        };
+
+        const d5Draft: DisciplineDraft = {
+            ...draft('D5'),
+            data: {
+                'corrective.actions': [
+                    { action: 'Replace and dress grinding wheel WC-GRIND-04-WHEEL1', owner: 'Unassigned (Maintenance Engineer)', status: 'Planned' },
+                    { action: 'Audit NC program feed rate and spindle speed parameters', owner: 'Production Engineer', status: 'Planned' },
+                ],
+            },
+        };
+
+        const d7Draft: DisciplineDraft = {
+            ...draft('D7'),
+            data: {
+                'preventive.actions': [
+                    { action: 'Update FMEA-GRIND-2024 failure mode and prevention controls', owner: 'Process Engineer · Quality Engineer', status: 'Planned' },
+                ],
+            },
+        };
+
+        const r: EightDResult = {
+            internalSummary: 'Summary',
+            customerSummary: null,
+            disciplines: [d1Draft, draft('D2'), d3Draft, draft('D4', { data: d4Data(ctxQ3) }), d5Draft, draft('D6', { dataBacked: false }), d7Draft, draft('D8')],
+        };
+
+        const { result, repairs } = postProcess(r, mockTeamCtx);
+
+        const d3Res = result.disciplines.find((d) => d.code === 'D3');
+        const d5Res = result.disciplines.find((d) => d.code === 'D5');
+        const d7Res = result.disciplines.find((d) => d.code === 'D7');
+
+        const d3Actions = (d3Res?.data as any)['containment.actions'];
+        expect(d3Actions[0].owner).toBe('Anna Schmidt'); // Quality Engineer matches quarantine/check
+        expect(d3Actions[1].owner).toBe('Karl Wagner'); // Maintenance Planner matches maintenance
+
+        const d5Actions = (d5Res?.data as any)['corrective.actions'];
+        expect(d5Actions[0].owner).toBe('Karl Wagner'); // Maintenance
+        expect(d5Actions[1].owner).toBe('Minh Dinh'); // Production
+
+        const d7Actions = (d7Res?.data as any)['preventive.actions'];
+        expect(d7Actions[0].owner).toBe('Anna Schmidt'); // FMEA / Quality
+
+        expect(repairs.some((x) => /gán người phụ trách/.test(x))).toBe(true);
+    });
+
+    it('giữ nguyên owner khi model đã gán đúng tên thành viên trong team D1', () => {
+        const d3Draft: DisciplineDraft = {
+            ...draft('D3'),
+            data: {
+                'containment.actions': [
+                    { action: 'Quarantine parts', owner: 'Karl Wagner', status: 'Planned' },
+                ],
+            },
+        };
+
+        const r: EightDResult = {
+            internalSummary: '',
+            customerSummary: null,
+            disciplines: [d3Draft],
+        };
+
+        const { result } = postProcess(r, mockTeamCtx, undefined, undefined, undefined, {}, ['D3']);
+        const d3Actions = (result.disciplines[0].data as any)['containment.actions'];
+        expect(d3Actions[0].owner).toBe('Karl Wagner');
     });
 });

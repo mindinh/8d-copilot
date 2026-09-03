@@ -117,3 +117,49 @@ export function numericPart(code: string | null | undefined): number | null {
     const n = Number(m[1]);
     return Number.isSafeInteger(n) ? n : null;
 }
+
+/**
+ * Xem trước số kế tiếp mà không làm tăng bộ đếm dải số.
+ * Dùng để hiển thị trước mã số tự sinh trên giao diện form.
+ */
+export async function peekNextNumber(
+    tx: any,
+    object: string,
+    exists?: (code: string) => Promise<boolean>,
+): Promise<string> {
+    const { SELECT } = ql();
+    const row: NumberRangeRow | undefined = await tx.run(
+        SELECT.one.from(TABLE).columns('object', 'prefix', 'currentValue', 'width').where({ object }),
+    );
+
+    let next = 1;
+    let prefix: string | null = '';
+    let width = 8;
+
+    if (row) {
+        next = (Number(row.currentValue) || 0) + 1;
+        prefix = row.prefix;
+        width = row.width;
+    } else {
+        if (object === 'DEFECT') {
+            prefix = '8D-';
+            next = 10049121;
+            width = 8;
+        } else if (object === 'INSPLOT') {
+            prefix = '';
+            next = 10000109;
+            width = 10;
+        }
+    }
+
+    let code = formatNumber(prefix, next, width);
+    if (exists) {
+        let attempts = 0;
+        while (attempts < 100 && (await exists(code))) {
+            next++;
+            code = formatNumber(prefix, next, width);
+            attempts++;
+        }
+    }
+    return code;
+}

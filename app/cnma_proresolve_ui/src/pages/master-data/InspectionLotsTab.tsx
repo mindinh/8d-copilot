@@ -27,7 +27,6 @@ import {
     Edit,
     FileCode,
     Layers,
-    Lock,
     Plus,
     RefreshCw,
     Search,
@@ -38,6 +37,7 @@ import {
 import { toast } from 'sonner';
 import {
     inspectionLotsService,
+    useNextNumber,
     type InspectionLotItem,
 } from '@/services/master-data-service';
 import { useValueHelp } from '@/hooks/use-value-help';
@@ -378,12 +378,21 @@ function InspectionLotFormDialog({
     // Trống khi tạo mới: server cấp số lúc lưu. Có sẵn khi sửa — số đã cấp rồi.
     const [lotId, setLotId] = useState(() => initialValues?.lotId || '');
     const isEdit = Boolean(initialValues?.lotId);
+    const nextLotIdQuery = useNextNumber('INSPLOT', open && !isEdit);
 
     useEffect(() => {
         if (open) {
-            setLotId(initialValues?.lotId || '');
+            if (isEdit) {
+                setLotId(initialValues?.lotId || '');
+            } else if (nextLotIdQuery.data && !lotId) {
+                setLotId(nextLotIdQuery.data);
+            }
         }
-    }, [open, initialValues]);
+    }, [open, initialValues, isEdit, nextLotIdQuery.data, lotId]);
+
+    const displayedLotId = isEdit
+        ? lotId
+        : (lotId || nextLotIdQuery.data || 'Allocating ID...');
     const [materialId, setMaterialId] = useState(initialValues?.materialId || '');
     const [characteristic, setCharacteristic] = useState(initialValues?.characteristic || '');
     const [equipment, setEquipment] = useState(initialValues?.equipment || '');
@@ -436,10 +445,9 @@ function InspectionLotFormDialog({
             return;
         }
 
+        const finalLotId = isEdit ? lotId.trim() : (lotId.trim() || nextLotIdQuery.data?.trim());
         onSubmit({
-            // Bỏ hẳn khoá khỏi payload khi trống, chứ không gửi chuỗi rỗng: '' là
-            // một giá trị, và server sẽ tôn trọng nó thay vì cấp số.
-            ...(lotId.trim() ? { lotId: lotId.trim() } : {}),
+            ...(finalLotId ? { lotId: finalLotId } : {}),
             materialId: materialId.trim(),
             characteristic: characteristic.trim(),
             equipment: equipment.trim() || null,
@@ -504,42 +512,21 @@ function InspectionLotFormDialog({
                                         <Label className="text-xs font-semibold text-foreground">
                                             Inspection Lot ID (Prüflos)
                                         </Label>
-                                        {isEdit ? (
-                                            <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
-                                                <Lock className="w-3 h-3 text-muted-foreground" />
-                                                Assigned
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10.5px] font-medium text-muted-foreground">
-                                                Optional — external number
-                                            </span>
-                                        )}
+                                        <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                            {isEdit ? 'Assigned' : 'System Assigned'}
+                                        </Badge>
                                     </div>
-                                    {/*
-                                      Sửa thì khoá — số đã cấp, đổi nó là làm đứt mọi
-                                      trích dẫn trỏ tới lô này. Tạo mới thì để trống và
-                                      nói rõ số sẽ có lúc lưu, chứ không hiện sẵn một con
-                                      số mà đóng form là mất.
-                                    */}
                                     <Input
-                                        value={lotId}
-                                        onChange={(e) => setLotId(e.target.value)}
-                                        disabled={isEdit}
-                                        readOnly={isEdit}
-                                        placeholder="Assigned on save"
-                                        className={cn(
-                                            'font-mono text-xs h-9 font-semibold',
-                                            isEdit
-                                                ? 'bg-muted/60 text-muted-foreground cursor-not-allowed select-none'
-                                                : 'bg-background',
-                                        )}
+                                        value={displayedLotId}
+                                        disabled
+                                        readOnly
+                                        className="font-mono text-xs h-9 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
                                     />
-                                    {!isEdit && (
-                                        <p className="text-[10.5px] leading-snug text-muted-foreground">
-                                            Leave blank and the server assigns the next number when you save.
-                                            Type one only when the lot already has a number elsewhere.
-                                        </p>
-                                    )}
+                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                        {isEdit
+                                            ? 'Fixed inspection lot number (SAP QALS). Cannot be modified.'
+                                            : 'Auto-assigned by system number sequence (SAP QALS) on save.'}
+                                    </p>
                                 </div>
 
                                 <div className="sm:col-span-4 space-y-1">

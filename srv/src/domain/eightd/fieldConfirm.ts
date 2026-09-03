@@ -39,11 +39,22 @@ export const NON_CONFIRMABLE_WIDGETS = new Set([
  */
 export function isExcludedDisciplineField(code: string, key: string, label?: string): boolean {
     const l = (label || '').toLowerCase();
-    if (code === 'D3' && (key === 'containment.gaps' || key === 'sources')) return true;
+    if (code === 'D3') {
+        if (
+            key === 'containment.gaps'
+            || key === 'sources'
+            || key === 'containment.objective'
+            || key === 'objective'
+            || l.includes('containment objective')
+            || l.includes('objective')
+        ) return true;
+    }
     if (code === 'D4' && (key === 'rootCause.evidenceGaps' || key === 'sources')) return true;
     if (code === 'D5') {
         if (
             key === 'sources'
+            || key === 'corrective.objective'
+            || key === 'objective'
             || key === 'corrective.rootCauseCoverage'
             || key === 'corrective.coverageAssessment'
             || key === 'corrective.uncoveredCauses'
@@ -55,7 +66,9 @@ export function isExcludedDisciplineField(code: string, key: string, label?: str
             || key === 'howEachActionRemovesTheCause'
         ) return true;
         if (
-            l.includes('removes the cause')
+            l.includes('corrective objective')
+            || l.includes('objective')
+            || l.includes('removes the cause')
             || l.includes('removes cause')
             || l.includes('not yet covered')
             || l.includes('uncovered cause')
@@ -90,6 +103,8 @@ export function isExcludedDisciplineField(code: string, key: string, label?: str
     if (code === 'D7') {
         if (
             key === 'sources'
+            || key === 'preventive.objective'
+            || key === 'objective'
             || key === 'preventive.systemicScope'
             || key === 'preventive.whereElseThisApplies'
             || key === 'preventive.whereElse'
@@ -106,7 +121,9 @@ export function isExcludedDisciplineField(code: string, key: string, label?: str
             || key === 'gaps'
         ) return true;
         if (
-            l.includes('where else')
+            l.includes('preventive objective')
+            || l.includes('objective')
+            || l.includes('where else')
             || l.includes('systemic scope')
             || l.includes('preventive gap')
             || l.includes('open gap')

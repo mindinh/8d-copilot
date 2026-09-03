@@ -82,7 +82,12 @@ export function DefectsTab() {
     async function openEdit(row: DefectItem) {
         setLoadingEdit(row.ID);
         try {
-            setEditItem(await defectsService.getWithCharacteristics(row.ID));
+            const item = await defectsService.getWithCharacteristics(row.ID);
+            const reportID = reportByDefect.get(item.defectId);
+            if (!reportID && item.status !== 'Completed') {
+                item.status = 'Open';
+            }
+            setEditItem(item);
         } catch (err: any) {
             toast.error(err?.response?.data?.error?.message ?? err?.message ?? 'Could not load the defect.');
         } finally {
@@ -243,6 +248,12 @@ export function DefectsTab() {
                                 {rows.map((row) => {
                                     const reportID = reportByDefect.get(row.defectId);
                                     const done = row.status === 'Completed';
+                                    // Defect chưa start 8D (hiển thị button start 8D) thì status bắt buộc là "Open"
+                                    const effectiveStatus: DefectStatus = done
+                                        ? 'Completed'
+                                        : !reportID
+                                        ? 'Open'
+                                        : (row.status === 'Open' ? 'In Process' : (row.status as DefectStatus) || 'In Process');
                                     return (
                                         <tr key={row.ID} className="hover:bg-muted/30 transition-colors">
                                             <td className="py-3 px-4 font-mono font-bold text-foreground">
@@ -253,10 +264,10 @@ export function DefectsTab() {
                                                     variant="outline"
                                                     className={cn(
                                                         'text-[10.5px]',
-                                                        DEFECT_STATUS_TONE[(row.status ?? 'Open') as DefectStatus],
+                                                        DEFECT_STATUS_TONE[effectiveStatus] || DEFECT_STATUS_TONE['Open'],
                                                     )}
                                                 >
-                                                    {row.status ?? 'Open'}
+                                                    {effectiveStatus}
                                                 </Badge>
                                             </td>
                                             <td className="py-3 px-4 font-medium text-foreground">

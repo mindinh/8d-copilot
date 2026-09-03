@@ -837,6 +837,7 @@ async function generateReportProgressive(
             // cả tám ô và `[0]` luôn là D1 — mọi bước D2..D8 sẽ ghi đè lên D1
             // bằng placeholder, và báo cáo cuối cùng chỉ còn một dòng.
             [code],
+            precedingDisciplines,
         );
         discipline = singlePost.result.disciplines.find((d) => d.code === code) ?? discipline;
         if (singlePost.repairs.length) repairs.push(...singlePost.repairs);

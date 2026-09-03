@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     Badge,
     Button,
+    Calendar,
     Dialog,
     DialogContent,
     DialogDescription,
@@ -10,6 +11,9 @@ import {
     DialogTitle,
     Input,
     Label,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
     Select,
     SelectContent,
     SelectItem,
@@ -18,13 +22,32 @@ import {
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { CalendarClock, CheckSquare, Clock, Edit2, Eye, FileText, Hash, Paperclip, Sparkles, Tag, User } from 'lucide-react';
+import {
+    AlignLeft,
+    CalendarDays,
+    CheckSquare,
+    ClipboardList,
+    Cpu,
+    Edit2,
+    Eye,
+    Gauge,
+    Hash,
+    Leaf,
+    Package,
+    Paperclip,
+    Sparkles,
+    Tag,
+    Target,
+    Timer,
+    User,
+    X,
+} from 'lucide-react';
 import { TASK_STATUSES, normalizeActionStatus, type ActionTask } from '../../../../../shared/action-task';
 import { classifyTaskCode, taskCodeGroupOf, taskCodeTextOf } from '../../../../../shared/task-catalogue';
-import { listTaskEvidence } from '@/services/eightd-service';
+import { getPartnerDirectory, listTaskEvidence } from '@/services/eightd-service';
 import { useValueHelp } from '@/hooks/use-value-help';
 import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
-import { VALUE_HELP_IDS } from '@/services/value-help-service';
+import { VALUE_HELP_IDS, type ValueHelpEntry } from '@/services/value-help-service';
 import { TaskEvidenceSection } from './task-evidence';
 
 /**
@@ -86,6 +109,89 @@ function formatDate(iso: string): string {
         : parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** Ô chọn ngày với lịch Popover mở lên trên (dropdownPlacement='top'). */
+function DatePickerField({
+    id,
+    value,
+    onChange,
+    dropdownPlacement = 'top',
+}: {
+    id?: string;
+    value: string;
+    onChange: (val: string) => void;
+    dropdownPlacement?: 'top' | 'bottom';
+}) {
+    const [open, setOpen] = useState(false);
+
+    const selectedDate = useMemo(() => {
+        if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+        const d = new Date(`${value}T00:00:00`);
+        return Number.isNaN(d.getTime()) ? undefined : d;
+    }, [value]);
+
+    const handleSelect = (date: Date | undefined) => {
+        if (date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            onChange(`${y}-${m}-${d}`);
+        } else {
+            onChange('');
+        }
+        setOpen(false);
+    };
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    id={id}
+                    type="button"
+                    className="flex h-8 w-full items-center justify-between rounded-md border-2 border-[var(--input-border)] hover:border-[var(--input-border-hover)] focus-visible:border-[var(--color-brand)] outline-none bg-background px-3 py-1 text-[13px] text-foreground text-left transition-[color,box-shadow,border-color] cursor-pointer"
+                >
+                    <span className={cn('truncate', !value && 'text-muted-foreground')}>
+                        {value ? formatDate(value) || value : 'YYYY-MM-DD'}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {value && (
+                            <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onChange('');
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.stopPropagation();
+                                        onChange('');
+                                    }
+                                }}
+                                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
+                                title="Clear date"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </span>
+                        )}
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                side={dropdownPlacement}
+                align="start"
+                className="w-auto p-2 bg-popover border border-border shadow-md z-50"
+            >
+                <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleSelect}
+                />
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 /** Mã nhiệm vụ ở dạng chip, kèm mô tả trong tooltip để bảng không phải rộng thêm. */
 function TaskCodeChip({ code }: { code: string }) {
     if (!code) return <Blank label="—" />;
@@ -96,6 +202,53 @@ function TaskCodeChip({ code }: { code: string }) {
             className="inline-flex items-center rounded border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground"
         >
             {code}
+        </span>
+    );
+}
+
+/** Huy hiệu Root Cause lấy từ D4 với màu sắc 6M Ishikawa tương ứng. */
+function RootCauseChip({ category }: { category?: string | null }) {
+    const raw = String(category ?? '').trim();
+    if (!raw || raw === '—') {
+        return <span className="text-muted-foreground font-mono text-[13px]">—</span>;
+    }
+    const cat = raw.toLowerCase();
+    const isMan = cat === 'man';
+    const isMachine = cat === 'machine';
+    const isMethod = cat === 'method';
+    const isMaterial = cat === 'material';
+    const isMeasurement = cat === 'measurement';
+    const isEnvironment = cat === 'environment';
+
+    const Icon =
+        isMan ? User :
+        isMachine ? Cpu :
+        isMethod ? ClipboardList :
+        isMaterial ? Package :
+        isMeasurement ? Gauge :
+        isEnvironment ? Leaf : Sparkles;
+
+    const toneClass =
+        isMan ? 'border-pink-200 bg-pink-50/70 text-pink-700 dark:border-pink-850 dark:bg-pink-950/40 dark:text-pink-300' :
+        isMachine ? 'border-blue-200 bg-blue-50/70 text-blue-700 dark:border-blue-850 dark:bg-blue-950/40 dark:text-blue-300' :
+        isMethod ? 'border-amber-200 bg-amber-50/70 text-amber-700 dark:border-amber-850 dark:bg-amber-950/40 dark:text-amber-300' :
+        isMaterial ? 'border-orange-200 bg-orange-50/70 text-orange-700 dark:border-orange-850 dark:bg-orange-950/40 dark:text-orange-300' :
+        isMeasurement ? 'border-cyan-200 bg-cyan-50/70 text-cyan-700 dark:border-cyan-850 dark:bg-cyan-950/40 dark:text-cyan-300' :
+        isEnvironment ? 'border-emerald-200 bg-emerald-50/70 text-emerald-700 dark:border-emerald-850 dark:bg-emerald-950/40 dark:text-emerald-300' :
+        'border-primary/20 bg-primary/10 text-primary';
+
+    const displayTitle = raw.charAt(0).toUpperCase() + raw.slice(1);
+
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11.5px] font-semibold border font-mono tracking-tight',
+                toneClass,
+            )}
+            title={`Root Cause from D4: ${displayTitle}`}
+        >
+            <Icon className="h-3 w-3 shrink-0" />
+            <span>{displayTitle}</span>
         </span>
     );
 }
@@ -142,7 +295,7 @@ function TaskCodeField({
     return (
         <>
             <div className="space-y-1.5">
-                <Label htmlFor={`${idPrefix}-task-code`} className="text-xs font-medium text-muted-foreground">
+                <Label htmlFor={`${idPrefix}-task-code`} className="text-[14px] font-medium text-muted-foreground">
                     Task Code
                 </Label>
                 <ValueHelpInput
@@ -152,8 +305,10 @@ function TaskCodeField({
                     entries={taskCodeVh.entries}
                     loading={taskCodeVh.loading}
                     quiet
+                    dropdownPlacement="top"
                     catalogLabel="the task catalogue"
                     placeholder="e.g. TSK-1010"
+                    inputClassName="text-[13px]"
                 />
                 {suggestion && (
                     <button
@@ -167,16 +322,40 @@ function TaskCodeField({
                 )}
             </div>
             <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Code Group</Label>
+                <Label className="text-[14px] font-medium text-muted-foreground">Code Group</Label>
                 <Input
                     value={group}
                     readOnly
                     placeholder="— from Task Code —"
-                    className="h-8 text-xs bg-muted/40 font-mono"
+                    className="h-8 text-[13px] bg-muted/40 font-mono"
                 />
             </div>
         </>
     );
+}
+
+function usePartnerValueHelp() {
+    const { data: partners = [], isLoading } = useQuery({
+        queryKey: ['partnerDirectory'],
+        queryFn: getPartnerDirectory,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const entries: ValueHelpEntry[] = useMemo(() => {
+        return partners.map((p) => {
+            const cleanId = p.partnerId.replace(/^BP-/i, '');
+            const titlePart = p.functionTitle ? ` (${p.functionTitle})` : '';
+            return {
+                key: `${cleanId} — ${p.partnerName}${titlePart}`,
+                text: p.email || p.functionTitle || '',
+                partnerId: cleanId,
+                partnerName: p.partnerName,
+                functionTitle: p.functionTitle,
+            };
+        });
+    }, [partners]);
+
+    return { entries, loading: isLoading };
 }
 
 function TaskDetail({
@@ -185,6 +364,7 @@ function TaskDetail({
     readOnly = false,
     reportID = '',
     disciplineCode = '',
+    rootCause = '',
     onClose,
     onSave,
 }: {
@@ -193,21 +373,22 @@ function TaskDetail({
     readOnly?: boolean;
     reportID?: string;
     disciplineCode?: string;
+    rootCause?: string;
     onClose: () => void;
     onSave: (updatedTask: ActionTask) => void;
 }) {
-    if (!task) return null;
-
+    const partnerVh = usePartnerValueHelp();
     const [isEditing, setIsEditing] = useState(initialEditing);
-    const [name, setName] = useState(task.name);
-    const [assignee, setAssignee] = useState(task.assignee);
-    const [durationDays, setDurationDays] = useState<number | string>(task.durationDays ? String(task.durationDays) : '');
-    const [status, setStatus] = useState(task.status || 'Not started');
-    const [description, setDescription] = useState(task.description);
-    const [taskCode, setTaskCode] = useState(task.taskCode);
-    const [plannedEndDate, setPlannedEndDate] = useState(task.plannedEndDate);
+    const [name, setName] = useState(task?.name ?? '');
+    const [assignee, setAssignee] = useState(task?.assignee ?? '');
+    const [durationDays, setDurationDays] = useState<number | string>(task?.durationDays ? String(task.durationDays) : '');
+    const [status, setStatus] = useState(task?.status || 'Not started');
+    const [description, setDescription] = useState(task?.description ?? '');
+    const [taskCode, setTaskCode] = useState(task?.taskCode ?? '');
+    const [plannedEndDate, setPlannedEndDate] = useState(task?.plannedEndDate ?? '');
 
     useEffect(() => {
+        if (!task) return;
         setName(task.name);
         setAssignee(task.assignee);
         setDurationDays(task.durationDays ? String(task.durationDays) : '');
@@ -217,6 +398,8 @@ function TaskDetail({
         setPlannedEndDate(task.plannedEndDate);
         setIsEditing(initialEditing);
     }, [task, initialEditing]);
+
+    if (!task) return null;
 
     const handleSave = () => {
         // Mã viết hoa trước khi lưu: danh mục là chữ hoa, và `TSK-1010` gõ thành
@@ -245,7 +428,7 @@ function TaskDetail({
                     <div className="flex items-center justify-between gap-2 pr-6">
                         <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                <FileText className="h-4 w-4" />
+                                <ClipboardList className="h-4 w-4" />
                             </span>
                             <div>
                                 <DialogTitle className="text-base font-semibold">
@@ -277,46 +460,52 @@ function TaskDetail({
                     <div className="space-y-4 pt-2">
                         {/* Task Name */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                            <Label className="text-[14px] font-medium text-muted-foreground">
                                 Task Name <span className="text-destructive">*</span>
                             </Label>
-                            <Input
+                            <Textarea
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                className="h-8 text-xs bg-background font-medium"
+                                rows={2}
+                                className="text-[13px] font-normal leading-relaxed bg-background min-h-[56px] resize-y"
                                 placeholder="Task name..."
                             />
                         </div>
 
                         {/* Description */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                            <Label className="text-[14px] font-medium text-muted-foreground">
                                 Description & Instructions
                             </Label>
                             <Textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={4}
-                                className="text-xs leading-relaxed bg-background min-h-[80px]"
+                                className="text-[13px] leading-relaxed bg-background min-h-[80px]"
                                 placeholder="Detailed instructions, scope of work, or criteria..."
                             />
                         </div>
 
                         {/* Grid */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+                            <div className="space-y-1.5 sm:col-span-6">
+                                <Label className="text-[14px] font-medium text-muted-foreground">
                                     Assignee
                                 </Label>
-                                <Input
+                                <ValueHelpInput
                                     value={assignee}
-                                    onChange={(e) => setAssignee(e.target.value)}
-                                    className="h-8 text-xs bg-background"
+                                    onChange={setAssignee}
+                                    entries={partnerVh.entries}
+                                    loading={partnerVh.loading}
+                                    quiet
+                                    dropdownPlacement="top"
+                                    inputClassName="text-[13px]"
                                     placeholder="e.g. Quality Engineer"
+                                    catalogLabel="the team directory"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="space-y-1.5 sm:col-span-2">
+                                <Label className="text-[14px] font-medium text-muted-foreground">
                                     Duration (Days)
                                 </Label>
                                 <Input
@@ -325,47 +514,82 @@ function TaskDetail({
                                     placeholder="0"
                                     value={durationDays}
                                     onChange={(e) => setDurationDays(e.target.value)}
-                                    className="h-8 text-xs bg-background"
+                                    className="h-8 text-[13px] bg-background"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="space-y-1.5 sm:col-span-4">
+                                <Label className="text-[14px] font-medium text-muted-foreground">
                                     Status
                                 </Label>
                                 <Select value={status} onValueChange={setStatus}>
-                                    <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                    <SelectTrigger className="h-8 text-[13px] bg-background w-full">
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent side="top">
                                         {TASK_STATUSES.map((st) => (
-                                            <SelectItem key={st} value={st}>{st}</SelectItem>
+                                            <SelectItem key={st} value={st} className="text-[13px]">{st}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
-                        {/* Quality Task coding — SAP catalog type 2 */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <TaskCodeField
-                                code={taskCode}
-                                onCodeChange={setTaskCode}
-                                suggestedFrom={name}
-                                idPrefix={`task-detail-${task.id}`}
-                            />
-                            <div className="space-y-1.5">
-                                <Label htmlFor={`task-detail-${task.id}-due`} className="text-xs font-medium text-muted-foreground">
+                        {/* Quality Task coding / Root Cause */}
+                        {disciplineCode === 'D5' ? (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label className="text-[14px] font-medium text-muted-foreground">
+                                        Root Cause (from D4)
+                                    </Label>
+                                    <div className="flex items-center h-8">
+                                        <RootCauseChip category={(task as any)?.rootCause || rootCause} />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
+                                        Planned End Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-due`}
+                                        value={plannedEndDate}
+                                        onChange={setPlannedEndDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
+                            </div>
+                        ) : (disciplineCode === 'D3' || disciplineCode === 'D7') ? (
+                            <div className="space-y-1.5 sm:col-span-2">
+                                <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
                                     Planned End Date
                                 </Label>
-                                <Input
+                                <DatePickerField
                                     id={`task-detail-${task.id}-due`}
-                                    type="date"
                                     value={plannedEndDate}
-                                    onChange={(e) => setPlannedEndDate(e.target.value)}
-                                    className="h-8 text-xs bg-background"
+                                    onChange={setPlannedEndDate}
+                                    dropdownPlacement="top"
                                 />
                             </div>
-                        </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <TaskCodeField
+                                    code={taskCode}
+                                    onCodeChange={setTaskCode}
+                                    suggestedFrom={name}
+                                    idPrefix={`task-detail-${task.id}`}
+                                />
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
+                                        Planned End Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-due`}
+                                        value={plannedEndDate}
+                                        onChange={setPlannedEndDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex items-center justify-end gap-2 pt-3 border-t">
                             <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs">
@@ -379,11 +603,12 @@ function TaskDetail({
                 ) : (
                     <div className="space-y-4 pt-2">
                         {/* Task Title Box */}
-                        <div className="rounded-lg border bg-card p-3.5 space-y-1">
-                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Task Statement
+                        <div className="rounded-lg border bg-card p-3.5 space-y-1.5">
+                            <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <Target className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                <span>Task Statement</span>
                             </div>
-                            <p className="text-sm font-medium leading-relaxed text-foreground break-words">
+                            <p className="text-[13px] font-normal leading-relaxed text-foreground break-words">
                                 {task.name}
                             </p>
                         </div>
@@ -391,76 +616,95 @@ function TaskDetail({
                         {/* Attribute Cards Grid */}
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <User className="h-4 w-4 text-muted-foreground" /> Assignee
+                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                    <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <span>Assignee</span>
                                 </div>
-                                <div className="text-xs font-semibold text-foreground truncate">
+                                <div className="text-[13px] font-normal text-foreground truncate">
                                     {task.assignee || <Blank label="Unassigned" />}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" /> Duration
+                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                    <Timer className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                    <span>Duration</span>
                                 </div>
-                                <div className="text-xs font-semibold text-foreground">
+                                <div className="text-[13px] font-normal text-foreground">
                                     {task.durationDays > 0 ? `${task.durationDays} day${task.durationDays > 1 ? 's' : ''}` : <Blank label="Not estimated" />}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <Tag className="h-3.5 w-3.5 text-muted-foreground" /> Status
+                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                    <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Status</span>
                                 </div>
                                 <div>
                                     <StatusChip status={task.status} />
                                 </div>
                             </div>
 
-                            {/* Task Code chiếm hai cột: mô tả của mã dài hơn hẳn ba ô trên,
-                                và cắt nó đi thì cái chip mã trở thành một chuỗi vô nghĩa. */}
-                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
-                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <Hash className="h-3.5 w-3.5 text-muted-foreground" /> Task Code
+                            {/* Task Code / Root Cause */}
+                            {disciplineCode === 'D5' ? (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
+                                    <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                        <Sparkles className="h-4 w-4 text-primary" />
+                                        <span>Root Cause</span>
+                                    </div>
+                                    <div className="pt-0.5">
+                                        <RootCauseChip category={(task as any)?.rootCause || rootCause} />
+                                    </div>
                                 </div>
-                                {task.taskCode ? (
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <TaskCodeChip code={task.taskCode} />
-                                            {task.taskCodeGroup && (
-                                                <span className="font-mono text-[10.5px] text-muted-foreground">
-                                                    {task.taskCodeGroup}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="text-[11px] leading-snug text-muted-foreground">
-                                            {taskCodeTextOf(task.taskCode) ?? 'Not in the task catalogue.'}
-                                        </div>
+                            ) : (disciplineCode === 'D3' || disciplineCode === 'D7') ? null : (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
+                                    <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                        <Hash className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                        <span>Task Code</span>
                                     </div>
-                                ) : (
-                                    <div className="text-xs font-semibold">
-                                        <Blank label="Not coded" />
-                                    </div>
-                                )}
-                            </div>
+                                    {task.taskCode ? (
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <TaskCodeChip code={task.taskCode} />
+                                                {task.taskCodeGroup && (
+                                                    <span className="font-mono text-[12px] text-muted-foreground">
+                                                        {task.taskCodeGroup}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-[13px] font-normal leading-snug text-muted-foreground">
+                                                {taskCodeTextOf(task.taskCode) ?? 'Not in the task catalogue.'}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-[13px] font-normal">
+                                            <Blank label="Not coded" />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
-                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" /> Planned End Date
+                            <div className={cn(
+                                'rounded-lg border bg-muted/20 p-3 space-y-1',
+                                (disciplineCode === 'D3' || disciplineCode === 'D7') ? 'sm:col-span-3' : 'sm:col-span-1',
+                            )}>
+                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                    <CalendarDays className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                                    <span>Planned End Date</span>
                                 </div>
-                                <div className="text-xs font-semibold text-foreground">
+                                <div className="text-[13px] font-normal text-foreground">
                                     {formatDate(task.plannedEndDate) || <Blank label="No date committed" />}
                                 </div>
                             </div>
                         </div>
 
                         {/* Description Section */}
-                        {/* Description Section */}
                         <div className="rounded-lg border bg-muted/10 p-3.5 space-y-1.5">
-                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Description & Instructions
+                            <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <AlignLeft className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                                <span>Description & Instructions</span>
                             </div>
-                            <div className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                            <div className="text-[13px] font-normal leading-relaxed text-foreground whitespace-pre-wrap break-words">
                                 {task.description ? (
                                     task.description
                                 ) : (
@@ -530,32 +774,39 @@ function TaskDetail({
  * Ghim sàn cho Task rồi để `overflow-x-auto` ngoài bảng lo phần tràn: cuộn ngang
  * là thứ người dùng hiểu được, còn một cột dựng đứng thì không.
  */
-const HEADERS: Array<{ label: string; className?: string }> = [
-    { label: 'Task', className: 'min-w-[240px]' },
-    { label: 'Code' },
-    { label: 'Assignee' },
-    { label: 'Duration' },
-    { label: 'Status' },
-    { label: 'Evidence' },
-    { label: '' },
-];
-
 export function TaskTable({
     tasks,
     onChange,
     readOnly = false,
     reportID = '',
     disciplineCode = '',
+    rootCause = '',
 }: {
     tasks: ActionTask[];
     onChange: (next: ActionTask[]) => void;
     readOnly?: boolean;
     reportID?: string;
     disciplineCode?: string;
+    rootCause?: string;
 }) {
     const [selectedTask, setSelectedTask] = useState<ActionTask | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [adding, setAdding] = useState(false);
+    const partnerVh = usePartnerValueHelp();
+
+    const isD5 = disciplineCode === 'D5';
+    const isD3orD7 = disciplineCode === 'D3' || disciplineCode === 'D7';
+
+    const headers: Array<{ label: string; className?: string }> = useMemo(() => [
+        { label: 'Task', className: 'min-w-[240px]' },
+        ...(isD5 ? [{ label: 'Root Cause', className: 'whitespace-nowrap' }] : []),
+        ...(!isD5 && !isD3orD7 ? [{ label: 'Code' }] : []),
+        { label: 'Assignee' },
+        { label: 'Duration' },
+        { label: 'Status' },
+        { label: 'Evidence' },
+        { label: '' },
+    ], [isD5, isD3orD7]);
 
     const [newTaskName, setNewTaskName] = useState('');
     const [newDescription, setNewDescription] = useState('');
@@ -643,7 +894,7 @@ export function TaskTable({
                 <table className="w-full border-collapse">
                     <thead>
                         <tr>
-                            {HEADERS.map(({ label, className }, index) => (
+                            {headers.map(({ label, className }, index) => (
                                 <th
                                     key={index}
                                     className={cn(
@@ -659,7 +910,7 @@ export function TaskTable({
                     <tbody>
                         {tasks.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="px-2.5 py-5 text-center text-[13.5px] font-normal text-muted-foreground">
+                                <td colSpan={headers.length} className="px-2.5 py-5 text-center text-[13.5px] font-normal text-muted-foreground">
                                     No task accepted yet. Use <span className="font-medium text-foreground">Accept</span> on a
                                     suggestion above, or add one by hand.
                                 </td>
@@ -686,9 +937,16 @@ export function TaskTable({
                                             <span className="font-normal text-foreground">{task.name}</span>
                                         </span>
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
-                                        <TaskCodeChip code={task.taskCode} />
-                                    </td>
+                                    {isD5 && (
+                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
+                                            <RootCauseChip category={(task as any)?.rootCause || rootCause} />
+                                        </td>
+                                    )}
+                                    {!isD5 && !isD3orD7 && (
+                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
+                                            <TaskCodeChip code={task.taskCode} />
+                                        </td>
+                                    )}
                                     <td className="border-b px-2.5 py-2 align-middle text-[13.5px] font-normal">
                                         {task.assignee
                                             ? <span className="inline-flex items-center gap-1.5 text-foreground">
@@ -771,20 +1029,20 @@ export function TaskTable({
                 <div className="mt-3 rounded-lg border bg-muted/20 p-3.5 space-y-3">
                     <p className="text-xs font-semibold text-foreground">Add New Task</p>
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                        <Label className="text-[14px] font-medium text-muted-foreground">
                             Task Name <span className="text-destructive">*</span>
                         </Label>
-                        <Input
-                            type="text"
+                        <Textarea
                             placeholder="e.g. Replace clamp pads and perform calibration..."
                             value={newTaskName}
                             onChange={(e) => setNewTaskName(e.target.value)}
-                            className="h-8 text-xs bg-background"
+                            rows={2}
+                            className="text-[13px] font-normal leading-relaxed bg-background min-h-[56px] resize-y"
                             autoFocus
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                        <Label className="text-[14px] font-medium text-muted-foreground">
                             Description & Instructions
                         </Label>
                         <Textarea
@@ -792,24 +1050,28 @@ export function TaskTable({
                             value={newDescription}
                             onChange={(e) => setNewDescription(e.target.value)}
                             rows={2}
-                            className="text-xs leading-relaxed bg-background min-h-[60px]"
+                            className="text-[13px] leading-relaxed bg-background min-h-[60px]"
                         />
                     </div>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
+                        <div className="space-y-1.5 sm:col-span-6">
+                            <Label className="text-[14px] font-medium text-muted-foreground">
                                 Assignee
                             </Label>
-                            <Input
-                                type="text"
-                                placeholder="e.g. Quality Engineer"
+                            <ValueHelpInput
                                 value={newAssignee}
-                                onChange={(e) => setNewAssignee(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                                onChange={setNewAssignee}
+                                entries={partnerVh.entries}
+                                loading={partnerVh.loading}
+                                quiet
+                                dropdownPlacement="top"
+                                inputClassName="text-[13px]"
+                                placeholder="e.g. Quality Engineer"
+                                catalogLabel="the team directory"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label className="text-[14px] font-medium text-muted-foreground">
                                 Duration (Days)
                             </Label>
                             <Input
@@ -818,20 +1080,20 @@ export function TaskTable({
                                 placeholder="0"
                                 value={newDurationDays}
                                 onChange={(e) => setNewDurationDays(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                                className="h-8 text-[13px] bg-background"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                        <div className="space-y-1.5 sm:col-span-4">
+                            <Label className="text-[14px] font-medium text-muted-foreground">
                                 Status
                             </Label>
                             <Select value={newStatus} onValueChange={setNewStatus}>
-                                <SelectTrigger className="h-8 text-xs bg-background w-full">
+                                <SelectTrigger className="h-8 text-[13px] bg-background w-full">
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent side="top">
                                     {TASK_STATUSES.map((st) => (
-                                        <SelectItem key={st} value={st}>
+                                        <SelectItem key={st} value={st} className="text-[13px]">
                                             {st}
                                         </SelectItem>
                                     ))}
@@ -839,27 +1101,62 @@ export function TaskTable({
                             </Select>
                         </div>
                     </div>
-                    {/* Quality Task coding — SAP catalog type 2 */}
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                        <TaskCodeField
-                            code={newTaskCode}
-                            onCodeChange={setNewTaskCode}
-                            suggestedFrom={newTaskName}
-                            idPrefix="new-task"
-                        />
-                        <div className="space-y-1.5">
-                            <Label htmlFor="new-task-due" className="text-xs font-medium text-muted-foreground">
+                    {/* Quality Task coding / Root Cause */}
+                    {isD5 ? (
+                        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                                <Label className="text-[14px] font-medium text-muted-foreground">
+                                    Root Cause (from D4)
+                                </Label>
+                                <div className="flex items-center h-8">
+                                    <RootCauseChip category={rootCause} />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
+                                    Planned End Date
+                                </Label>
+                                <DatePickerField
+                                    id="new-task-due"
+                                    value={newPlannedEndDate}
+                                    onChange={setNewPlannedEndDate}
+                                    dropdownPlacement="top"
+                                />
+                            </div>
+                        </div>
+                    ) : isD3orD7 ? (
+                        <div className="space-y-1.5 sm:col-span-1">
+                            <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
                                 Planned End Date
                             </Label>
-                            <Input
+                            <DatePickerField
                                 id="new-task-due"
-                                type="date"
                                 value={newPlannedEndDate}
-                                onChange={(e) => setNewPlannedEndDate(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                                onChange={setNewPlannedEndDate}
+                                dropdownPlacement="top"
                             />
                         </div>
-                    </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                            <TaskCodeField
+                                code={newTaskCode}
+                                onCodeChange={setNewTaskCode}
+                                suggestedFrom={newTaskName}
+                                idPrefix="new-task"
+                            />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
+                                    Planned End Date
+                                </Label>
+                                <DatePickerField
+                                    id="new-task-due"
+                                    value={newPlannedEndDate}
+                                    onChange={setNewPlannedEndDate}
+                                    dropdownPlacement="top"
+                                />
+                            </div>
+                        </div>
+                    )}
                     <div className="flex items-center gap-2 pt-1">
                         <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()}>
                             Add task
@@ -871,15 +1168,18 @@ export function TaskTable({
                 </div>
             )}
 
-            <TaskDetail
-                task={selectedTask}
-                initialEditing={isEditMode}
-                readOnly={readOnly}
-                reportID={reportID}
-                disciplineCode={disciplineCode}
-                onClose={() => setSelectedTask(null)}
-                onSave={updateTask}
-            />
+            {selectedTask && (
+                <TaskDetail
+                    task={selectedTask}
+                    initialEditing={isEditMode}
+                    readOnly={readOnly}
+                    reportID={reportID}
+                    disciplineCode={disciplineCode}
+                    rootCause={rootCause}
+                    onClose={() => setSelectedTask(null)}
+                    onSave={updateTask}
+                />
+            )}
         </div>
     );
 }

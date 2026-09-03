@@ -13,7 +13,22 @@ import {
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { AlertTriangle, Check, Edit3, Loader2, RefreshCw, Sparkles, Star, Trash2 } from 'lucide-react';
+import {
+    AlertTriangle,
+    Check,
+    ClipboardList,
+    Cpu,
+    Edit3,
+    Gauge,
+    Leaf,
+    Loader2,
+    Package,
+    RefreshCw,
+    Sparkles,
+    Star,
+    Trash2,
+    User,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { reanalyzeDownstream, saveDisciplineField } from '@/services/eightd-service';
@@ -140,6 +155,16 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
 
     return (
         <div className="space-y-3">
+            <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] font-bold text-foreground">
+                    5-Why chain
+                </span>
+                <AiProvenanceInfo
+                    fieldKey={fieldKey || 'rootCause.fiveWhy'}
+                    label="5-Why chain"
+                />
+            </div>
+
             {steps.length === 0 ? (
                 <p className="text-sm italic text-muted-foreground">
                     No 5-Why chain recorded for this case yet.
@@ -171,7 +196,7 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                     </span>
                                     <div className="min-w-0 flex-1 space-y-1">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="break-words text-sm font-semibold text-foreground">
+                                            <p className="break-words text-[13.5px] font-semibold text-foreground">
                                                 {row.question ?? row.why ?? '—'}
                                             </p>
                                             <AiProvenanceInfo
@@ -274,6 +299,29 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
 /** Thu tu 6M co dinh — doc theo hang quen thuoc, khong theo thu tu du lieu tra ve. */
 const SIX_M = ['Man', 'Machine', 'Method', 'Material', 'Measurement', 'Environment'] as const;
 
+function getSixMMeta(category: string): { icon: any; colorClass: string; bgClass: string; title: string } {
+    const cat = category.toLowerCase().trim();
+    if (cat === 'man') {
+        return { icon: User, colorClass: 'text-pink-600 dark:text-pink-400', bgClass: 'bg-pink-500/10', title: 'MAN' };
+    }
+    if (cat === 'machine') {
+        return { icon: Cpu, colorClass: 'text-blue-600 dark:text-blue-400', bgClass: 'bg-blue-500/10', title: 'MACHINE' };
+    }
+    if (cat === 'method') {
+        return { icon: ClipboardList, colorClass: 'text-amber-600 dark:text-amber-400', bgClass: 'bg-amber-500/10', title: 'METHOD' };
+    }
+    if (cat === 'material') {
+        return { icon: Package, colorClass: 'text-orange-600 dark:text-orange-400', bgClass: 'bg-orange-500/10', title: 'MATERIAL' };
+    }
+    if (cat === 'measurement') {
+        return { icon: Gauge, colorClass: 'text-cyan-600 dark:text-cyan-400', bgClass: 'bg-cyan-500/10', title: 'MEASUREMENT' };
+    }
+    if (cat === 'environment') {
+        return { icon: Leaf, colorClass: 'text-emerald-600 dark:text-emerald-400', bgClass: 'bg-emerald-500/10', title: 'ENVIRONMENT' };
+    }
+    return { icon: Sparkles, colorClass: 'text-muted-foreground', bgClass: 'bg-muted', title: category.toUpperCase() };
+}
+
 interface CauseRow {
     category?: string;
     description?: string;
@@ -369,7 +417,18 @@ export function IshikawaGridWidget({
     };
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-3">
+            <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] font-bold text-foreground">
+                    Ishikawa
+                </span>
+                <AiProvenanceInfo
+                    fieldKey="rootCause.ishikawaBoard"
+                    label="Ishikawa"
+                    caseContext={root}
+                />
+            </div>
+
             {usingProposal && (
                 <p className="rounded-md border border-warning/40 bg-warning/[0.07] px-2.5 py-1.5 text-[11px] text-muted-foreground">
                     <span className="font-semibold text-warning-foreground">Proposed by AI.</span>{' '}
@@ -380,6 +439,8 @@ export function IshikawaGridWidget({
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {SIX_M.map((category) => {
+                const meta = getSixMMeta(category);
+                const Icon = meta.icon;
                 const row = byCategory.get(category.toLowerCase());
                 const isRoot = selectedRootCategory
                     ? selectedRootCategory.toLowerCase() === category.toLowerCase()
@@ -398,12 +459,15 @@ export function IshikawaGridWidget({
                         )}
                     >
                         <div>
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-1.5">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/90">{category}</h4>
+                                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-bold', meta.bgClass, meta.colorClass)}>
+                                        <Icon className="h-3.5 w-3.5" />
+                                    </span>
+                                    <h4 className="text-[13px] font-bold uppercase tracking-wider text-foreground/90">{meta.title}</h4>
                                     <AiProvenanceInfo
                                         fieldKey={`ishikawa.${category}`}
-                                        label={`Ishikawa ${category}`}
+                                        label={`Ishikawa ${meta.title}`}
                                         caseContext={root}
                                         customReasoning={
                                             text
@@ -520,6 +584,7 @@ export function ActionCardsWidget({
     readOnly = false,
     reportID = '',
     disciplineCode = '',
+    rootCause = '',
 }: {
     value: unknown;
     emptyLabel?: string;
@@ -530,6 +595,7 @@ export function ActionCardsWidget({
     readOnly?: boolean;
     reportID?: string;
     disciplineCode?: string;
+    rootCause?: string;
 }) {
     const initialRows: ActionRow[] = Array.isArray(value) ? (value as ActionRow[]) : [];
     const [actions, setActions] = useState<ActionRow[]>(initialRows);
@@ -644,6 +710,7 @@ export function ActionCardsWidget({
                 readOnly={readOnly}
                 reportID={reportID}
                 disciplineCode={disciplineCode}
+                rootCause={rootCause}
             />
         </div>
     );
@@ -732,18 +799,18 @@ export function AiDraftWidget({
     };
 
     return (
-        <div className="relative mt-2 rounded-xl border border-primary/25 bg-primary/[0.03] p-4 shadow-xs transition-all">
+        <div className="relative rounded-xl border border-primary/25 bg-primary/[0.03] p-4 shadow-xs transition-all">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 pb-2 border-b border-primary/15">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-xs font-bold uppercase tracking-wide text-foreground">
-                        {disciplineID ? 'Root Cause Conclusion (D4)' : 'AI Draft'}
+                    <span className="text-[14px] font-bold text-foreground">
+                        {disciplineID ? 'Root cause conclusion' : 'AI Draft'}
                     </span>
                     <AiProvenanceInfo
                         fieldKey={fieldKey || 'rootCause.statement'}
-                        label="Root Cause Conclusion (D4)"
+                        label="Root cause conclusion"
                     />
                     <ComparativeDiagnosisBadge compact reportID={effectiveReportID} />
                 </div>
@@ -767,7 +834,7 @@ export function AiDraftWidget({
                         onChange={(e) => setDraft(e.target.value)}
                         rows={3}
                         placeholder="Enter concise root cause conclusion..."
-                        className="text-[13px] leading-relaxed resize-y bg-background font-normal"
+                        className="text-[13.5px] leading-relaxed resize-y bg-background font-normal"
                         autoFocus
                     />
                     <div className="flex items-center justify-between gap-2">
@@ -799,7 +866,7 @@ export function AiDraftWidget({
             ) : (
                 <div className="min-w-0">
                     {text ? (
-                        <p className="break-words text-[13px] leading-relaxed text-foreground font-medium">
+                        <p className="break-words text-[13.5px] leading-relaxed text-foreground font-normal">
                             {text}
                         </p>
                     ) : (

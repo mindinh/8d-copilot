@@ -41,6 +41,14 @@ export const VALUE_HELP_IDS = {
     /** Catalog type 2 — mã hoá HÀNH ĐỘNG của D3/D5/D7, song song với type 9 mã hoá lỗi. */
     taskCode: 'TASK_CODE',
     taskCodeGroup: 'TASK_CODE_GROUP',
+    /** Quản lý lô hàng (SAP MCHA/MCH1). Con của Material. */
+    batch: 'BATCH',
+    /** Danh mục phòng ban chịu trách nhiệm (SAP QMEL-ABTEI). */
+    department: 'DEPARTMENT',
+    /** Điều phối viên thông báo lỗi (SAP QMEL-PARNR). */
+    coordinator: 'COORDINATOR',
+    /** Đặc tính đo kiểm chuẩn (SAP QPMK Master Inspection Characteristics). Con của Material. */
+    characteristic: 'INSPECTION_CHARACTERISTIC',
 } as const;
 
 /**
@@ -157,6 +165,126 @@ const UNITS_OF_MEASURE = [
     { key: 'M3', text: 'Cubic metre' },
     { key: 'BOX', text: 'Box' },
     { key: 'PAL', text: 'Pallet' },
+];
+
+/**
+ * Danh sách lô sản xuất/vật tư mẫu gắn với từng Material — phục vụ F4 có cascading theo materialId.
+ */
+/**
+ * Danh sách lô sản xuất/vật tư mẫu gắn với từng Material — phục vụ F4 có cascading theo materialId.
+ * Cấu trúc: Plant (1000) -> Material ID (MAT-...) -> Batch ID (B-...)
+ */
+export const BATCHES = [
+    // MAT-10247 (Bracket Housing X240)
+    { key: 'B-49172', text: 'Bracket Housing X240 - Lot 2026-01-A (Quarantined: Surface Chatter & Burr)', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', plant: '1000', status: 'Quarantined', batchDate: '2026-01-15' },
+    { key: 'B-50231', text: 'Bracket Housing X240 - Lot 2026-02-A (Quarantined: Internal Porosity Void)', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', plant: '1000', status: 'Quarantined', batchDate: '2026-02-10' },
+    { key: 'B-51004', text: 'Bracket Housing X240 - Lot 2026-02-B (Unrestricted: Conforming Final Lot)', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-28' },
+    { key: 'B-51288', text: 'Bracket Housing X240 - Lot 2026-03-A (Unrestricted: Released for Assembly)', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', plant: '1000', status: 'Unrestricted', batchDate: '2026-03-01' },
+    // MAT-88301 (Shaft Pinion SP-90)
+    { key: 'B-55901', text: 'Shaft Pinion SP-90 - Lot 2026-01-SP (Quarantined: Pinion Taper Angle Out of Spec)', materialId: 'MAT-88301', materialDesc: 'Shaft Pinion SP-90', plant: '1000', status: 'Quarantined', batchDate: '2026-01-20' },
+    { key: 'B-55902', text: 'Shaft Pinion SP-90 - Lot 2026-02-SP (Unrestricted: Hardness & Dimensions Passed)', materialId: 'MAT-88301', materialDesc: 'Shaft Pinion SP-90', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-05' },
+    // MAT-30911 (Brake Caliper Piston)
+    { key: 'B-38290', text: 'Caliper Piston - Lot 2026-01-CP (Quarantined: Outer Diameter Scoring Scratch)', materialId: 'MAT-30911', materialDesc: 'Brake Caliper Piston', plant: '1000', status: 'Quarantined', batchDate: '2026-01-18' },
+    { key: 'B-38291', text: 'Caliper Piston - Lot 2026-02-CP (Unrestricted: Polished Chrome Plating Conforming)', materialId: 'MAT-30911', materialDesc: 'Brake Caliper Piston', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-12' },
+    // MAT-11500 (Sprocket Hub H22)
+    { key: 'B-40112', text: 'Sprocket Hub H22 - Lot 2026-02-SH (Quarantined: Central Bore Oversized +0.05mm)', materialId: 'MAT-11500', materialDesc: 'Sprocket Hub H22', plant: '1000', status: 'Quarantined', batchDate: '2026-02-14' },
+    { key: 'B-40115', text: 'Sprocket Hub H22 - Lot 2026-02-SH2 (Unrestricted: Keyway & Bore Tolerance Normal)', materialId: 'MAT-11500', materialDesc: 'Sprocket Hub H22', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-20' },
+    // MAT-10318 (Pump Housing P90)
+    { key: 'B-60318', text: 'Pump Housing P90 - Lot 2026-02-PH (Quarantined: Casting Micro-crack at Flange)', materialId: 'MAT-10318', materialDesc: 'Pump Housing P90', plant: '1000', status: 'Quarantined', batchDate: '2026-02-01' },
+    { key: 'B-60320', text: 'Pump Housing P90 - Lot 2026-02-PH2 (Unrestricted: Hydrostatic Pressure Test Passed)', materialId: 'MAT-10318', materialDesc: 'Pump Housing P90', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-25' },
+    // MAT-10402 (Drive Shaft S150)
+    { key: 'B-70402', text: 'Drive Shaft S150 - Lot 2026-02-DS (Quarantined: Runout & Total Wobble Above 0.08mm)', materialId: 'MAT-10402', materialDesc: 'Drive Shaft S150', plant: '1000', status: 'Quarantined', batchDate: '2026-02-08' },
+    { key: 'B-70405', text: 'Drive Shaft S150 - Lot 2026-02-DS2 (Unrestricted: Dynamic Balancing Verified)', materialId: 'MAT-10402', materialDesc: 'Drive Shaft S150', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-22' },
+    // MAT-88410 (Fuel Regulator Housing Valve)
+    { key: 'B-88411', text: 'Fuel Regulator Valve - Lot 2026-02-FR (Quarantined: High Pressure Helium Leakage)', materialId: 'MAT-88410', materialDesc: 'Fuel Regulator Housing Valve', plant: '1000', status: 'Quarantined', batchDate: '2026-02-15' },
+    { key: 'B-88412', text: 'Fuel Regulator Valve - Lot 2026-02-FR2 (Unrestricted: Sealing Integrity 100% Passed)', materialId: 'MAT-88410', materialDesc: 'Fuel Regulator Housing Valve', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-26' },
+    // MAT-10555 (Cylinder Head CH-50)
+    { key: 'B-90551', text: 'Cylinder Head CH-50 - Lot 2026-01-CH (Quarantined: Warpage on Gasket Surface)', materialId: 'MAT-10555', materialDesc: 'Cylinder Head CH-50', plant: '1000', status: 'Quarantined', batchDate: '2026-01-25' },
+    { key: 'B-90552', text: 'Cylinder Head CH-50 - Lot 2026-02-CH (Unrestricted: CMM Surface Flatness Verified)', materialId: 'MAT-10555', materialDesc: 'Cylinder Head CH-50', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-18' },
+    // MAT-10611 (Transmission Gear TG-12)
+    { key: 'B-91611', text: 'Transmission Gear TG-12 - Lot 2026-01-TG (Quarantined: Tooth Profile Involute Deviation)', materialId: 'MAT-10611', materialDesc: 'Transmission Gear TG-12', plant: '1000', status: 'Quarantined', batchDate: '2026-02-03' },
+    { key: 'B-91612', text: 'Transmission Gear TG-12 - Lot 2026-02-TG (Unrestricted: Carburized & Quenched Passed)', materialId: 'MAT-10611', materialDesc: 'Transmission Gear TG-12', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-27' },
+    // MAT-10744 (Manifold Valve MV-04)
+    { key: 'B-92741', text: 'Manifold Valve MV-04 - Lot 2026-01-MV (Quarantined: O-ring Sealing Groove Depth Defect)', materialId: 'MAT-10744', materialDesc: 'Manifold Valve MV-04', plant: '1000', status: 'Quarantined', batchDate: '2026-02-06' },
+    { key: 'B-92742', text: 'Manifold Valve MV-04 - Lot 2026-02-MV (Unrestricted: Pressure Hold Tested)', materialId: 'MAT-10744', materialDesc: 'Manifold Valve MV-04', plant: '1000', status: 'Unrestricted', batchDate: '2026-02-24' },
+];
+
+/**
+ * Danh mục phòng ban tiêu chuẩn (ISO 9001 / IATF 16949).
+ * Đơn vị tổ chức cha trực tiếp của các Coordinator.
+ */
+export const DEPARTMENTS = [
+    { key: 'QA', text: 'Quality Assurance', plant: '1000', lead: 'Heli (QE)' },
+    { key: 'PRD', text: 'Production Shop Floor', plant: '1000', lead: 'Sarah Connor' },
+    { key: 'ENG', text: 'Process Engineering', plant: '1000', lead: 'Frank Castle' },
+    { key: 'MAINT', text: 'Maintenance & Tooling', plant: '1000', lead: 'Dave Miller' },
+    { key: 'SCM', text: 'Supply Chain & Logistics', plant: '1000', lead: 'Grace Hopper' },
+    { key: 'CS', text: 'Customer Quality & Field Service', plant: '1000', lead: 'Alex Murphy' },
+];
+
+/**
+ * Danh mục điều phối viên thông báo lỗi (Notification Coordinators) chuẩn.
+ * Nhân sự trực thuộc từng phòng ban (Department) tương ứng.
+ */
+export const COORDINATORS = [
+    { key: 'BP-QA-01', text: 'Heli (QE)', department: 'Quality Assurance', functionTitle: 'Lead Quality Assurance Engineer', email: 'heli.qe@example.com', phone: '+84 901 234 567' },
+    { key: 'BP-QA-02', text: 'Minh Dinh', department: 'Quality Assurance', functionTitle: 'Senior QM Coordinator & 8D Champion', email: 'minh.dinh@example.com', phone: '+84 902 345 678' },
+    { key: 'BP-PRD-01', text: 'Sarah Connor', department: 'Production Shop Floor', functionTitle: 'Production Section Coordinator', email: 'sarah.c@example.com', phone: '+84 903 456 789' },
+    { key: 'BP-PRD-02', text: 'Marcus Wright', department: 'Production Shop Floor', functionTitle: 'Shift Supervisor & Assembly Lead', email: 'marcus.w@example.com', phone: '+84 903 888 999' },
+    { key: 'BP-ENG-01', text: 'Frank Castle', department: 'Process Engineering', functionTitle: 'Senior Process & Tooling Engineer', email: 'frank.c@example.com', phone: '+84 904 567 890' },
+    { key: 'BP-MAINT-01', text: 'Dave Miller', department: 'Maintenance & Tooling', functionTitle: 'Tooling & Machine Maintenance Specialist', email: 'dave.m@example.com', phone: '+84 905 678 901' },
+    { key: 'BP-SCM-01', text: 'Grace Hopper', department: 'Supply Chain & Logistics', functionTitle: 'Supplier Quality Assurance Lead', email: 'grace.h@example.com', phone: '+84 906 789 012' },
+    { key: 'BP-CS-01', text: 'Alex Murphy', department: 'Customer Quality & Field Service', functionTitle: 'Customer Complaint Lead & Field Liaison', email: 'alex.m@example.com', phone: '+84 907 111 222' },
+];
+
+/**
+ * Danh mục đặc tính đo kiểm chuẩn (Master Inspection Characteristics - SAP QPMK).
+ * Gắn với từng Material (hoặc chung) kèm dung sai thiết kế và thiết bị đo chuẩn.
+ */
+export const INSPECTION_CHARACTERISTICS = [
+    // MAT-10247 (Bracket Housing X240)
+    { key: 'MIC-FLAT-01', text: 'Flange Face Flatness', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', specLowerLimit: '0.0000', specUpperLimit: '0.0800', specUom: 'mm', defaultEquipment: 'CMM-ZEISS-01', charType: 'Quantitative' },
+    { key: 'MIC-BURR-01', text: 'Flange Edge Burr Height', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', specLowerLimit: '0.0000', specUpperLimit: '0.0500', specUom: 'mm', defaultEquipment: 'OPTICAL-COMP-01', charType: 'Quantitative' },
+    { key: 'MIC-DIST-01', text: 'Bolt Hole Pitch Distance', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', specLowerLimit: '120.0000', specUpperLimit: '120.1500', specUom: 'mm', defaultEquipment: 'CMM-ZEISS-01', charType: 'Quantitative' },
+    { key: 'MIC-PORO-01', text: 'Porosity Void Area Ratio', materialId: 'MAT-10247', materialDesc: 'Bracket Housing X240', specLowerLimit: '0.0000', specUpperLimit: '1.5000', specUom: '%', defaultEquipment: 'XRAY-SCAN-01', charType: 'Quantitative' },
+
+    // MAT-88301 (Shaft Pinion SP-90)
+    { key: 'MIC-TAPER-01', text: 'Pinion Taper Angle', materialId: 'MAT-88301', materialDesc: 'Shaft Pinion SP-90', specLowerLimit: '15.0000', specUpperLimit: '15.0500', specUom: 'deg', defaultEquipment: 'PROFILE-PROJ-02', charType: 'Quantitative' },
+    { key: 'MIC-HARD-01', text: 'Surface Hardness Rockwell C', materialId: 'MAT-88301', materialDesc: 'Shaft Pinion SP-90', specLowerLimit: '58.0000', specUpperLimit: '62.0000', specUom: 'HRC', defaultEquipment: 'ROCKWELL-HR-01', charType: 'Quantitative' },
+    { key: 'MIC-TOOTH-01', text: 'Gear Tooth Involute Error', materialId: 'MAT-88301', materialDesc: 'Shaft Pinion SP-90', specLowerLimit: '0.0000', specUpperLimit: '0.0120', specUom: 'mm', defaultEquipment: 'GEAR-TESTER-01', charType: 'Quantitative' },
+
+    // MAT-30911 (Brake Caliper Piston)
+    { key: 'MIC-OD-01', text: 'Piston Outer Diameter (OD)', materialId: 'MAT-30911', materialDesc: 'Brake Caliper Piston', specLowerLimit: '45.0000', specUpperLimit: '45.0200', specUom: 'mm', defaultEquipment: 'AIR-GAUGE-02', charType: 'Quantitative' },
+    { key: 'MIC-COAT-01', text: 'Chrome Plating Thickness', materialId: 'MAT-30911', materialDesc: 'Brake Caliper Piston', specLowerLimit: '15.0000', specUpperLimit: '25.0000', specUom: 'µm', defaultEquipment: 'EDDY-CURRENT-01', charType: 'Quantitative' },
+    { key: 'MIC-ROUGH-02', text: 'Piston Skirt Roughness Ra', materialId: 'MAT-30911', materialDesc: 'Brake Caliper Piston', specLowerLimit: '0.0000', specUpperLimit: '0.2000', specUom: 'µm', defaultEquipment: 'SURF-TESTER-01', charType: 'Quantitative' },
+
+    // MAT-11500 (Sprocket Hub H22)
+    { key: 'MIC-BORE-01', text: 'Central Bore Diameter', materialId: 'MAT-11500', materialDesc: 'Sprocket Hub H22', specLowerLimit: '22.0000', specUpperLimit: '22.0300', specUom: 'mm', defaultEquipment: 'BORE-MICROMETER-01', charType: 'Quantitative' },
+    { key: 'MIC-KEY-01', text: 'Keyway Width', materialId: 'MAT-11500', materialDesc: 'Sprocket Hub H22', specLowerLimit: '6.0000', specUpperLimit: '6.0400', specUom: 'mm', defaultEquipment: 'PLUG-GAUGE-GO-NOGO', charType: 'Quantitative' },
+
+    // MAT-10318 (Pump Housing P90)
+    { key: 'MIC-ROUGH-01', text: 'Sealing Face Roughness Ra', materialId: 'MAT-10318', materialDesc: 'Pump Housing P90', specLowerLimit: '0.0000', specUpperLimit: '0.8000', specUom: 'µm', defaultEquipment: 'MITUTOYO-SJ410', charType: 'Quantitative' },
+    { key: 'MIC-BURST-01', text: 'Hydrostatic Burst Pressure', materialId: 'MAT-10318', materialDesc: 'Pump Housing P90', specLowerLimit: '120.0000', specUpperLimit: '150.0000', specUom: 'bar', defaultEquipment: 'HYDRO-BENCH-01', charType: 'Quantitative' },
+
+    // MAT-10402 (Drive Shaft S150)
+    { key: 'MIC-RUNOUT-01', text: 'Total Radial Runout / Wobble', materialId: 'MAT-10402', materialDesc: 'Drive Shaft S150', specLowerLimit: '0.0000', specUpperLimit: '0.0400', specUom: 'mm', defaultEquipment: 'DIAL-INDICATOR-BENCH', charType: 'Quantitative' },
+    { key: 'MIC-BAL-01', text: 'Dynamic Balance Imbalance', materialId: 'MAT-10402', materialDesc: 'Drive Shaft S150', specLowerLimit: '0.0000', specUpperLimit: '1.5000', specUom: 'g·cm', defaultEquipment: 'SHENK-BALANCING-01', charType: 'Quantitative' },
+
+    // MAT-88410 (Fuel Regulator Housing Valve)
+    { key: 'MIC-LEAK-01', text: 'Helium Leak Rate', materialId: 'MAT-88410', materialDesc: 'Fuel Regulator Housing Valve', specLowerLimit: '0.0000', specUpperLimit: '1.0000', specUom: 'sccm', defaultEquipment: 'PFEIFFER-HELIUM-01', charType: 'Quantitative' },
+    { key: 'MIC-CRACK-01', text: 'Valve Cracking Pressure', materialId: 'MAT-88410', materialDesc: 'Fuel Regulator Housing Valve', specLowerLimit: '3.4000', specUpperLimit: '3.6000', specUom: 'bar', defaultEquipment: 'TEST-STAND-FRV', charType: 'Quantitative' },
+
+    // MAT-10555 (Cylinder Head CH-50)
+    { key: 'MIC-WARP-01', text: 'Cylinder Deck Face Warpage', materialId: 'MAT-10555', materialDesc: 'Cylinder Head CH-50', specLowerLimit: '0.0000', specUpperLimit: '0.0500', specUom: 'mm', defaultEquipment: 'CMM-ZEISS-01', charType: 'Quantitative' },
+
+    // MAT-10611 (Transmission Gear TG-12)
+    { key: 'MIC-BACK-01', text: 'Gear Mesh Backlash', materialId: 'MAT-10611', materialDesc: 'Transmission Gear TG-12', specLowerLimit: '0.0800', specUpperLimit: '0.1500', specUom: 'mm', defaultEquipment: 'DIAL-GAUGE-02', charType: 'Quantitative' },
+
+    // MAT-10744 (Manifold Valve MV-04)
+    { key: 'MIC-GROOVE-01', text: 'O-ring Sealing Groove Depth', materialId: 'MAT-10744', materialDesc: 'Manifold Valve MV-04', specLowerLimit: '2.4000', specUpperLimit: '2.5000', specUom: 'mm', defaultEquipment: 'DEPTH-MICROMETER-01', charType: 'Quantitative' },
+
+    // Đặc tính chung (General / Across Materials)
+    { key: 'MIC-VISUAL-01', text: 'Surface Cosmetic Defect / Scratch', materialId: '', materialDesc: 'General (All Materials)', specLowerLimit: '0.0000', specUpperLimit: '0.0000', specUom: 'visual', defaultEquipment: 'OPTICAL-MICROSCOPE', charType: 'Qualitative' },
 ];
 
 interface ValueHelpSeed {
@@ -358,6 +486,59 @@ const SEEDS: ValueHelpSeed[] = [
         displayFormat: 'textOnly',
         sortBy: 'key',
     },
+    {
+        valueHelpID: VALUE_HELP_IDS.batch,
+        description: 'Batches of materials (SAP MCHA/MCH1). Filtered by materialId.',
+        sourceType: 'static',
+        staticEntries: JSON.stringify(BATCHES),
+        dependsOn: 'materialId',
+        returnMapping: JSON.stringify([
+            { sourceColumn: 'key', targetField: 'batchId' },
+            { sourceColumn: 'materialId', targetField: 'materialId' },
+            { sourceColumn: 'plant', targetField: 'plant' },
+        ]),
+        displayFormat: 'keyAndText',
+        sortBy: 'key',
+    },
+    {
+        valueHelpID: VALUE_HELP_IDS.department,
+        description: 'Responsible departments for defect handling and quality assurance (QMEL-ABTEI).',
+        sourceType: 'static',
+        staticEntries: JSON.stringify(DEPARTMENTS),
+        returnMapping: JSON.stringify([
+            { sourceColumn: 'text', targetField: 'department' },
+        ]),
+        displayFormat: 'textOnly',
+        sortBy: 'key',
+    },
+    {
+        valueHelpID: VALUE_HELP_IDS.coordinator,
+        description: 'Quality notification coordinators and lead engineers (QMEL-PARNR).',
+        sourceType: 'static',
+        staticEntries: JSON.stringify(COORDINATORS),
+        returnMapping: JSON.stringify([
+            { sourceColumn: 'text', targetField: 'coordinator' },
+            { sourceColumn: 'department', targetField: 'department' },
+        ]),
+        displayFormat: 'textOnly',
+        sortBy: 'text',
+    },
+    {
+        valueHelpID: VALUE_HELP_IDS.characteristic,
+        description: 'Master inspection characteristics (SAP QPMK) with default tolerance limits and equipment. Filtered by materialId.',
+        sourceType: 'static',
+        staticEntries: JSON.stringify(INSPECTION_CHARACTERISTICS),
+        dependsOn: 'materialId',
+        returnMapping: JSON.stringify([
+            { sourceColumn: 'text', targetField: 'characteristic' },
+            { sourceColumn: 'specLowerLimit', targetField: 'specLowerLimit' },
+            { sourceColumn: 'specUpperLimit', targetField: 'specUpperLimit' },
+            { sourceColumn: 'specUom', targetField: 'specUom' },
+            { sourceColumn: 'defaultEquipment', targetField: 'equipment' },
+        ]),
+        displayFormat: 'textOnly',
+        sortBy: 'text',
+    },
 ];
 
 /**
@@ -436,6 +617,15 @@ async function reconcileStaticCatalogues(db: any): Promise<void> {
         );
         if (!row) continue;
 
+        // Đồng bộ displayFormat nếu cấu hình trong code có thay đổi
+        if (seed.displayFormat) {
+            await db.run(
+                UPDATE(VALUE_HELPS)
+                    .set({ displayFormat: seed.displayFormat })
+                    .where({ ID: row.ID }),
+            );
+        }
+
         let stored: Array<{ key?: string }>;
         try {
             const parsed = JSON.parse(row.staticEntries || '[]');
@@ -445,6 +635,16 @@ async function reconcileStaticCatalogues(db: any): Promise<void> {
             // Nội dung hỏng thì bỏ qua chứ không ghi đè: đè lên là xoá mất bản
             // admin đã sửa, và mất im lặng. Báo to để có người đi sửa tay.
             LOG.error(`staticEntries của ${seed.valueHelpID} không đọc được (${e.message}) — bỏ qua reconcile, cần sửa tay.`);
+            continue;
+        }
+
+        if (stored.length === 0) {
+            await db.run(
+                UPDATE(VALUE_HELPS)
+                    .set({ staticEntries: seed.staticEntries })
+                    .where({ ID: row.ID }),
+            );
+            LOG.info(`Đã nạp toàn bộ staticEntries cho ${seed.valueHelpID}`);
             continue;
         }
 

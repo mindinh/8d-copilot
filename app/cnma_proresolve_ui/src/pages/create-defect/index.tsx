@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback, type ChangeEvent } f
 import { useNavigate } from 'react-router-dom';
 import { fillPlaceholderOnTab } from '@/hooks/use-placeholder-autofill';
 import { useUserInfo } from '@/hooks/use-user-info';
-import { useValueHelp } from '@/hooks/use-value-help';
+import { useValueHelp, useValueHelpSync } from '@/hooks/use-value-help';
 import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
 import {
     applyReturnMapping,
@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { defectsService, type DefectItem } from '@/services/defect-service';
+import { useNextNumber } from '@/services/master-data-service';
 
 export const ORIGIN_CUSTOMER = 'Q1 - Customer Complaint';
 
@@ -171,7 +172,7 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
     const [notificationId, setNotificationId] = useState('');
     const [origin, setOrigin] = useState('Q3 - Internal Defect');
     const [symptomShortText, setSymptomShortText] = useState('');
-    const [status] = useState('In Process');
+    const [status] = useState('Open');
     const [foundDate, setFoundDate] = useState(() => new Date().toISOString().split('T')[0]);
     // Lượng ảnh hưởng: SỐ + đơn vị, không phải một câu.
     //
@@ -227,6 +228,18 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
     const [slaResponseDue, setSlaResponseDue] = useState('');
 
     const isEditing = Boolean(defect?.ID);
+    const nextDefectIdQuery = useNextNumber('DEFECT', open && !isEditing);
+
+    useEffect(() => {
+        if (!open) return;
+        if (!isEditing && nextDefectIdQuery.data && !notificationId) {
+            setNotificationId(nextDefectIdQuery.data);
+        }
+    }, [open, isEditing, nextDefectIdQuery.data, notificationId]);
+
+    const displayedNotificationId = isEditing
+        ? notificationId
+        : (notificationId || nextDefectIdQuery.data || 'Allocating ID...');
 
     /**
      * Đổ bản ghi đang sửa vào form, MỘT LẦN mỗi lần mở.
@@ -353,6 +366,17 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
         dependsOnValue: materialId,
         enabled: entryMode === 'during-inspection',
     });
+    // Lô hàng (Batch ID): lọc theo VẬT TƯ (materialId)
+    const batchVh = useValueHelp(VALUE_HELP_IDS.batch, {
+        dependsOnValue: materialId,
+        enabled: Boolean(materialId.trim()),
+    });
+    const departmentVh = useValueHelp(VALUE_HELP_IDS.department);
+    const coordinatorVh = useValueHelp(VALUE_HELP_IDS.coordinator);
+    // Đặc tính đo kiểm chuẩn (Master Inspection Characteristics): lọc theo VẬT TƯ (materialId)
+    const characteristicVh = useValueHelp(VALUE_HELP_IDS.characteristic, {
+        dependsOnValue: materialId,
+    });
 
     /**
      * Dán các ô phụ thuộc sau khi chọn một mục F4.
@@ -370,11 +394,57 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
             defectText: setDefectText,
             defectClass: setDefectClass,
             defectCodeGroup: setDefectCodeGroup,
+            batchId: setBatchId,
+            coordinator: setCoordinator,
+            department: setDepartment,
         };
         for (const [field, value] of Object.entries(applyReturnMapping(entry, mapping))) {
             setters[field]?.(value);
         }
     }, []);
+
+    /**
+     * Giữ các ô mô tả khớp với mã, DÙ mã vào ô bằng đường nào.
+     *
+     * `onPick` chỉ bắn khi người dùng chọn từ danh sách. Mã còn vào ô bằng ba
+     * đường khác — gõ đủ mã, dán, nạp từ JSON — và ba đường đó trước đây để lại
+     * mô tả của mã CŨ nằm cạnh mã MỚI. Ba hook dưới đây đóng cả ba đường, và
+     * cũng là chỗ dọn ô chỉ đọc khi mã bị xoá trắng.
+     *
+     * Chỉ ba danh mục này cần: chúng là ba danh mục DUY NHẤT có ô mô tả đi kèm
+     * trên màn hình. Coordinator và Department tự trả về chính giá trị của mình,
+     * không suy ra ô nào khác.
+     */
+    useValueHelpSync({
+        value: materialId,
+        state: materialVh,
+        setters: { materialDesc: setMaterialDesc, materialGroup: setMaterialGroup },
+        // Nhóm vật tư là thuộc tính của MÃ và ô của nó chỉ đọc. Mã không tra được
+        // nữa mà vẫn để nguyên nhóm cũ là để lại một lời khẳng định sai.
+        derivedReadOnly: ['materialGroup'],
+        // Lô hàng lọc theo vật tư: đổi vật tư thì lô cũ thuộc về vật tư khác.
+        onEntryChange: () => setBatchId(''),
+    });
+
+    useValueHelpSync({
+        value: workCenterId,
+        state: workCenterVh,
+        setters: { workCenterDesc: setWorkCenterDesc },
+        derivedReadOnly: ['workCenterDesc'],
+    });
+
+    useValueHelpSync({
+        value: defectCode,
+        state: defectCodeVh,
+        setters: {
+            defectText: setDefectText,
+            defectClass: setDefectClass,
+            defectCodeGroup: setDefectCodeGroup,
+        },
+        // Mức nghiêm trọng suy ra từ mã, người dùng không gõ được. Mô tả thì sửa
+        // được nên không nằm ở đây — nó chỉ bị ghi đè khi chuyển hẳn sang mã khác.
+        derivedReadOnly: ['defectClass'],
+    });
 
     /**
      * Chọn một lô kiểm tra — ĐÂY là toàn bộ Đường A.
@@ -394,6 +464,9 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
      */
     const applyLotPick = useCallback((entry: ValueHelpEntry, mapping: ReturnMappingRule[]) => {
         const mapped = applyReturnMapping(entry, mapping);
+        if (mapped.materialId && mapped.materialId !== materialId) {
+            setBatchId('');
+        }
         const headerSetters: Record<string, (v: string) => void> = {
             materialId: setMaterialId,
             plant: setPlant,
@@ -483,17 +556,23 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
         const checks: Array<[string, boolean]> = [
             ['Plant', isOutsideCatalogue(plantVh.entries, plant, plantVh.loading)],
             ['Material ID', isOutsideCatalogue(materialVh.entries, materialId, materialVh.loading)],
+            ['Batch ID', isOutsideCatalogue(batchVh.entries, batchId, batchVh.loading)],
             ['Work Center ID', isOutsideCatalogue(workCenterVh.entries, workCenterId, workCenterVh.loading)],
             ['Defect Code Group', isOutsideCatalogue(codeGroupVh.entries, defectCodeGroup, codeGroupVh.loading)],
             ['Defect Code', isOutsideCatalogue(defectCodeVh.entries, defectCode, defectCodeVh.loading)],
+            ['Notification Coordinator', isOutsideCatalogue(coordinatorVh.entries, coordinator, coordinatorVh.loading)],
+            ['Responsible Department', isOutsideCatalogue(departmentVh.entries, department, departmentVh.loading)],
         ];
         return checks.filter(([, bad]) => bad).map(([label]) => label);
     }, [
         plant, plantVh.entries, plantVh.loading,
         materialId, materialVh.entries, materialVh.loading,
+        batchId, batchVh.entries, batchVh.loading,
         workCenterId, workCenterVh.entries, workCenterVh.loading,
         defectCodeGroup, codeGroupVh.entries, codeGroupVh.loading,
         defectCode, defectCodeVh.entries, defectCodeVh.loading,
+        coordinator, coordinatorVh.entries, coordinatorVh.loading,
+        department, departmentVh.entries, departmentVh.loading,
     ]);
 
     /**
@@ -544,6 +623,34 @@ export function CreateDefectDialog({ open, onOpenChange, onCreated, defect }: Cr
         updated[index] = { ...updated[index], [field]: value };
         setInspections(updated);
     };
+
+    /**
+     * Tự động điền dung sai thiết kế, đơn vị và thiết bị đo chuẩn khi chọn MIC từ F4.
+     */
+    const handlePickCharacteristic = useCallback((index: number, entry: ValueHelpEntry) => {
+        setInspections((prev) => {
+            const updated = [...prev];
+            const current = updated[index] ?? { ...EMPTY_INSPECTION };
+            const charText = String(entry.text || entry.key || '');
+            const specLower = entry.specLowerLimit !== undefined && entry.specLowerLimit !== null
+                ? String(entry.specLowerLimit) : current.specLowerLimit;
+            const specUpper = entry.specUpperLimit !== undefined && entry.specUpperLimit !== null
+                ? String(entry.specUpperLimit) : current.specUpperLimit;
+            const uom = entry.specUom ? String(entry.specUom) : current.specUom;
+            const equipment = (entry.defaultEquipment && !current.equipment)
+                ? String(entry.defaultEquipment) : current.equipment;
+
+            updated[index] = {
+                ...current,
+                characteristic: charText,
+                specLowerLimit: specLower,
+                specUpperLimit: specUpper,
+                specUom: uom,
+                equipment,
+            };
+            return updated;
+        });
+    }, []);
 
     const removeInspection = (index: number) => {
         if (inspections.length <= 1) return;
@@ -1270,24 +1377,24 @@ function numberOrNull(val?: string | null): number | null {
                     </CardHeader>
 
                     <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* Notification ID — server cấp khi lưu, trừ khi gõ đè */}
+                        {/* Notification ID — tự động cấp theo dải số, tuyệt đối không cho nhập tay */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Notification ID</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold">Notification ID</Label>
+                                <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                    {isEditing ? 'Assigned' : 'System Assigned'}
+                                </Badge>
+                            </div>
                             <Input
-                                value={notificationId}
-                                onChange={(e) => setNotificationId(e.target.value)}
-                                className="font-mono text-xs"
-                                placeholder="Assigned on save"
-                                // Khoá khi sửa: số đã cấp, đã đi vào `Reports.
-                                // sourceDefectId` và vào mọi vết kiểm toán. Đổi nó
-                                // ở đây là cắt sợi dây nối lỗi với 8D của nó.
-                                readOnly={isEditing}
-                                disabled={isEditing}
+                                value={displayedNotificationId}
+                                className="font-mono text-xs font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
+                                readOnly
+                                disabled
                             />
                             <p className="text-[11px] text-muted-foreground">
                                 {isEditing
                                     ? 'Issued once, when the defect was recorded. It cannot change — the 8D and the audit trail refer to it.'
-                                    : 'Leave blank and the system assigns the next notification number when you save. Type one only when the defect already carries a number from SAP.'}
+                                    : 'Auto-assigned by system number sequence (SAP QMEL) on save.'}
                             </p>
                         </div>
 
@@ -1489,8 +1596,18 @@ function numberOrNull(val?: string | null): number | null {
                             <Label className="text-xs font-semibold">Material ID</Label>
                             <ValueHelpInput
                                 value={materialId}
-                                onChange={setMaterialId}
-                                onPick={(entry) => applyPick(entry, materialVh.returnMapping)}
+                                onChange={(newMat) => {
+                                    if (newMat !== materialId) {
+                                        setMaterialId(newMat);
+                                        setBatchId(''); // Auto-clear batch khi đổi material
+                                    }
+                                }}
+                                onPick={(entry) => {
+                                    if (entry.key !== materialId) {
+                                        setBatchId(''); // Auto-clear batch khi đổi material
+                                    }
+                                    applyPick(entry, materialVh.returnMapping);
+                                }}
                                 entries={materialVh.entries}
                                 loading={materialVh.loading}
                                 strict
@@ -1526,14 +1643,21 @@ function numberOrNull(val?: string | null): number | null {
                             />
                         </div>
 
-                        {/* Batch ID */}
+                        {/* Batch ID — phụ thuộc vào Material ID */}
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold">Batch ID</Label>
-                            <Input
+                            <ValueHelpInput
                                 value={batchId}
-                                onChange={(e) => setBatchId(e.target.value)}
-                                placeholder="e.g. B-55901"
-                                className="font-mono text-xs"
+                                onChange={setBatchId}
+                                onPick={(entry) => applyPick(entry, batchVh.returnMapping)}
+                                entries={batchVh.entries}
+                                loading={batchVh.loading}
+                                strict
+                                disabled={!materialId.trim()}
+                                catalogLabel={materialId.trim() ? `the batch list for ${materialId.trim()}` : 'the batch list'}
+                                scoringNote={materialId.trim() ? `Filtered to batches of ${materialId.trim()}` : 'Select Material ID first'}
+                                maintenanceHint="Maintain batches in Master Data first."
+                                placeholder={materialId.trim() ? 'e.g. B-49172' : 'Select Material ID first'}
                             />
                         </div>
 
@@ -1701,12 +1825,21 @@ function numberOrNull(val?: string | null): number | null {
 
                                 {inspections.map((insp, idx) => (
                                     <div key={idx} className="flex items-center gap-2">
-                                        <Input
-                                            value={insp.characteristic}
-                                            onChange={(e) => updateInspection(idx, 'characteristic', e.target.value)}
-                                            placeholder="e.g. Flange burr height"
-                                            className="flex-[2] text-xs"
-                                        />
+                                        <div className="flex-[2] min-w-0">
+                                            <ValueHelpInput
+                                                value={insp.characteristic}
+                                                onChange={(val) => updateInspection(idx, 'characteristic', val)}
+                                                onPick={(entry) => handlePickCharacteristic(idx, entry)}
+                                                entries={characteristicVh.entries}
+                                                loading={characteristicVh.loading}
+                                                strict={false}
+                                                quiet={true}
+                                                pickKey="text"
+                                                placeholder="e.g. Flange Face Flatness"
+                                                catalogLabel={materialId ? `MIC for ${materialId}` : 'inspection characteristics'}
+                                                maintenanceHint="Pick standard MIC (auto-fills limits) or type custom."
+                                            />
+                                        </div>
                                         <Input
                                             value={insp.measuredValue}
                                             onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
@@ -1832,25 +1965,37 @@ function numberOrNull(val?: string | null): number | null {
                             </Select>
                         </div>
 
-                        {/* Notification Coordinator */}
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Notification Coordinator</Label>
-                            <Input
-                                value={coordinator}
-                                onChange={(e) => setCoordinator(e.target.value)}
-                                placeholder="e.g. Minh Dinh"
-                                className="text-xs font-mono"
-                            />
-                        </div>
-
                         {/* Responsible Department */}
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold">Responsible Department</Label>
-                            <Input
+                            <ValueHelpInput
                                 value={department}
-                                onChange={(e) => setDepartment(e.target.value)}
+                                onChange={setDepartment}
+                                onPick={(entry) => applyPick(entry, departmentVh.returnMapping)}
+                                entries={departmentVh.entries}
+                                loading={departmentVh.loading}
+                                strict
+                                dropdownPlacement="top"
                                 placeholder="e.g. Quality Assurance"
-                                className="text-xs font-mono"
+                                catalogLabel="the responsible department list"
+                                maintenanceHint="Select a department from Master Data."
+                            />
+                        </div>
+
+                        {/* Notification Coordinator */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Notification Coordinator</Label>
+                            <ValueHelpInput
+                                value={coordinator}
+                                onChange={setCoordinator}
+                                onPick={(entry) => applyPick(entry, coordinatorVh.returnMapping)}
+                                entries={coordinatorVh.entries}
+                                loading={coordinatorVh.loading}
+                                strict
+                                dropdownPlacement="top"
+                                placeholder="e.g. Heli (QE)"
+                                catalogLabel="the notification coordinator list"
+                                maintenanceHint="Add coordinator in Master Data first."
                             />
                         </div>
                     </CardContent>

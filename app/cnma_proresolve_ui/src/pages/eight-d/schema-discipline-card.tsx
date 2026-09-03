@@ -65,6 +65,16 @@ const SELF_LABELLED_WIDGETS = new Set([
     'preventive.actions',
     'verification.actions',
     'actions',
+    'ishikawa-grid',
+    'rootCause.ishikawaBoard',
+    'why-chain',
+    'rootCause.fiveWhy',
+    'ai-draft',
+    'rootCause.statement',
+    'fmea-link',
+    'preventive.fmea',
+    'closure-gate',
+    'closure.gate',
 ]);
 
 /**
@@ -119,6 +129,178 @@ function compactValue(value: unknown): string {
     const record = value as Record<string, unknown>;
     const summary = ['partnerName', 'name', 'actionText', 'description', 'answer', 'measuredValue', 'symptomShortText'].map((key) => record[key]).find((item) => typeof item === 'string' && item);
     return summary ? String(summary) : Object.entries(record).slice(0, 3).map(([key, item]) => `${humanize(key)}: ${String(item ?? '-')}`).join(' · ');
+}
+
+const SIX_M_CATEGORIES = ['Man', 'Machine', 'Method', 'Material', 'Measurement', 'Environment'] as const;
+
+function isTruthy(val: unknown): boolean {
+    if (!val) return false;
+    if (val === true || val === 1 || val === '1') return true;
+    const s = String(val).trim().toLowerCase();
+    return s === 'true' || s === 'x' || s === 'yes';
+}
+
+function normalizeCategoryName(raw: unknown): string | null {
+    if (!raw || typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === '—' || trimmed === '-') return null;
+    const matched = SIX_M_CATEGORIES.find((m) => m.toLowerCase() === trimmed.toLowerCase());
+    return matched || (trimmed.charAt(0).toUpperCase() + trimmed.slice(1));
+}
+
+export function extractAiRootCause(
+    d4Data: Record<string, unknown> | null,
+    context: Record<string, unknown> | null,
+): string | null {
+    if (!d4Data && !context) return null;
+
+    // 1. Tìm trong bảng ishikawaBoard (ở mọi vị trí có thể trong d4Data hoặc context)
+    const ishikawaBoard = (
+        (d4Data?.rootCause as any)?.ishikawaBoard ||
+        d4Data?.['rootCause.ishikawaBoard'] ||
+        d4Data?.ishikawaBoard ||
+        (d4Data?.rootCause as any)?.ishikawa ||
+        d4Data?.ishikawa ||
+        context?.ishikawa ||
+        (context?.rootCause as any)?.ishikawaBoard ||
+        []
+    );
+
+    if (Array.isArray(ishikawaBoard) && ishikawaBoard.length > 0) {
+        // A. Dòng có cờ isRootCause
+        const rootRow = ishikawaBoard.find((r) => r && isTruthy(r.isRootCause));
+        if (rootRow?.category) {
+            const cat = normalizeCategoryName(rootRow.category);
+            if (cat) return cat;
+        }
+        // B. Dòng có finding thực tế (khác 'not assessed', 'not provided', '—')
+        const assessedRow = ishikawaBoard.find((r) => {
+            const f = String(r?.finding ?? r?.description ?? '').trim().toLowerCase();
+            return f && f !== 'not assessed' && f !== 'not provided' && f !== '—' && f !== '-';
+        });
+        if (assessedRow?.category) {
+            const cat = normalizeCategoryName(assessedRow.category);
+            if (cat) return cat;
+        }
+    }
+
+    // 2. Tìm trong context.rootCause
+    const ctxRoot = context?.rootCause;
+    if (ctxRoot) {
+        if (typeof ctxRoot === 'object' && (ctxRoot as any).category) {
+            const cat = normalizeCategoryName((ctxRoot as any).category);
+            if (cat) return cat;
+        }
+        if (typeof ctxRoot === 'string') {
+            const cat = normalizeCategoryName(ctxRoot);
+            if (cat) return cat;
+        }
+    }
+
+    // 3. Tìm trong d4Data.rootCause.category
+    const d4Root = (d4Data?.rootCause as any);
+    if (d4Root && typeof d4Root === 'object' && d4Root.category) {
+        const cat = normalizeCategoryName(d4Root.category);
+        if (cat) return cat;
+    }
+
+    // 4. Tìm trong rootCause.statement (ví dụ: "(Machine)", "Machine: ...", "Root cause: Method")
+    const statement = String(
+        d4Root?.statement ||
+        d4Data?.['rootCause.statement'] ||
+        d4Data?.statement ||
+        ''
+    );
+    if (statement) {
+        for (const m of SIX_M_CATEGORIES) {
+            const regex = new RegExp(`\\b${m}\\b`, 'i');
+            if (regex.test(statement)) {
+                return m;
+            }
+        }
+    }
+
+    // 5. Tìm trong fiveWhy
+    const fiveWhy = (
+        d4Root?.fiveWhy ||
+        d4Data?.['rootCause.fiveWhy'] ||
+        d4Data?.fiveWhy ||
+        context?.fiveWhy ||
+        []
+    );
+    if (Array.isArray(fiveWhy) && fiveWhy.length > 0) {
+        const rootStep = fiveWhy.find((s) => s && isTruthy(s.isRootCauseStep));
+        const text = String(rootStep?.answer ?? rootStep?.why ?? '');
+        for (const m of SIX_M_CATEGORIES) {
+            if (new RegExp(`\\b${m}\\b`, 'i').test(text)) return m;
+        }
+    }
+
+    // 6. Tìm trong custom findings
+    const customFindings = (
+        d4Data?.ishikawaCustomFindings ||
+        (d4Data?.rootCause as any)?.ishikawaCustomFindings ||
+        {}
+    );
+    if (customFindings && typeof customFindings === 'object') {
+        const keys = Object.keys(customFindings);
+        if (keys.length > 0) {
+            const cat = normalizeCategoryName(keys[0]);
+            if (cat) return cat;
+        }
+    }
+
+    return null;
+}
+
+export function resolveD4RootCause(
+    d4: Discipline8D | undefined,
+    caseContext?: unknown,
+): string {
+    if (!d4) return '—';
+
+    let d4Data: Record<string, unknown> | null = null;
+    try {
+        d4Data = typeof d4.resultJson === 'object' && d4.resultJson !== null
+            ? (d4.resultJson as Record<string, unknown>)
+            : JSON.parse(d4.resultJson || '{}');
+    } catch {
+        d4Data = {};
+    }
+
+    let parsedContext: Record<string, unknown> | null = null;
+    try {
+        parsedContext = typeof caseContext === 'object' && caseContext !== null
+            ? (caseContext as Record<string, unknown>)
+            : JSON.parse(String(caseContext || '{}'));
+    } catch {
+        parsedContext = {};
+    }
+
+    const isD4Completed = reviewStatusOf(d4) === 'Approved' || d4.reviewStatus === 'Approved';
+
+    // Root Cause do AI suy luận (aiRoot):
+    const aiRoot = extractAiRootCause(d4Data, parsedContext);
+
+    // Root Cause do người dùng chọn / chốt:
+    const userSelected = normalizeCategoryName(
+        d4Data?.confirmedRootCategory ||
+        d4Data?.selectedRootCategory ||
+        (d4Data?.rootCause as any)?.selectedRootCategory ||
+        (d4Data?.rootCause as any)?.confirmedRootCategory
+    );
+
+    // Quy tắc nghiệp vụ:
+    // - Khi D4 đã Complete:
+    //   Hiển thị userSelected (nếu người dùng có đổi).
+    //   Nếu người dùng không đổi (hoặc chưa từng chọn khác AI), hiển thị aiRoot!
+    // - Khi D4 chưa Complete:
+    //   Hiển thị aiRoot! (Người dùng có click chọn khác ở D4 nhưng chưa bấm Complete thì D5 vẫn giữ nguyên aiRoot).
+    if (isD4Completed) {
+        return userSelected || aiRoot || '—';
+    }
+
+    return aiRoot || userSelected || '—';
 }
 
 function ObjectTable({ rows }: { rows: Array<Record<string, unknown>> }) {
@@ -220,7 +402,22 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
             />
         );
     }
-    if (field.widget === 'action-cards') return <ActionCardsWidget value={value} disciplineID={disciplineID} fieldKey={field.key} acceptedValue={getPath(data, assignedFieldFor(field.key))} readOnly={isLocked} reportID={reportID} disciplineCode={disciplineCode} />;
+    if (field.widget === 'action-cards') {
+        const d4 = siblings?.find((d) => d.code === 'D4');
+        const d4RootCause = disciplineCode === 'D5' ? resolveD4RootCause(d4, context) : '—';
+        return (
+            <ActionCardsWidget
+                value={value}
+                disciplineID={disciplineID}
+                fieldKey={field.key}
+                acceptedValue={getPath(data, assignedFieldFor(field.key))}
+                readOnly={isLocked}
+                reportID={reportID}
+                disciplineCode={disciplineCode}
+                rootCause={d4RootCause}
+            />
+        );
+    }
     if (field.widget === 'ai-draft') return <AiDraftWidget value={value} disciplineID={disciplineID} readOnly={isLocked} reportID={reportID} fieldKey={field.key} />;
     if (field.widget === 'fmea-link') return <FmeaLinkWidget value={value} />;
     // Cổng đóng case là sự thật về CẢ report, nên nó đọc trạng thái duyệt của các
@@ -271,8 +468,8 @@ export function FieldBlock({
 
     return (
         <div className={cn(
-            'min-w-0 overflow-hidden rounded-xl transition-all',
-            isSelfLabelled ? 'p-0' : 'p-3.5 border bg-card shadow-xs border-border/70',
+            'min-w-0 transition-all',
+            isSelfLabelled ? 'p-0' : 'overflow-hidden rounded-xl p-3.5 border bg-card shadow-xs border-border/70',
             COLUMN_SPANS[Math.min(12, Math.max(1, field.colSpan ?? 12))],
             ROW_SPANS[field.rowSpan ?? 1],
             field.widget === 'callout' && 'border-l-4 border-l-info bg-info-bg/40 p-4',
@@ -299,7 +496,7 @@ export function FieldBlock({
                     </div>
                 </div>
             )}
-            <div className="min-w-0 overflow-hidden">
+            <div className="min-w-0">
                 <FieldValue
                     field={field}
                     value={value}
@@ -333,11 +530,22 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
     if (code === 'D1' && (key === 'team.suggestionStatus' || key === 'suggestionStatus')) {
         if (!value || value === 'Not provided' || !String(value).trim()) return true;
     }
-    if (code === 'D3' && (key === 'containment.gaps' || key === 'sources')) return true;
+    if (code === 'D3') {
+        if (
+            key === 'containment.gaps'
+            || key === 'sources'
+            || key === 'containment.objective'
+            || key === 'objective'
+            || l.includes('containment objective')
+            || l.includes('objective')
+        ) return true;
+    }
     if (code === 'D4' && (key === 'rootCause.evidenceGaps' || key === 'sources')) return true;
     if (code === 'D5') {
         if (
             key === 'sources'
+            || key === 'corrective.objective'
+            || key === 'objective'
             || key === 'corrective.rootCauseCoverage'
             || key === 'corrective.coverageAssessment'
             || key === 'corrective.uncoveredCauses'
@@ -349,7 +557,9 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
             || key === 'howEachActionRemovesTheCause'
         ) return true;
         if (
-            l.includes('removes the cause')
+            l.includes('corrective objective')
+            || l.includes('objective')
+            || l.includes('removes the cause')
             || l.includes('removes cause')
             || l.includes('not yet covered')
             || l.includes('uncovered cause')
@@ -383,7 +593,12 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
     }
     if (code === 'D7') {
         if (
-            key === 'sources'
+            key === 'preventive.fmea'
+            || key === 'fmea'
+            || key.includes('fmea')
+            || key === 'sources'
+            || key === 'preventive.objective'
+            || key === 'objective'
             || key === 'preventive.systemicScope'
             || key === 'preventive.whereElseThisApplies'
             || key === 'preventive.whereElse'
@@ -400,7 +615,10 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
             || key === 'gaps'
         ) return true;
         if (
-            l.includes('where else')
+            l.includes('fmea')
+            || l.includes('preventive objective')
+            || l.includes('objective')
+            || l.includes('where else')
             || l.includes('systemic scope')
             || l.includes('preventive gap')
             || l.includes('open gap')

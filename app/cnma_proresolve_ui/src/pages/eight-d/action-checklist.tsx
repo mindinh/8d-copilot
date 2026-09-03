@@ -247,29 +247,68 @@ export function ActionChecklist({
     };
 
     return (
-        <Card className="overflow-hidden bg-card border border-border shadow-xs">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b bg-muted/30 px-4 py-2.5">
-                <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                        Action Implementation & Verification Status (D6)
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Track execution and verify effectiveness of corrective actions.
-                    </p>
+        <div className="space-y-4">
+            {/* Prominent Header Banner */}
+            <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-xs">
+                            <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+                                Action Implementation & Verification Status
+                            </h3>
+                            <p className="text-xs sm:text-[13px] text-muted-foreground mt-1 leading-normal">
+                                Track execution and verify effectiveness of corrective actions across containment, corrective, and preventive stages.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                        <div className={cn(
+                            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg border text-xs font-semibold shadow-2xs",
+                            verified === total && total > 0
+                                ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400 dark:bg-emerald-950/40"
+                                : "bg-primary/5 text-foreground border-border/80"
+                        )}>
+                            <span className={cn(
+                                "flex h-2 w-2 rounded-full shrink-0",
+                                verified === total && total > 0 ? "bg-emerald-500" : "bg-primary animate-pulse"
+                            )} />
+                            <span>
+                                <strong className="font-bold text-foreground text-[13px]">{verified}</strong> of <strong className="font-bold text-foreground text-[13px]">{total}</strong> Actions Verified
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                    <strong className="font-semibold text-foreground">{verified}</strong> of {total} verified
-                </span>
+
+                {total > 0 && (
+                    <div className="mt-3.5 pt-3 border-t border-border/50 flex items-center gap-3">
+                        <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
+                            <div
+                                className={cn(
+                                    "h-full transition-all duration-500 rounded-full",
+                                    verified === total ? "bg-emerald-500" : "bg-primary"
+                                )}
+                                style={{ width: `${Math.round((verified / total) * 100)}%` }}
+                            />
+                        </div>
+                        <span className="text-[11.5px] font-medium tabular-nums text-muted-foreground shrink-0">
+                            {Math.round((verified / total) * 100)}% Complete
+                        </span>
+                    </div>
+                )}
             </div>
 
-            <div className="divide-y divide-border/60">
+            <div className="space-y-4">
                 {groups.map((group) => {
                     if (group.rows.length === 0) return null;
                     return (
-                        <div key={group.key} className="px-4 py-3">
-                            <div className="mb-2 flex items-center gap-2">
-                                <span className="text-xs font-semibold text-foreground">{group.label}</span>
-                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        <div key={group.key} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[14px] font-semibold text-foreground">{group.label}</span>
+                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
                                     {group.step}
                                 </span>
                             </div>
@@ -283,17 +322,17 @@ export function ActionChecklist({
                                     return (
                                         <li
                                             key={`${group.key}-${row.lineNo}-${row.actionText}`}
-                                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border bg-muted/15"
+                                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:border-border/80 transition-colors"
                                         >
                                             <div className="flex items-start gap-2.5 min-w-0 flex-1">
                                                 <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', className)} />
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="break-words text-xs font-medium text-foreground">
+                                                    <p className="break-words text-[13px] font-normal text-foreground">
                                                         {row.actionText}
                                                     </p>
                                                     {row.owner && (
                                                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                            Owner: <span className="font-medium text-foreground/80">{row.owner}</span>
+                                                            Owner: <span className="font-normal text-foreground/80">{row.owner}</span>
                                                         </p>
                                                     )}
                                                 </div>
@@ -353,10 +392,10 @@ export function ActionChecklist({
                 })}
             </div>
 
-            <p className="border-t bg-muted/15 px-4 py-2 text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground pt-1">
                 Actions are defined and managed in D3 (Containment), D5 (Corrective Actions), and D7 (Preventive Actions).
             </p>
-        </Card>
+        </div>
     );
 }
 
