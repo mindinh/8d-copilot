@@ -18,6 +18,11 @@ import {
     embedLibraryInBackground,
     seedLibraryFromBundle,
 } from './src/domain/eightd/precedent/librarySeeder';
+import {
+    seedValueHelps,
+    verifyDefectCatalogueCoverage,
+    verifyTaskCatalogueCoverage,
+} from './src/domain/eightd/valueHelpSeeder';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -93,14 +98,32 @@ cds.on('serving', (srv) => {
         registerEightDHandlers(srv);
     }
     if (srv.name === 'ValueHelpService') {
-        new ValueHelpHandler({
+        /**
+         * ── Bản trước dựng handler rồi VỨT ĐI ──
+         * `new ValueHelpHandler({...})` không gắn vào sự kiện nào, và
+         * `getValueHelp` cũng chưa được khai báo trong `ValueHelpService.cds`.
+         * Nên mọi ô F4 gọi lên đều ăn 404 — im lặng, vì phía client bắt lỗi rồi
+         * trả danh sách rỗng, và một danh sách rỗng nhìn y hệt "danh mục chưa có
+         * dữ liệu". Ba chỗ hỏng, một triệu chứng.
+         */
+        const valueHelp = new ValueHelpHandler({
             entityName: 'cnma.valuehelp.ValueHelpList',
             allowedReferenceTables: {
                 ShadowUsers: 'cnma.identity.ShadowUsers',
                 ShadowGroups: 'cnma.identity.ShadowGroups',
                 SampleEntity: 'cnma.proresolve.SampleEntity',
+                // Ba F4 MATERIAL, WORK_CENTER và PARTNER trỏ vào hai bảng này.
+                // Thiếu chúng ở đây thì `handleReferenceSource` từ chối bảng và
+                // trả về mảng rỗng — ô chọn vẫn hiện, chỉ là không có gì để chọn.
+                HistoricalCases: 'cnma.proresolve.HistoricalCases',
+                HistoricalTeamMembers: 'cnma.proresolve.HistoricalTeamMembers',
+                // F4 lô kiểm tra (Đường A). Cùng lý do: không có tên ở đây thì
+                // `handleReferenceSource` từ chối bảng và trả mảng rỗng.
+                InspectionLots: 'cnma.proresolve.InspectionLots',
             },
         });
+        srv.on('getValueHelp', (req: any) => valueHelp.getValueHelp(req));
+        srv.on('getValueHelpSearch', (req: any) => valueHelp.getValueHelpSearch(req));
     }
 });
 
@@ -194,6 +217,22 @@ async function startupTasks(): Promise<void> {
         // Kho thiếu làm hỏng gợi ý tiền lệ, nhưng không được làm app chết:
         // `findPrecedents` đã báo rõ lý do thay vì đoán bừa.
         logger.error('Không bù được kho case từ dữ liệu đóng gói:', e?.message ?? e);
+    }
+
+    // Định nghĩa F4 cho form ghi nhận lỗi, rồi kiểm tra catalogue phủ đủ kho case.
+    //
+    // PHẢI chạy sau `seedLibraryFromBundle()`: phép kiểm tra độ phủ đọc
+    // `HistoricalCases`, nên kho phải có dữ liệu trước, không thì nó báo "phủ đủ 0
+    // mã" — đúng về kỹ thuật và vô dụng về thực tế.
+    try {
+        await seedValueHelps();
+        await verifyDefectCatalogueCoverage();
+        // Cùng lý do thứ tự: phép kiểm này đọc `HistoricalActions`, con của
+        // `HistoricalCases`, nên kho phải nạp xong trước.
+        await verifyTaskCatalogueCoverage();
+    } catch (e: any) {
+        // Thiếu F4 làm form phải gõ tay, nhưng không được làm app chết.
+        logger.error('Không seed được định nghĩa F4:', e?.message ?? e);
     }
 
     // Vector cho tiêu chí ngữ nghĩa. Chạy ngầm — cần AI Core sống và mất vài

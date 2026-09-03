@@ -17,6 +17,8 @@ import {
     ACTION_TYPE_TO_STEP,
     ORIGIN_CUSTOMER,
     PipelineError,
+    isValuation,
+    originAllowsInspectionLot,
     type ActionRow,
     type CaseContext,
     type FiveWhyRow,
@@ -24,6 +26,7 @@ import {
     type InspectionRow,
     type IshikawaRow,
     type TeamRow,
+    type Valuation,
 } from './types';
 import { isDeliberateNA, isRootCauseFlag } from './datasetValidator';
 
@@ -170,13 +173,76 @@ export function classifyAction(label: unknown): keyof typeof ACTION_TYPE_TO_STEP
     return null;
 }
 
-/** `true` = vượt spec. `null` = không đủ cơ sở để kết luận. */
+/**
+ * `true` = vượt spec. `null` = không đủ cơ sở để kết luận.
+ *
+ * Đây là ĐƯỜNG LÙI, không phải đường chính — xem `resolveOutOfSpec`. Chỉ còn dùng
+ * cho dòng cũ chỉ có spec dạng văn bản.
+ */
 export function evaluateOutOfSpec(measured: string, spec: string): boolean | null {
     const value = firstNumber(measured);
     if (value === null) return null;
     const inSpec = parseSpec(spec);
     if (!inSpec) return null;
     return !inSpec(value);
+}
+
+/** Số hợp lệ, hoặc `null`. Chuỗi rỗng và 'abc' đều ra null, `0` thì không. */
+function num(v: unknown): number | null {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.').trim());
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Kết luận vượt spec, theo thứ tự ĐỘ TIN CẬY GIẢM DẦN.
+ *
+ * ① `valuation` — phán quyết của người kiểm (bước ③ của SAP). Là dữ kiện được ghi
+ *    lại, không phải suy luận của ta. Có nó thì không cần gì thêm.
+ * ② Hai giới hạn số — phép so sánh xác định, không parse chuỗi nên không hỏng được.
+ * ③ Parse `specValue` — chỉ cho dữ liệu cũ. Đây chính là chỗ vẫn còn đoán, và là
+ *    lý do hai bước trên tồn tại.
+ *
+ * ── Vì sao thứ tự này chứ không lấy số làm chuẩn ──
+ * Một đặc tính có thể bị từ chối vì lý do mà hai giới hạn không tả được (vết xước
+ * ngoài vùng đo, mẫu hỏng khi tháo). Người kiểm đã nói 'Rejected' thì ta không có
+ * tư cách lật lại bằng một phép so sánh hẹp hơn cái họ nhìn thấy.
+ */
+export function resolveOutOfSpec(input: {
+    measuredValue: string;
+    specValue: string;
+    specLowerLimit: number | null;
+    specUpperLimit: number | null;
+    valuation: Valuation | null;
+}): boolean | null {
+    if (input.valuation) return input.valuation === 'Rejected';
+
+    const value = firstNumber(input.measuredValue);
+    const { specLowerLimit: lo, specUpperLimit: hi } = input;
+    if (value !== null && (lo !== null || hi !== null)) {
+        if (lo !== null && value < lo) return true;
+        if (hi !== null && value > hi) return true;
+        return false;
+    }
+
+    return evaluateOutOfSpec(input.measuredValue, input.specValue);
+}
+
+/**
+ * Chuỗi spec để hiển thị, dựng từ hai giới hạn.
+ *
+ * Chỉ dựng khi chưa có chuỗi sẵn: `specValue` người dùng gõ hoặc workbook mang
+ * theo là NGUYÊN VĂN của họ, và một câu diễn đạt lại luôn mất thông tin ('per
+ * drawing DOC-4610' không có giới hạn nào để dựng lại).
+ */
+export function formatSpecRange(
+    lo: number | null, hi: number | null, uom: string | null,
+): string {
+    const u = uom ? ` ${uom}` : '';
+    if (lo !== null && hi !== null) return `${lo} – ${hi}${u}`;
+    if (hi !== null) return `max ${hi}${u}`;
+    if (lo !== null) return `min ${lo}${u}`;
+    return '';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,8 +316,11 @@ function flattenNested(nested: Row): Row {
         notifications: [{
             notification_id: nid,
             material_id: material.material_id,
+            plant: material.plant,
             batch_id: batch.batch_id,
             defect_code: defect.defect_code,
+            // Nhóm mã đi theo mã: mã lỗi chỉ duy nhất trong một nhóm.
+            defect_code_group: defect.defect_code_group ?? defect.code_group,
             work_center_id: wc.work_center_id,
             ...header,
         }],
@@ -335,14 +404,23 @@ export function extractDeepCase(raw: any): Row | null {
         completion_date: obj.completionDate ?? obj.completion_date,
         found_date: obj.foundDate ?? obj.found_date,
         quantity_extent: obj.quantityExtent ?? obj.quantity_extent,
+        defect_quantity: obj.defectQuantity ?? obj.defect_quantity,
+        defect_quantity_uom: obj.defectQuantityUom ?? obj.defect_quantity_uom,
         entry_mode: obj.entryMode ?? obj.entry_mode,
         inspection_lot_id: obj.inspectionLotId ?? obj.inspection_lot_id,
+        reference_number: obj.referenceNumber ?? obj.reference_number,
     };
 
     const inspections = getArray(obj.inspections).map((r) => stamp({
         characteristic: r.characteristic,
         measured_value: r.measuredValue ?? r.measured_value,
         spec_value: r.specValue ?? r.spec_value,
+        // Ba trường số + phán quyết là đường CHÍNH từ 1.4 trở đi; `spec_value` ở
+        // trên chỉ còn là chuỗi hiển thị và đường lùi cho payload cũ.
+        spec_lower_limit: r.specLowerLimit ?? r.spec_lower_limit,
+        spec_upper_limit: r.specUpperLimit ?? r.spec_upper_limit,
+        spec_uom: r.specUom ?? r.spec_uom ?? r.unit,
+        valuation: r.valuation,
         equipment: r.equipment ?? r.fixture,
     }));
 
@@ -351,6 +429,7 @@ export function extractDeepCase(raw: any): Row | null {
         material_id: r.materialId ?? r.material_id,
         characteristic: r.characteristic,
         equipment: r.equipment,
+        work_center_id: r.workCenterId ?? r.work_center_id,
         measured_value: r.measuredValue ?? r.measured_value,
         conforming: r.conforming,
         lot_date: r.lotDate ?? r.lot_date,
@@ -429,25 +508,36 @@ export function extractDeepCase(raw: any): Row | null {
     const matDesc = material?.description ?? obj.materialDesc ?? obj.material_desc;
     const matGroup = material?.materialGroup ?? material?.material_group
         ?? obj.materialGroup ?? obj.material_group;
+    const plant = material?.plant ?? obj.plant ?? obj.plantId ?? obj.plant_id;
 
     const batchId = batch?.batchId ?? batch?.batch_id ?? obj.batchId ?? obj.batch_id;
 
     const defCode = defect?.defectCode ?? defect?.defect_code ?? obj.defectCode ?? obj.defect_code;
     const defText = defect?.defectText ?? defect?.defect_text ?? obj.defectText ?? obj.defect_text;
+    // Nhóm và mức nghiêm trọng nhận cả `codeGroup`/`code_group` lẫn `severity`: form
+    // gửi tên này, workbook cũ gửi tên kia, và cả hai đều là dữ liệu thật.
+    const defGroup = defect?.defectCodeGroup ?? defect?.defect_code_group ?? defect?.codeGroup ?? defect?.code_group
+        ?? obj.defectCodeGroup ?? obj.defect_code_group;
+    const defClass = defect?.defectClass ?? defect?.defect_class ?? defect?.severity
+        ?? obj.defectClass ?? obj.defect_class;
 
     const wcId = wc?.workCenterId ?? wc?.work_center_id ?? obj.workCenterId ?? obj.work_center_id;
     const wcDesc = wc?.description ?? obj.workCenterDesc ?? obj.work_center_desc;
 
     return {
-        materials: matId ? [{ material_id: matId, description: matDesc, material_group: matGroup }] : [],
+        materials: matId ? [{ material_id: matId, description: matDesc, material_group: matGroup, plant }] : [],
         batches: batchId ? [{ batch_id: batchId, material_id: matId }] : [],
-        defect_catalog: defCode ? [{ defect_code: defCode, defect_text: defText }] : [],
+        defect_catalog: defCode
+            ? [{ defect_code: defCode, defect_text: defText, defect_code_group: defGroup, defect_class: defClass }]
+            : [],
         work_centers: wcId ? [{ work_center_id: wcId, description: wcDesc }] : [],
         notifications: [{
             notification_id: nid,
             material_id: matId,
+            plant,
             batch_id: batchId,
             defect_code: defCode,
+            defect_code_group: defGroup,
             work_center_id: wcId,
             ...header,
         }],
@@ -495,13 +585,28 @@ export function mapCase(raw: any): CaseContext {
     const inspections: InspectionRow[] = rows(data, 'inspections').map((r) => {
         const char = cleanField(r.characteristic);
         const measured = cleanField(r.measured_value ?? r.measuredValue);
-        const spec = cleanField(r.spec_value ?? r.specValue);
+        const lo = num(r.spec_lower_limit ?? r.specLowerLimit);
+        const hi = num(r.spec_upper_limit ?? r.specUpperLimit);
+        const uom = text(r.spec_uom ?? r.specUom ?? r.unit);
+        const valuation: Valuation | null = isValuation(r.valuation)
+            ? (String(r.valuation).trim() as Valuation)
+            : null;
+        // Chuỗi người dùng gõ được ưu tiên giữ nguyên văn; chỉ khi không có mới
+        // dựng câu từ hai giới hạn.
+        const spec = cleanField(r.spec_value ?? r.specValue) || formatSpecRange(lo, hi, uom);
         return {
             characteristic: char,
             measuredValue: measured,
             specValue: spec,
+            specLowerLimit: lo,
+            specUpperLimit: hi,
+            specUom: uom,
+            valuation,
             equipment: text(r.equipment ?? r.fixture),
-            outOfSpec: evaluateOutOfSpec(measured, spec),
+            outOfSpec: resolveOutOfSpec({
+                measuredValue: measured, specValue: spec,
+                specLowerLimit: lo, specUpperLimit: hi, valuation,
+            }),
         };
     }).filter((i) => i.characteristic || i.measuredValue || i.specValue || i.equipment);
 
@@ -510,6 +615,7 @@ export function mapCase(raw: any): CaseContext {
         materialId: String(r.material_id ?? ''),
         characteristic: String(r.characteristic ?? ''),
         equipment: text(r.equipment),
+        workCenterId: text(r.work_center_id),
         measuredValue: text(r.measured_value),
         conforming: Boolean(r.conforming),
         lotDate: normalizeDate(r.lot_date),
@@ -518,6 +624,13 @@ export function mapCase(raw: any): CaseContext {
     if (!inspections.length) gaps.push('No inspection results — D2 cannot be quantified from measurements.');
     if (inspections.length && inspections.every((i) => i.outOfSpec === null)) {
         gaps.push('Inspection values could not be compared with the specification automatically.');
+    }
+    // Một dòng không kết luận được là một dòng KHÔNG có valuation và KHÔNG có giới
+    // hạn số — tức là người nhập bỏ trống cả hai lối, chứ không phải parser hỏng.
+    // Nói đích danh đặc tính nào, vì đó là thứ người sửa cần biết.
+    const unresolved = inspections.filter((i) => i.outOfSpec === null).map((i) => i.characteristic || '(unnamed)');
+    if (unresolved.length && unresolved.length < inspections.length) {
+        gaps.push(`No valuation or numeric limits recorded for ${unresolved.join(', ')} — those rows were not judged.`);
     }
     const outOfSpecInspections = inspections.filter((i) => i.outOfSpec === true);
     if (outOfSpecInspections.length > 1) {
@@ -637,10 +750,16 @@ export function mapCase(raw: any): CaseContext {
     // Với case Q3, ba trường này là chuỗi 'N/A - ...' CÓ CHỦ ĐÍCH. Giữ nguyên
     // giá trị và hạ cờ `applicable`, để model biết đây là "không áp dụng" chứ
     // không phải "thiếu dữ liệu".
+    //
+    // Mã khiếu nại RỖNG cũng là "không dùng được", ngang với sentinel 'N/A - ...'.
+    // Trước đây form lấp chỗ trống bằng 'CC-2026-PENDING' nên trường hợp này chưa
+    // bao giờ tới đây; giờ form gửi null, và null phải hạ cờ chứ không được đi
+    // tiếp thành một case Q1 trông như có tham chiếu khách hàng.
     const crefRow = one(data, 'customer_reference');
     const custApplicable =
         isCustomerFacing &&
         !!crefRow &&
+        !!text(crefRow.complaint_reference) &&
         !isDeliberateNA(crefRow.complaint_reference);
     const customer = {
         complaintReference: text(crefRow?.complaint_reference),
@@ -651,6 +770,32 @@ export function mapCase(raw: any): CaseContext {
     if (isCustomerFacing && !custApplicable) {
         gaps.push('Customer complaint case but no usable customer reference data.');
     }
+
+    // ── Lượng ảnh hưởng ──
+    // Số và đơn vị là nguồn; `quantityExtent` chỉ được ghép khi case KHÔNG mang
+    // sẵn chuỗi. Chiều ngược lại — parse '128 units affected' ra số — cố tình
+    // không làm: 'units' không phải đơn vị đo, và đoán ra 'PC' là bịa.
+    const defectQuantity = num(note.defect_quantity);
+    const defectQuantityUom = text(note.defect_quantity_uom);
+    const defectQuantityText = defectQuantity !== null
+        ? `${defectQuantity}${defectQuantityUom ? ` ${defectQuantityUom}` : ''}`
+        : '';
+
+    // ── Cách phát hiện ──
+    // Khiếu nại khách hàng không có lô kiểm tra (xem `originAllowsInspectionLot`).
+    // Payload vẫn có thể mang một số lô — form cũ cho gõ, và file import thì
+    // không ai kiểm. Bỏ nó ở ĐÂY, tại ranh giới fact, thay vì để nó đi tiếp và
+    // được trích dẫn như bằng chứng. Có gap để việc bỏ đi không diễn ra âm thầm.
+    const lotAllowed = originAllowsInspectionLot(origin);
+    const rawLotId = text(note.inspection_lot_id);
+    const inspectionLotId = lotAllowed ? rawLotId : null;
+    if (!lotAllowed && rawLotId) {
+        gaps.push(
+            `Inspection lot ${rawLotId} was recorded against a customer complaint and has been dropped — `
+            + 'a customer complaint is raised after delivery, so it has no inspection lot of ours.',
+        );
+    }
+    const entryMode = lotAllowed ? text(note.entry_mode) : 'outside-inspection';
 
     // ── Trách nhiệm & người báo cáo ──
     const respRow = one(data, 'responsibility');
@@ -669,18 +814,26 @@ export function mapCase(raw: any): CaseContext {
             status: String(note.status ?? ''),
             foundDate: normalizeDate(note.found_date),
             completionDate: normalizeDate(note.completion_date),
-            quantityExtent: String(note.quantity_extent ?? ''),
+            quantityExtent: String(note.quantity_extent ?? '') || defectQuantityText,
+            defectQuantity,
+            defectQuantityUom,
             teamSize: typeof note.team_size === 'number' ? note.team_size : null,
-            entryMode: text(note.entry_mode),
-            inspectionLotId: text(note.inspection_lot_id),
+            entryMode,
+            inspectionLotId,
+            referenceNumber: text(note.reference_number),
         },
         product: {
+            plant: id(note.plant ?? material.plant),
             materialId: id(note.material_id ?? material.material_id),
             materialDesc: id(material.description),
             materialGroup: id(material.material_group ?? note.material_group),
             batchId: id(note.batch_id ?? batch.batch_id),
+            // Nhóm đọc từ notification TRƯỚC, vì đó là nhóm đã chọn cho case này;
+            // dòng catalogue chỉ là bản sao và có thể thiếu ở dữ liệu cũ.
+            defectCodeGroup: id(note.defect_code_group ?? defect.defect_code_group),
             defectCode: id(note.defect_code ?? defect.defect_code),
             defectText: id(defect.defect_text),
+            defectClass: id(defect.defect_class ?? note.defect_class),
             workCenterId: id(note.work_center_id ?? workCenter.work_center_id),
             workCenterDesc: id(workCenter.description),
         },

@@ -35,6 +35,7 @@ import { DisciplineReviewBox } from './review-controls';
 import { ActionChecklist, parseCaseActions } from './action-checklist';
 import { CaseProvenanceProvider } from './ai-provenance-info';
 import { CaseStepper } from './case-stepper';
+import { CaseCommitments } from './case-commitments';
 import { AuditTrailPanel } from './audit-trail-panel';
 
 type SideTab = 'audit' | 'similar';
@@ -178,6 +179,25 @@ export function EightDDetailPage() {
                     </div>
 
                     <p className="text-sm text-muted-foreground mt-1">{report.symptomShortText}</p>
+
+                    {/*
+                      * Nguồn của case: lỗi nào đã sinh ra báo cáo này.
+                      *
+                      * Nói rõ cả khi KHÔNG có, vì "không có bản ghi lỗi" là một sự
+                      * thật về case chứ không phải một ô trống — nó cho biết case
+                      * này vào bằng đường nhập JSON, nên đừng đi tìm một số lỗi
+                      * không tồn tại.
+                      */}
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                        {report.sourceDefectId ? (
+                            <>
+                                Opened from defect{' '}
+                                <span className="font-mono text-foreground">{report.sourceDefectId}</span>
+                            </>
+                        ) : (
+                            'Imported as JSON — no source defect record'
+                        )}
+                    </p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -334,16 +354,40 @@ export function EightDDetailPage() {
                             <Field label="Origin">{report.origin}</Field>
                             <Field label="SAP status">{report.sapStatus}</Field>
                             <Field label="Found">{report.foundDate ?? '—'}</Field>
-                            <Field label="Extent">{report.quantityExtent}</Field>
+                            {/*
+                              Ưu tiên số + đơn vị; câu mô tả chỉ là đường lui cho các
+                              case tạo trước khi hai cột đó tồn tại.
+                            */}
+                            <Field label="Extent">
+                                {report.defectQuantity != null
+                                    ? `${report.defectQuantity}${report.defectQuantityUom ? ` ${report.defectQuantityUom}` : ''}`
+                                    : (report.quantityExtent || '—')}
+                            </Field>
 
                             <Field label="Material">
                                 <span className="font-mono text-xs">{report.materialId}</span>
                                 <div className="text-xs text-muted-foreground">{report.materialDesc}</div>
+                                {report.plant && (
+                                    <div className="text-[11px] text-muted-foreground">Plant {report.plant}</div>
+                                )}
                             </Field>
                             <Field label="Batch"><span className="font-mono text-xs">{report.batchId}</span></Field>
+                            {/*
+                              Nhóm mã đứng TRƯỚC mã, ngăn cách bằng "/": mã lỗi chỉ
+                              duy nhất trong nhóm của nó, nên hiện mã một mình là
+                              hiện một khoá thiếu vế. Case cũ không có nhóm thì chỉ
+                              hiện mã — không bịa nhóm vào.
+                            */}
                             <Field label="Defect">
-                                <span className="font-mono text-xs">{report.defectCode}</span>
+                                <span className="font-mono text-xs">
+                                    {report.defectCodeGroup ? `${report.defectCodeGroup} / ` : ''}{report.defectCode}
+                                </span>
                                 <div className="text-xs text-muted-foreground">{report.defectText}</div>
+                                {report.defectClass && (
+                                    <div className="text-[11px] text-muted-foreground">
+                                        Severity: {report.defectClass}
+                                    </div>
+                                )}
                             </Field>
                             <Field label="Work center">
                                 <span className="font-mono text-xs">{report.workCenterId}</span>
@@ -354,6 +398,15 @@ export function EightDDetailPage() {
                             <Field label="Cost of poor quality">{formatEur(report.copqEur)}</Field>
                             <Field label="FMEA">{report.fmeaId ?? '—'}</Field>
                             <Field label="Team size">{report.teamSize ?? '—'}</Field>
+                            <Field label="Reference no.">
+                                <span className="font-mono text-xs">{report.referenceNumber || '—'}</span>
+                            </Field>
+                            {/*
+                              Hai ô CUỐI vì chúng là hai ô duy nhất sửa được, và
+                              gài một ô sửa được vào giữa mười ô chỉ đọc là mời
+                              người dùng thử bấm vào những ô còn lại.
+                            */}
+                            <CaseCommitments report={report} customerFacing={customerFacing} />
                         </div>
                     </Card>
 

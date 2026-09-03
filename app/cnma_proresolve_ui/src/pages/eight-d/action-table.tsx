@@ -18,9 +18,13 @@ import {
     Textarea,
     cn,
 } from '@cnma/react-ui';
-import { CheckSquare, Clock, Edit2, Eye, FileText, Paperclip, Sparkles, Tag, User } from 'lucide-react';
+import { CalendarClock, CheckSquare, Clock, Edit2, Eye, FileText, Hash, Paperclip, Sparkles, Tag, User } from 'lucide-react';
 import { TASK_STATUSES, normalizeActionStatus, type ActionTask } from '../../../../../shared/action-task';
+import { classifyTaskCode, taskCodeGroupOf, taskCodeTextOf } from '../../../../../shared/task-catalogue';
 import { listTaskEvidence } from '@/services/eightd-service';
+import { useValueHelp } from '@/hooks/use-value-help';
+import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
+import { VALUE_HELP_IDS } from '@/services/value-help-service';
 import { TaskEvidenceSection } from './task-evidence';
 
 /**
@@ -32,7 +36,14 @@ import { TaskEvidenceSection } from './task-evidence';
  * chắn để tới lúc audit không ai nói được việc nào đã có người chịu trách nhiệm.
  * Cùng quan hệ với `team.roster` → `team.assignedRoster` ở D1.
  *
- * Bảng hiển thị 6 cột: Task | Assignee | Duration | Status | Evidence | (actions).
+ * Bảng hiển thị 7 cột: Task | Code | Assignee | Duration | Status | Evidence | (actions).
+ *
+ * ── Vì sao cột Code nằm trong bảng, còn hạn dự kiến thì không ──
+ * Phase 4 đổi câu hỏi "lần trước gặp lỗi này chúng ta đã làm gì" từ một phép đọc
+ * văn bản thành một phép đếm. Thứ trả tiền cho việc đó là MÃ, nên mã phải nhìn
+ * thấy được ngay ở danh sách. `plannedEndDate` là dữ liệu vận hành của một việc
+ * cụ thể — nó thuộc về ô chi tiết, và nhét thêm một cột ngày vào bảng chỉ làm
+ * bảng chật đi mà không trả lại gì cho việc tra cứu.
  */
 
 const STATUS_TONE: Record<string, string> = {
@@ -66,6 +77,108 @@ function Blank({ label }: { label: string }) {
     return <span className="italic text-muted-foreground/70">{label}</span>;
 }
 
+/** Ngày ISO hiển thị cho người đọc; chuỗi không phải ngày thì trả về rỗng. */
+function formatDate(iso: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    const parsed = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+        ? ''
+        : parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/** Mã nhiệm vụ ở dạng chip, kèm mô tả trong tooltip để bảng không phải rộng thêm. */
+function TaskCodeChip({ code }: { code: string }) {
+    if (!code) return <Blank label="—" />;
+    const text = taskCodeTextOf(code);
+    return (
+        <span
+            title={text ? `${code} — ${text}` : code}
+            className="inline-flex items-center rounded border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground"
+        >
+            {code}
+        </span>
+    );
+}
+
+/**
+ * Ô chọn mã nhiệm vụ, dùng chung cho form Add và ô Edit.
+ *
+ * ── Vì sao đi qua `ValueHelpInput` chứ không phải một `Select` đọc thẳng
+ * `TASK_CODES` ──
+ * Đọc thẳng hằng số thì gọn hơn và không cần mạng. Nhưng danh mục nhiệm vụ là
+ * danh mục SAP (catalog type 2) y như danh mục lỗi (type 9) — ngày nối S/4, cả
+ * hai phải đổi nguồn bằng cách sửa `sourceType` của MỘT DÒNG trong
+ * `ValueHelpList`, không phải bằng cách sửa component. Một trong hai ô đi đường
+ * riêng là đúng cái chỗ ngày đó sẽ bị bỏ quên.
+ *
+ * ── Vì sao KHÔNG `strict` ──
+ * Ô mã lỗi khoá cứng vì nó là khoá chấm điểm tiền lệ: sai mã là mất điểm âm
+ * thầm. Mã nhiệm vụ thì không chấm điểm — nó phục vụ tra cứu. Chặn lưu một việc
+ * chỉ vì bộ luật chưa có mã cho nó là đổi một bản ghi thiếu mã lấy một việc
+ * không được giao cho ai. Ô trống nói đúng sự thật: chưa mã hoá được.
+ *
+ * ── Vì sao nhóm là ô đọc-only ──
+ * Cùng lý do với nhóm mã lỗi: một mã chỉ thuộc đúng một nhóm. Cho sửa nhóm là mở
+ * đường cho một cặp nhóm/mã không tồn tại trong danh mục.
+ */
+function TaskCodeField({
+    code,
+    onCodeChange,
+    suggestedFrom,
+    idPrefix,
+}: {
+    code: string;
+    onCodeChange: (code: string) => void;
+    /** Tên task đang gõ — dùng để gợi ý mã khi ô còn trống. */
+    suggestedFrom: string;
+    idPrefix: string;
+}) {
+    const taskCodeVh = useValueHelp(VALUE_HELP_IDS.taskCode);
+    const suggestion = code ? null : classifyTaskCode(suggestedFrom)?.taskCode ?? null;
+    // Nhóm suy từ mã bằng đúng hàm mà `normalizeTasks` dùng, nên thứ hiện trên
+    // màn hình và thứ được lưu xuống không thể lệch nhau.
+    const group = taskCodeGroupOf(code) ?? '';
+
+    return (
+        <>
+            <div className="space-y-1.5">
+                <Label htmlFor={`${idPrefix}-task-code`} className="text-xs font-medium text-muted-foreground">
+                    Task Code
+                </Label>
+                <ValueHelpInput
+                    id={`${idPrefix}-task-code`}
+                    value={code}
+                    onChange={onCodeChange}
+                    entries={taskCodeVh.entries}
+                    loading={taskCodeVh.loading}
+                    quiet
+                    catalogLabel="the task catalogue"
+                    placeholder="e.g. TSK-1010"
+                />
+                {suggestion && (
+                    <button
+                        type="button"
+                        onClick={() => onCodeChange(suggestion)}
+                        className="flex items-start gap-1 text-left text-[10.5px] leading-snug text-primary hover:underline cursor-pointer"
+                    >
+                        <Sparkles className="mt-px h-3 w-3 shrink-0" />
+                        <span>Suggested from the task name: {suggestion} — {taskCodeTextOf(suggestion)}</span>
+                    </button>
+                )}
+            </div>
+            <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Code Group</Label>
+                <Input
+                    value={group}
+                    readOnly
+                    placeholder="— from Task Code —"
+                    className="h-8 text-xs bg-muted/40 font-mono"
+                />
+            </div>
+        </>
+    );
+}
+
 function TaskDetail({
     task,
     initialEditing = false,
@@ -91,6 +204,8 @@ function TaskDetail({
     const [durationDays, setDurationDays] = useState<number | string>(task.durationDays ? String(task.durationDays) : '');
     const [status, setStatus] = useState(task.status || 'Not started');
     const [description, setDescription] = useState(task.description);
+    const [taskCode, setTaskCode] = useState(task.taskCode);
+    const [plannedEndDate, setPlannedEndDate] = useState(task.plannedEndDate);
 
     useEffect(() => {
         setName(task.name);
@@ -98,10 +213,15 @@ function TaskDetail({
         setDurationDays(task.durationDays ? String(task.durationDays) : '');
         setStatus(task.status || 'Not started');
         setDescription(task.description);
+        setTaskCode(task.taskCode);
+        setPlannedEndDate(task.plannedEndDate);
         setIsEditing(initialEditing);
     }, [task, initialEditing]);
 
     const handleSave = () => {
+        // Mã viết hoa trước khi lưu: danh mục là chữ hoa, và `TSK-1010` gõ thành
+        // `tsk-1010` sẽ đếm thành một mã thứ hai lúc tra cứu.
+        const code = taskCode.trim().toUpperCase();
         onSave({
             ...task,
             name: name.trim() || task.name,
@@ -109,6 +229,11 @@ function TaskDetail({
             durationDays: Math.max(0, Number(durationDays) || 0),
             status,
             description: description.trim(),
+            taskCode: code,
+            // Nhóm KHÔNG lấy từ state riêng: nó là hàm của mã. Giữ hai state rồi
+            // lưu cả hai là cách để chúng lệch nhau đúng lúc không ai nhìn.
+            taskCodeGroup: taskCodeGroupOf(code) ?? '',
+            plannedEndDate,
         });
         setIsEditing(false);
     };
@@ -220,6 +345,28 @@ function TaskDetail({
                             </div>
                         </div>
 
+                        {/* Quality Task coding — SAP catalog type 2 */}
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <TaskCodeField
+                                code={taskCode}
+                                onCodeChange={setTaskCode}
+                                suggestedFrom={name}
+                                idPrefix={`task-detail-${task.id}`}
+                            />
+                            <div className="space-y-1.5">
+                                <Label htmlFor={`task-detail-${task.id}-due`} className="text-xs font-medium text-muted-foreground">
+                                    Planned End Date
+                                </Label>
+                                <Input
+                                    id={`task-detail-${task.id}-due`}
+                                    type="date"
+                                    value={plannedEndDate}
+                                    onChange={(e) => setPlannedEndDate(e.target.value)}
+                                    className="h-8 text-xs bg-background"
+                                />
+                            </div>
+                        </div>
+
                         <div className="flex items-center justify-end gap-2 pt-3 border-t">
                             <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs">
                                 Cancel
@@ -267,6 +414,42 @@ function TaskDetail({
                                 </div>
                                 <div>
                                     <StatusChip status={task.status} />
+                                </div>
+                            </div>
+
+                            {/* Task Code chiếm hai cột: mô tả của mã dài hơn hẳn ba ô trên,
+                                và cắt nó đi thì cái chip mã trở thành một chuỗi vô nghĩa. */}
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                                    <Hash className="h-3.5 w-3.5 text-muted-foreground" /> Task Code
+                                </div>
+                                {task.taskCode ? (
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <TaskCodeChip code={task.taskCode} />
+                                            {task.taskCodeGroup && (
+                                                <span className="font-mono text-[10.5px] text-muted-foreground">
+                                                    {task.taskCodeGroup}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[11px] leading-snug text-muted-foreground">
+                                            {taskCodeTextOf(task.taskCode) ?? 'Not in the task catalogue.'}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-xs font-semibold">
+                                        <Blank label="Not coded" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" /> Planned End Date
+                                </div>
+                                <div className="text-xs font-semibold text-foreground">
+                                    {formatDate(task.plannedEndDate) || <Blank label="No date committed" />}
                                 </div>
                             </div>
                         </div>
@@ -335,6 +518,28 @@ function TaskDetail({
     );
 }
 
+/**
+ * Cột của bảng nhiệm vụ, kèm bề rộng tối thiểu.
+ *
+ * ── Vì sao phải ghim bề rộng ──
+ * Bảng là `w-full` và sáu cột còn lại đều `whitespace-nowrap`, nên trình duyệt
+ * lấy đủ chỗ cho chúng trước rồi mới dồn phần thừa cho cột Task — cột DUY NHẤT
+ * được phép xuống dòng. Với sáu cột thì phần thừa còn đủ; thêm cột Code vào là
+ * Task co xuống còn vài chục pixel và câu hành động rơi mỗi dòng một chữ.
+ *
+ * Ghim sàn cho Task rồi để `overflow-x-auto` ngoài bảng lo phần tràn: cuộn ngang
+ * là thứ người dùng hiểu được, còn một cột dựng đứng thì không.
+ */
+const HEADERS: Array<{ label: string; className?: string }> = [
+    { label: 'Task', className: 'min-w-[240px]' },
+    { label: 'Code' },
+    { label: 'Assignee' },
+    { label: 'Duration' },
+    { label: 'Status' },
+    { label: 'Evidence' },
+    { label: '' },
+];
+
 export function TaskTable({
     tasks,
     onChange,
@@ -357,6 +562,8 @@ export function TaskTable({
     const [newAssignee, setNewAssignee] = useState('');
     const [newDurationDays, setNewDurationDays] = useState<number | string>('');
     const [newStatus, setNewStatus] = useState<string>(TASK_STATUSES[0]);
+    const [newTaskCode, setNewTaskCode] = useState('');
+    const [newPlannedEndDate, setNewPlannedEndDate] = useState('');
 
     const { data: evidences = [] } = useQuery({
         queryKey: ['8d', 'evidence', reportID],
@@ -379,6 +586,12 @@ export function TaskTable({
     const handleCreateTask = () => {
         const name = newTaskName.trim();
         if (!name) return;
+        // Không ép người dùng bấm nút gợi ý: bỏ trống ô mã thì suy từ tên, hệt như
+        // `taskFromAction` làm với một đề xuất được Accept. Việc gõ tay và việc
+        // nhận từ AI phải ra cùng một kết quả, không thì thống kê theo mã sẽ nói
+        // rằng việc do người tự thêm "ít khi có mã" — một kết luận về form nhập
+        // liệu bị đọc nhầm thành một kết luận về nhà máy.
+        const code = newTaskCode.trim().toUpperCase() || classifyTaskCode(name)?.taskCode || '';
         persist([...tasks, {
             id: `task-manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
             name,
@@ -388,12 +601,17 @@ export function TaskTable({
             status: newStatus || TASK_STATUSES[0],
             origin: 'User added',
             attachments: [],
+            taskCode: code,
+            taskCodeGroup: taskCodeGroupOf(code) ?? '',
+            plannedEndDate: newPlannedEndDate,
         }]);
         setNewTaskName('');
         setNewDescription('');
         setNewAssignee('');
         setNewDurationDays('');
         setNewStatus(TASK_STATUSES[0]);
+        setNewTaskCode('');
+        setNewPlannedEndDate('');
         setAdding(false);
     };
 
@@ -425,10 +643,13 @@ export function TaskTable({
                 <table className="w-full border-collapse">
                     <thead>
                         <tr>
-                            {['Task', 'Assignee', 'Duration', 'Status', 'Evidence', ''].map((label, index) => (
+                            {HEADERS.map(({ label, className }, index) => (
                                 <th
                                     key={index}
-                                    className="border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                                    className={cn(
+                                        'border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
+                                        className,
+                                    )}
                                 >
                                     {label}
                                 </th>
@@ -438,7 +659,7 @@ export function TaskTable({
                     <tbody>
                         {tasks.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-2.5 py-5 text-center text-[13.5px] font-normal text-muted-foreground">
+                                <td colSpan={7} className="px-2.5 py-5 text-center text-[13.5px] font-normal text-muted-foreground">
                                     No task accepted yet. Use <span className="font-medium text-foreground">Accept</span> on a
                                     suggestion above, or add one by hand.
                                 </td>
@@ -464,6 +685,9 @@ export function TaskTable({
                                             )}
                                             <span className="font-normal text-foreground">{task.name}</span>
                                         </span>
+                                    </td>
+                                    <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
+                                        <TaskCodeChip code={task.taskCode} />
                                     </td>
                                     <td className="border-b px-2.5 py-2 align-middle text-[13.5px] font-normal">
                                         {task.assignee
@@ -613,6 +837,27 @@ export function TaskTable({
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </div>
+                    {/* Quality Task coding — SAP catalog type 2 */}
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                        <TaskCodeField
+                            code={newTaskCode}
+                            onCodeChange={setNewTaskCode}
+                            suggestedFrom={newTaskName}
+                            idPrefix="new-task"
+                        />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="new-task-due" className="text-xs font-medium text-muted-foreground">
+                                Planned End Date
+                            </Label>
+                            <Input
+                                id="new-task-due"
+                                type="date"
+                                value={newPlannedEndDate}
+                                onChange={(e) => setNewPlannedEndDate(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
                         </div>
                     </div>
                     <div className="flex items-center gap-2 pt-1">

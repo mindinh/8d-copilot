@@ -3,7 +3,11 @@ export type StepStatus = 'NotStarted' | 'InProcess' | 'Complete';
 const STEP_CODES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
 const STEP_LABELS: Record<string, string> = {
     D1: 'Team', D2: 'Problem', D3: 'Containment', D4: 'Root Cause',
-    D5: 'Corrective Actions', D6: 'Implementation', D7: 'Prevention', D8: 'Congratulate'
+    // D8 là "Team Recognition" ở mọi nơi khác (case-stepper, /workflow,
+    // case-workload, object-schema). "Congratulate" sót lại ở đây là một tên
+    // thứ hai cho cùng một bước — người dùng thấy hai chữ khác nhau sẽ đi tìm
+    // hai bước khác nhau.
+    D5: 'Corrective Actions', D6: 'Implementation', D7: 'Prevention', D8: 'Team Recognition'
 };
 
 function stepStatusOf(approved: boolean, hasEvidence: boolean): StepStatus {

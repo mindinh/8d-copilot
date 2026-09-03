@@ -88,6 +88,16 @@ export interface DataTableProps<T = any> {
     onRowClick?: (row: T) => void;
     /** Optional predicate to determine if a row is clickable (default: all rows) */
     isRowClickable?: (row: T) => boolean;
+    /**
+     * Extra classes for a whole row, derived from the row itself.
+     *
+     * For state that belongs to the record rather than to one field — an overdue
+     * case, a critical defect. Putting that in a cell hides it: a reader scanning
+     * thirty rows sees the shape of the row, not the eleventh column. Returns
+     * classes appended after the built-in ones, so a background here wins over
+     * the default and the hover state still applies.
+     */
+    rowClassName?: (row: T) => string | undefined;
     /** Refresh handler (optional) */
     onRefresh?: () => void;
     /** Empty state message key */
@@ -218,6 +228,7 @@ export function DataTable<T = any>({
     selection,
     onRowClick,
     isRowClickable,
+    rowClassName,
     onRefresh,
     emptyMessageKey = 'common.noData',
     errorMessageKey = 'common.error',
@@ -473,7 +484,7 @@ export function DataTable<T = any>({
                                 return (
                                     <div
                                         key={rowId}
-                                        className={`px-3 py-2.5 transition-colors ${onRowClick
+                                        className={`px-3 py-2.5 transition-colors ${rowClassName?.(row) ?? ''} ${onRowClick
                                             ? clickable
                                                 ? 'active:bg-muted cursor-pointer'
                                                 : 'cursor-not-allowed opacity-60'
@@ -694,7 +705,7 @@ export function DataTable<T = any>({
                                                     ? 'hover:bg-muted cursor-pointer'
                                                     : 'cursor-not-allowed opacity-60'
                                                 : ''
-                                                } ${isSelected ? 'bg-primary/5' : ''}`}
+                                                } ${isSelected ? 'bg-primary/5' : ''} ${rowClassName?.(row) ?? ''}`}
                                             onClick={() => handleRowClickInternal(row)}
                                             style={{ opacity: isPlaceholderData ? 0.6 : 1 }}
                                         >
@@ -873,15 +884,23 @@ export function DataTable<T = any>({
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            data.map((row) => {
-                                const rowId = selection?.getRowId(row) || '';
+                            data.map((row, index) => {
+                                // Fallback trên chỉ số, giống hai chỗ render kia.
+                                //
+                                // Trước đây là `|| ''`: bảng nào KHÔNG truyền `selection`
+                                // thì mọi dòng nhận cùng một key rỗng, và React mất khả
+                                // năng phân biệt dòng này với dòng kia — trạng thái cục
+                                // bộ của một dòng có thể dính sang dòng khác khi danh
+                                // sách được lọc hay sắp lại. Worklist 8D là đúng một
+                                // bảng như vậy: 26 dòng, 25 cảnh báo trùng key.
+                                const rowId = selection?.getRowId(row) || `row-${index}`;
                                 const isSelected = selection?.selectedIds.has(rowId);
 
                                 return (
                                     <TableRow
                                         key={rowId}
                                         data-state={isSelected ? 'selected' : undefined}
-                                        className={`hover:bg-muted transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-primary/5 hover:bg-primary/10' : ''}`}
+                                        className={`hover:bg-muted transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-primary/5 hover:bg-primary/10' : ''} ${rowClassName?.(row) ?? ''}`}
                                         onClick={() => handleRowClickInternal(row)}
                                         style={{ opacity: isPlaceholderData ? 0.6 : 1 }}
                                     >

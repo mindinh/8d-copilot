@@ -15,6 +15,9 @@ using { cnma.valuehelp.ValueHelpList }   from '@cnma/cap-valuehelp/db/valuehelp'
 // ── Cấu hình AI dùng chung ───────────────────────────────────────────────────
 using from './ai-settings';
 
+// ── Lỗi chất lượng đã ghi nhận (QMEL) — nguồn của một báo cáo 8D ─────────────
+using from './defects';
+
 // ── Mô hình báo cáo 8D ───────────────────────────────────────────────────────
 using from './eight-d';
 
@@ -26,6 +29,9 @@ using from './retrieval-config';
 
 // ── Lịch sử kiểm tra lô & Sổ FMEA ──────────────────────────────────────────
 using from './inspection-lots';
+
+// ── Dải số do server cấp (thay cho max()+1 trong trình duyệt) ────────────────
+using from './number-ranges';
 
 // ── Application Entities ──────────────────────────────────────────────────────
 entity SampleEntity : cuid, managed {

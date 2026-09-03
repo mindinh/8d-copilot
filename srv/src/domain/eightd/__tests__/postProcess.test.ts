@@ -321,7 +321,11 @@ describe('postProcess — ràng buộc Q1-ONLY-CUSTOMER-FIELDS', () => {
             ctxQ1,
         );
         expect(result.customerSummary).toBe('Dear customer…');
-        expect(repairs).toEqual([]);
+        // Chỉ khẳng định về customerSummary. Trước đây test này đòi repairs RỖNG,
+        // và điều đó vô tình khoá cả những luật không liên quan: từ khi case Q1 bị
+        // ép `entryMode = 'outside-inspection'` (Q1 không có lô kiểm tra), D2 điền
+        // được ô "how" và ghi một dòng chữa hoàn toàn đúng.
+        expect(repairs.some((x) => /customerSummary/.test(x))).toBe(false);
     });
 
     it('báo chữa khi case Q1 mà model không sinh customerSummary', () => {

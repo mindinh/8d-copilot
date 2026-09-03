@@ -244,3 +244,59 @@ describe('thông báo', () => {
         expect(msg).toContain('Environment');
     });
 });
+
+/**
+ * Nguồn gốc và lô kiểm tra.
+ *
+ * Validator chạy trên FILE nguồn, trước khi mapper dọn. Nên nó vẫn phải nhìn
+ * thấy — và nói ra — cái lô mà mapper sắp bỏ đi. Nếu chỉ mapper biết, dataset
+ * hỏng sẽ được sửa lặng lẽ ở mỗi lần chạy và không bao giờ được sửa ở gốc.
+ */
+describe('Q1-NO-INSPECTION-LOT', () => {
+    it('case Q1 mang inspection_lot_id là cảnh báo chất lượng', () => {
+        const raw = { ...load('case-8D-10048577.json'), inspectionLotId: '0010000001' };
+        expect(qualityIds(raw)).toContain('Q1-NO-INSPECTION-LOT');
+    });
+
+    it('case Q1 không mang lô thì im lặng', () => {
+        expect(qualityIds(load('case-8D-10048577.json'))).not.toContain('Q1-NO-INSPECTION-LOT');
+    });
+
+    it('case Q3 mang lô là bình thường', () => {
+        const raw = { ...load('case-8D-10048412.json'), inspectionLotId: '0010000042' };
+        expect(qualityIds(raw)).not.toContain('Q1-NO-INSPECTION-LOT');
+    });
+
+    it('case Q2 mang lô là bình thường — hàng nhập có lô kiểm tra của mình', () => {
+        const raw = {
+            ...load('case-8D-10048412.json'),
+            origin: 'Q2 - Supplier Defect',
+            inspectionLotId: '0010000099',
+        };
+        expect(qualityIds(raw)).not.toContain('Q1-NO-INSPECTION-LOT');
+    });
+});
+
+/**
+ * Trường khách hàng thuộc về case hướng khách hàng — MỌI nguồn gốc khác đều
+ * không, không riêng Q3. Luật cũ chỉ so với Q3, nên case Q2 lọt qua.
+ */
+describe('Q1-ONLY-CUSTOMER-FIELDS trên nguồn gốc Q2', () => {
+    it('case Q2 mang mã khiếu nại khách hàng là cảnh báo', () => {
+        const raw = {
+            ...load('case-8D-10048412.json'),
+            origin: 'Q2 - Supplier Defect',
+            customerReference: { complaintReference: 'CC-2026-0442' },
+        };
+        expect(qualityIds(raw)).toContain('Q1-ONLY-CUSTOMER-FIELDS');
+    });
+
+    it("case Q2 với sentinel 'N/A - ...' thì không", () => {
+        const raw = {
+            ...load('case-8D-10048412.json'),
+            origin: 'Q2 - Supplier Defect',
+            customerReference: { complaintReference: 'N/A - supplier defect, no customer reference' },
+        };
+        expect(qualityIds(raw)).not.toContain('Q1-ONLY-CUSTOMER-FIELDS');
+    });
+});

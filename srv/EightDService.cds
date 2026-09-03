@@ -33,6 +33,23 @@ service EightDService {
     @readonly
     entity Disciplines as projection on ns.Disciplines;
 
+    /**
+     * Lỗi chất lượng đã ghi nhận (QMEL).
+     *
+     * Mở đủ CRUD, khác hẳn `Reports`: một lỗi LÀ một bản ghi người dùng nhập, có
+     * thể sửa khi phát hiện gõ sai vật tư hay work center. Còn `Reports` là kết
+     * quả của một lượt chạy AI, ghi tay vào đó chỉ tạo ra bản ghi không có
+     * `sourcePayload` và không chạy lại được.
+     *
+     * `defectId` do server cấp từ dải `DEFECT` — xem phần annotate ở cuối file.
+     * Con `characteristics` ghi kèm bằng deep insert qua chính entity này.
+     */
+    @restrict: [
+        { grant: ['READ'], to: ['admin', 'Admin', 'Auditor', 'User', 'authenticated-user'] },
+        { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User'] }
+    ]
+    entity Defects as projection on ns.Defects;
+
     @restrict: [
         { grant: ['READ', 'CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User', 'authenticated-user'] }
     ]
@@ -70,6 +87,64 @@ service EightDService {
      */
     action analyzeFromJson(payload : LargeString, title : String) returns String;
 
+    /**
+     * Mở một báo cáo 8D TỪ một lỗi đã ghi nhận — đường đi bình thường trong SAP,
+     * và là đường app này thiếu cho tới Phase 2.
+     *
+     * ── Vì sao là action chứ không phải "gọi analyzeFromJson với payload dựng ở
+     * trình duyệt" ──
+     * Ba luật phải đúng cùng lúc, và cả ba đều là luật của dữ liệu:
+     *
+     *   1. Một lỗi có TỐI ĐA một 8D (SAP: *"only possible to create one Problem
+     *      Solution Process per Defect"*). Kiểm ở client thì hai tab mở song song
+     *      vẫn lọt.
+     *   2. `Reports.notificationId` phải kế thừa `Defects.defectId`, không phải
+     *      một số mới. Một case, một số.
+     *   3. Lỗi chuyển sang `In Process` khi 8D mở. Để client làm hai lệnh riêng
+     *      thì lệnh thứ hai có thể không bao giờ chạy.
+     *
+     * Dựng payload ở server cũng đóng luôn đường sửa dữ liệu trên đường đi: client
+     * chỉ gửi ID, nên không có cách nào phân tích một case khác với case đã ghi.
+     *
+     * ── Hai tham số cam kết ──
+     * `dueDate` và `coordinator` là thứ CON NGƯỜI hứa lúc mở case, không phải thứ
+     * suy ra được từ bản ghi lỗi. Quyết định Q12 cấm hệ thống tự bịa hạn cho case
+     * nội bộ; nó không cấm một điều phối viên tự đặt hạn cho mình. Để trống thì
+     * rơi về giá trị suy từ payload (SLA thật của case Q1, coordinator của lỗi) —
+     * xem `commitments` trong `eightDRepository.createReport`.
+     *
+     * @param defectID    ID (UUID) của dòng trong `Defects`.
+     * @param title       Nhãn tuỳ chọn cho lần chạy.
+     * @param dueDate     Hạn hoàn tất cam kết, ISO `YYYY-MM-DD`. Tuỳ chọn.
+     * @param coordinator Người điều phối case. Tuỳ chọn.
+     * @returns           ID của report vừa tạo.
+     */
+    action startEightD(defectID : String, title : String, dueDate : String, coordinator : String) returns String;
+
+    /**
+     * Sửa hạn cam kết và người điều phối của một case ĐANG chạy.
+     *
+     * ── Vì sao phải sửa được sau khi tạo ──
+     * Hai trường này được nhập ở popup mở 8D, tức trong vài giây trước khi phân
+     * tích bắt đầu — đúng lúc người ta biết ít nhất về case. Một hạn chỉ đặt được
+     * ở khoảnh khắc đó là một hạn không dùng được: hạn trượt, điều phối viên nghỉ,
+     * và tuần sau không ai sửa nổi. Nên cùng hai trường, hai đường ghi.
+     *
+     * ── Vì sao là action hẹp chứ không phải mở UPDATE trên `Reports` ──
+     * Cùng lý do như `saveDisciplineField`: mở UPDATE là mở cả 40 cột, trong đó có
+     * `caseContext`, `sourcePayload` và mọi kết quả AI. Action này chạm đúng hai
+     * cột và không chạm gì khác.
+     *
+     * Gửi chuỗi rỗng để XOÁ một trường — đây là màn hình sửa, khác `startEightD`
+     * (ở đó "để trống" nghĩa là "lấy giá trị suy từ payload").
+     *
+     * @param reportID    ID của report.
+     * @param dueDate     Hạn hoàn tất, ISO `YYYY-MM-DD`. Rỗng để xoá.
+     * @param coordinator Người điều phối. Rỗng để xoá.
+     * @returns           `reportID`.
+     */
+    action setCaseCommitments(reportID : String, dueDate : String, coordinator : String) returns String;
+
     action reanalyze(reportID : String) returns String;
 
     /**
@@ -83,18 +158,49 @@ service EightDService {
     // ── Kho case lịch sử ─────────────────────────────────────────────────────
 
     /**
-     * Kho tiền lệ, chỉ đọc. Xem nhóm 8D kèm theo bằng `?$expand=team`.
+     * Kho tiền lệ. Đọc / sửa / xoá được, nhưng KHÔNG TẠO được qua OData.
      *
-     * Ghi chỉ qua `seedCaseLibrary`: một dòng ghi tay sẽ không có `defectKeywords`
-     * và `materialFamily` tính sẵn, nên nó lặng lẽ không bao giờ ăn điểm.
+     * ── Vì sao CREATE bị đóng ──
+     * Một dòng ghi tay không có `defectKeywords`, `materialFamily`, `searchText`
+     * hay `attributesJson` tính sẵn — nên nó nằm trong kho, hiện ra ở màn hình,
+     * và lặng lẽ ăn 0 điểm ở mọi tiêu chí. Nhìn từ ngoài giống hệt "không có case
+     * nào tương tự". Đó không phải thứ chặn được bằng lời nhắc trên UI: chừng nào
+     * đường ghi còn mở thì sớm muộn cũng có người đi vào.
+     *
+     * Từ Phase 5 chỉ còn ĐÚNG HAI đường vào kho, cả hai đều tính đủ các cột trên
+     * bằng cùng một hàm (`writeHistoricalCase`):
+     *
+     *   1. `seedCaseLibrary` — nạp hàng loạt dữ liệu cũ.        provenance=imported
+     *   2. Duyệt D8 — case do chính app này đóng.               provenance=closed-in-app
+     *
+     * UPDATE vẫn mở để sửa lỗi chính tả trên một dòng đã có; handler
+     * `before UPDATE` tính lại `defectKeywords` khi `defectText` đổi.
      */
     @restrict: [
-        { grant: ['READ', 'CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User', 'authenticated-user'] }
+        { grant: ['READ', 'UPDATE', 'DELETE'], to: ['admin', 'Admin', 'User', 'authenticated-user'] }
     ]
     entity HistoricalCases as projection on ns.HistoricalCases;
 
     @readonly
     entity HistoricalTeamMembers as projection on ns.HistoricalTeamMembers;
+
+    /**
+     * Hành động của case đã đóng, đọc được ĐỘC LẬP với case cha.
+     *
+     * ── Vì sao cần một projection tường minh ──
+     * `HistoricalActions` là composition con của `HistoricalCases`, nên CAP đã tự
+     * phơi nó ra trong service. Nhưng entity tự phơi chỉ tới được qua cha
+     * (`HistoricalCases(ID)/actions`); gọi thẳng `/HistoricalActions` trả 405.
+     * Màn hình Code Catalogues cần đếm mã nhiệm vụ trên TOÀN kho, và đi vòng qua
+     * `$expand` của 25 case chỉ để lấy một cột là kéo về cả kho để đếm 78 dòng.
+     *
+     * `@readonly` chứ không mở ghi: hành động vào kho qua đúng hai đường đã khai
+     * ở `HistoricalCases` ở trên (`seedCaseLibrary` và duyệt D8), và mã nhiệm vụ
+     * là do LUẬT suy ra chứ không do ai gõ — một đường ghi ở đây là một nguồn mã
+     * thứ hai.
+     */
+    @readonly
+    entity HistoricalActions as projection on ns.HistoricalActions;
 
     /**
      * Case tiền lệ của một report, kèm điểm và diễn giải từng tiêu chí.
@@ -224,4 +330,30 @@ service EightDService {
      */
     @(requires: ['admin', 'Admin'])
     action embedCaseLibrary(force : Boolean) returns String;
+}
+
+// ── Dải số: bắt buộc trong bản ghi, không bắt buộc trong yêu cầu ─────────────
+//
+// `lotId` vẫn là `@mandatory` ở tầng db — một dòng không mang số nghiệp vụ là
+// dòng hỏng. Nhưng kể từ Phase 1.7 thì SERVER cấp số đó, trong chính transaction
+// của lệnh insert (xem `srv/src/domain/numberRange.ts`), nên client gửi lên
+// KHÔNG có số là đúng chứ không phải thiếu.
+//
+// Kiểm tra đầu vào tự sinh của CAP chạy trước mọi handler của ứng dụng — kể cả
+// khi đăng ký bằng `srv.prepend` — nên nếu để `@mandatory` ở tầng service thì
+// yêu cầu bị chặn trước khi tới chỗ cấp số, và ô "Assigned on save" không bao giờ
+// lưu được. Hạ cờ ở ĐÚNG tầng phát sinh vấn đề, giữ nguyên ràng buộc ở tầng dưới:
+// `@assert.unique` vẫn còn, và handler cấp số luôn điền một giá trị trước khi bản
+// ghi đi tiếp.
+//
+// `HistoricalCases.notificationId` từng nằm ở đây vì cùng lý do. Không cần nữa:
+// Phase 5 đóng hẳn CREATE trên entity đó, nên không còn yêu cầu OData nào tới
+// được phép kiểm này — số vẫn do `seedLibrary` cấp, ở tầng domain.
+annotate EightDService.InspectionLots with {
+    lotId @mandatory: null;
+}
+
+// `Defects.defectId` cùng chuyện: bắt buộc trong bản ghi, do server cấp lúc lưu.
+annotate EightDService.Defects with {
+    defectId @mandatory: null;
 }

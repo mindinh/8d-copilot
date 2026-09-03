@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Badge,
@@ -40,40 +40,25 @@ import {
     inspectionLotsService,
     type InspectionLotItem,
 } from '@/services/master-data-service';
+import { useValueHelp } from '@/hooks/use-value-help';
+import { ValueHelpInput } from '@/components/ui/ValueHelpInput';
+import { findEntry, isOutsideCatalogue, VALUE_HELP_IDS } from '@/services/value-help-service';
 
-/**
- * Tự động tính Inspection Lot ID kế tiếp (+1 từ max ID hiện tại).
- * Ví dụ: 0010000019 -> 0010000020, LOT-06 -> LOT-07
+/*
+ * ── Số lô kiểm tra do SERVER cấp ─────────────────────────────────────────────
+ *
+ * Ở đây từng có `generateNextLotId(items)` — `max(items) + 1` tính trong trình
+ * duyệt. Nó hỏng ba kiểu, và cả ba đều lặng lẽ:
+ *
+ *   1. `items` là những dòng ĐANG TẢI, không phải cả bảng. Lọc theo vật tư hoặc
+ *      sang trang thứ hai là "số kế tiếp" có thể đã tồn tại.
+ *   2. Hai người mở form cùng lúc thì cùng thấy một số và cùng lưu.
+ *   3. Số hiện ra ngay khi mở form, nên mỗi form bỏ dở đốt một số.
+ *
+ * Giờ ô để trống và server cấp số trong chính transaction của lệnh insert (xem
+ * `srv/src/domain/numberRange.ts`). Gõ tay vẫn được — dữ liệu nhập từ ngoài mang
+ * số của chính nó, và SAP hỗ trợ cả hai kiểu.
  */
-export function generateNextLotId(items: { lotId?: string }[]): string {
-    let maxNum = 0;
-    let maxDigitsLength = 10;
-    let prefix = '';
-
-    for (const item of items) {
-        if (!item?.lotId) continue;
-        const str = item.lotId.trim();
-        const match = str.match(/^(.*?)(\d+)$/);
-        if (match) {
-            const p = match[1];
-            const digits = match[2];
-            const num = parseInt(digits, 10);
-            if (!isNaN(num) && num > maxNum) {
-                maxNum = num;
-                maxDigitsLength = digits.length;
-                prefix = p;
-            }
-        }
-    }
-
-    if (maxNum === 0) {
-        return '0010000001';
-    }
-
-    const nextNum = maxNum + 1;
-    const nextDigits = String(nextNum).padStart(maxDigitsLength, '0');
-    return `${prefix}${nextDigits}`;
-}
 
 export function InspectionLotsTab() {
     const queryClient = useQueryClient();
@@ -317,7 +302,6 @@ export function InspectionLotsTab() {
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 title="Add Inspection Lot (QM Data)"
-                existingRows={allRows}
                 isPending={createMutation.isPending}
                 onSubmit={(values) => createMutation.mutate(values)}
             />
@@ -339,7 +323,6 @@ export function InspectionLotsTab() {
                     onOpenChange={(open) => !open && setEditItem(null)}
                     title={`Edit Inspection Lot — ${editItem.lotId}`}
                     initialValues={editItem}
-                    existingRows={allRows}
                     isPending={updateMutation.isPending}
                     onSubmit={(values) => updateMutation.mutate({ id: editItem.ID, item: values })}
                 />
@@ -382,7 +365,6 @@ function InspectionLotFormDialog({
     onOpenChange,
     title,
     initialValues,
-    existingRows = [],
     isPending,
     onSubmit,
 }: {
@@ -390,22 +372,22 @@ function InspectionLotFormDialog({
     onOpenChange: (open: boolean) => void;
     title: string;
     initialValues?: InspectionLotItem;
-    existingRows?: InspectionLotItem[];
     isPending: boolean;
     onSubmit: (values: Partial<InspectionLotItem>) => void;
 }) {
-    const [lotId, setLotId] = useState(
-        () => initialValues?.lotId || generateNextLotId(existingRows)
-    );
+    // Trống khi tạo mới: server cấp số lúc lưu. Có sẵn khi sửa — số đã cấp rồi.
+    const [lotId, setLotId] = useState(() => initialValues?.lotId || '');
+    const isEdit = Boolean(initialValues?.lotId);
 
     useEffect(() => {
         if (open) {
-            setLotId(initialValues?.lotId || generateNextLotId(existingRows));
+            setLotId(initialValues?.lotId || '');
         }
-    }, [open, initialValues, existingRows]);
+    }, [open, initialValues]);
     const [materialId, setMaterialId] = useState(initialValues?.materialId || '');
     const [characteristic, setCharacteristic] = useState(initialValues?.characteristic || '');
     const [equipment, setEquipment] = useState(initialValues?.equipment || '');
+    const [workCenterId, setWorkCenterId] = useState(initialValues?.workCenterId || '');
     const [measuredValue, setMeasuredValue] = useState(initialValues?.measuredValue || '');
     const [unit, setUnit] = useState(initialValues?.unit || 'mm');
     const [conforming, setConforming] = useState(initialValues?.conforming ?? true);
@@ -413,18 +395,55 @@ function InspectionLotFormDialog({
     const [plant, setPlant] = useState(initialValues?.plant || '1000');
     const [originCode, setOriginCode] = useState('03');
 
+    // ── F4: nhà máy CỨNG, vật tư thì không ──
+    // `PLANT` là danh mục static độc lập — khoá cứng được.
+    // `MATERIAL` đọc từ `HistoricalCases`, tức là chỉ chứa vật tư ĐÃ TỪNG có case
+    // 8D đóng. Đa số vật tư không có. Khoá cứng ở đây nghĩa là không ghi được lô
+    // kiểm tra cho một vật tư chưa từng hỏng — vô lý, vì lô kiểm tra là thứ có
+    // TRƯỚC lỗi. Nên gợi ý và cảnh báo gõ sai, không chặn.
+    const plantVh = useValueHelp(VALUE_HELP_IDS.plant, { enabled: open });
+    const materialVh = useValueHelp(VALUE_HELP_IDS.material, { enabled: open });
+    const workCenterVh = useValueHelp(VALUE_HELP_IDS.workCenter, { enabled: open });
+    const plantOutside = isOutsideCatalogue(plantVh.entries, plant, plantVh.loading);
+
+    /**
+     * Trạm suy ra từ mã thiết bị — CHỈ để gợi ý, không tự điền.
+     *
+     * Quy ước `<trạm>-<đồ gá>` là quy ước của bộ dữ liệu mẫu, không phải luật.
+     * Ô cũ áp phép cắt này lên mọi mã, kèm giá trị dự phòng cứng `WC-MILL-07`, và
+     * hiển thị kết quả như thể đó là dữ liệu — trong khi nó chưa từng được lưu.
+     * Ở đây chỉ đề xuất khi phần cắt ra KHỚP một trạm có thật trong danh mục, và
+     * người dùng phải bấm nhận. Đoán được xác nhận thì không còn là đoán.
+     */
+    const derivedWorkCenter = useMemo(() => {
+        const guess = equipment.split('-').slice(0, 3).join('-');
+        if (!guess || guess === equipment.trim()) return null;
+        return findEntry(workCenterVh.entries, guess)?.key ?? null;
+    }, [equipment, workCenterVh.entries]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!lotId.trim() || !materialId.trim() || !characteristic.trim()) {
-            toast.error('Prüflos (Lot ID), Material, and Characteristic are required.');
+        // `lotId` KHÔNG nằm trong danh sách bắt buộc nữa: để trống là hợp lệ, và
+        // server sẽ cấp số. Chỉ Material và Characteristic là thứ người dùng biết.
+        if (!materialId.trim() || !characteristic.trim()) {
+            toast.error('Material and Characteristic are required.');
+            return;
+        }
+        if (plantOutside) {
+            toast.error(`Plant "${plant.trim()}" is not in the plant list.`, {
+                description: 'Pick one from the list, or maintain the plant list first.',
+            });
             return;
         }
 
         onSubmit({
-            lotId: lotId.trim(),
+            // Bỏ hẳn khoá khỏi payload khi trống, chứ không gửi chuỗi rỗng: '' là
+            // một giá trị, và server sẽ tôn trọng nó thay vì cấp số.
+            ...(lotId.trim() ? { lotId: lotId.trim() } : {}),
             materialId: materialId.trim(),
             characteristic: characteristic.trim(),
             equipment: equipment.trim() || null,
+            workCenterId: workCenterId.trim() || null,
             measuredValue: measuredValue.trim() || null,
             unit: unit.trim() || null,
             conforming,
@@ -483,21 +502,44 @@ function InspectionLotFormDialog({
                                 <div className="sm:col-span-4 space-y-1">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs font-semibold text-foreground">
-                                            Inspection Lot ID (Prüflos) *
+                                            Inspection Lot ID (Prüflos)
                                         </Label>
-                                        <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
-                                            <Lock className="w-3 h-3 text-muted-foreground" />
-                                            Auto-generated (+1)
-                                        </span>
+                                        {isEdit ? (
+                                            <span className="text-[10.5px] font-medium text-muted-foreground flex items-center gap-1">
+                                                <Lock className="w-3 h-3 text-muted-foreground" />
+                                                Assigned
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10.5px] font-medium text-muted-foreground">
+                                                Optional — external number
+                                            </span>
+                                        )}
                                     </div>
+                                    {/*
+                                      Sửa thì khoá — số đã cấp, đổi nó là làm đứt mọi
+                                      trích dẫn trỏ tới lô này. Tạo mới thì để trống và
+                                      nói rõ số sẽ có lúc lưu, chứ không hiện sẵn một con
+                                      số mà đóng form là mất.
+                                    */}
                                     <Input
                                         value={lotId}
-                                        disabled
-                                        readOnly
-                                        placeholder="Auto-generated (+1)"
-                                        className="font-mono text-xs h-9 bg-muted/60 text-muted-foreground cursor-not-allowed font-semibold select-none"
-                                        required
+                                        onChange={(e) => setLotId(e.target.value)}
+                                        disabled={isEdit}
+                                        readOnly={isEdit}
+                                        placeholder="Assigned on save"
+                                        className={cn(
+                                            'font-mono text-xs h-9 font-semibold',
+                                            isEdit
+                                                ? 'bg-muted/60 text-muted-foreground cursor-not-allowed select-none'
+                                                : 'bg-background',
+                                        )}
                                     />
+                                    {!isEdit && (
+                                        <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                            Leave blank and the server assigns the next number when you save.
+                                            Type one only when the lot already has a number elsewhere.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="sm:col-span-4 space-y-1">
@@ -521,11 +563,15 @@ function InspectionLotFormDialog({
                                     <Label className="text-xs font-semibold text-foreground">
                                         Plant (Werk)
                                     </Label>
-                                    <Input
+                                    <ValueHelpInput
                                         value={plant}
-                                        onChange={(e) => setPlant(e.target.value)}
-                                        placeholder="e.g. 1000 (Hannover)"
-                                        className="font-mono text-xs h-9 bg-background"
+                                        onChange={setPlant}
+                                        entries={plantVh.entries}
+                                        loading={plantVh.loading}
+                                        strict
+                                        catalogLabel="the plant list"
+                                        maintenanceHint="Maintain the plant list first."
+                                        placeholder="e.g. 1000"
                                     />
                                 </div>
 
@@ -533,12 +579,15 @@ function InspectionLotFormDialog({
                                     <Label className="text-xs font-semibold text-foreground">
                                         Material Number (Material) *
                                     </Label>
-                                    <Input
+                                    <ValueHelpInput
                                         value={materialId}
-                                        onChange={(e) => setMaterialId(e.target.value)}
+                                        onChange={setMaterialId}
+                                        entries={materialVh.entries}
+                                        loading={materialVh.loading}
+                                        catalogLabel="the material master"
+                                        scoringNote="D2 matches this code exactly when it pulls inspection history — a new material is fine, a typo is not."
                                         placeholder="e.g. MAT-10247"
-                                        className="font-mono text-xs h-9 bg-background font-semibold text-primary"
-                                        required
+                                        className="[&_input]:font-semibold [&_input]:text-primary"
                                     />
                                 </div>
 
@@ -583,11 +632,24 @@ function InspectionLotFormDialog({
                                     <Label className="text-xs font-semibold text-foreground">
                                         Work Center Reference (Arbeitsplatz)
                                     </Label>
-                                    <Input
-                                        value={equipment.includes('-') ? equipment.split('-').slice(0, 3).join('-') : 'WC-MILL-07'}
-                                        disabled
-                                        className="font-mono text-xs h-9 bg-muted/40 text-muted-foreground"
+                                    <ValueHelpInput
+                                        value={workCenterId}
+                                        onChange={setWorkCenterId}
+                                        entries={workCenterVh.entries}
+                                        loading={workCenterVh.loading}
+                                        placeholder="e.g. WC-MILL-07"
+                                        catalogLabel="the work center list"
+                                        scoringNote="Precedent matching scores work center on an exact match."
                                     />
+                                    {derivedWorkCenter && derivedWorkCenter !== workCenterId.trim() && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setWorkCenterId(derivedWorkCenter)}
+                                            className="text-[10.5px] leading-snug text-primary underline-offset-2 hover:underline"
+                                        >
+                                            Use {derivedWorkCenter} — from the equipment code
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -715,7 +777,7 @@ function InspectionLotFormDialog({
                             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 px-4 text-xs">
                                 Cancel
                             </Button>
-                            <Button type="submit" size="sm" disabled={isPending} className="h-9 px-5 text-xs bg-primary text-primary-foreground font-semibold">
+                            <Button type="submit" size="sm" disabled={isPending || plantOutside} className="h-9 px-5 text-xs bg-primary text-primary-foreground font-semibold">
                                 {isPending ? <Spinner className="w-4 h-4 mr-1.5" /> : null}
                                 Save Inspection Lot
                             </Button>
@@ -746,6 +808,7 @@ function InspectionLotJsonImportDialog({
     "materialId": "MAT-10247",
     "characteristic": "Flange burr height",
     "equipment": "WC-MILL-07-F1",
+    "workCenterId": "WC-MILL-07",
     "measuredValue": "0.32",
     "unit": "mm",
     "conforming": false,
@@ -757,6 +820,7 @@ function InspectionLotJsonImportDialog({
     "materialId": "MAT-10247",
     "characteristic": "Flange burr height",
     "equipment": "WC-MILL-07-F2",
+    "workCenterId": "WC-MILL-07",
     "measuredValue": "0.04",
     "unit": "mm",
     "conforming": true,
@@ -794,8 +858,10 @@ function InspectionLotJsonImportDialog({
 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            if (!item.lotId || !item.materialId || !item.characteristic) {
-                setParseError(`Item at index ${i} is missing required fields (lotId, materialId, characteristic).`);
+            // `lotId` tuỳ chọn: file xuất từ hệ thống khác thì mang số của nó, còn
+            // file dựng tay thì để server cấp. Hai trường kia không ai cấp hộ được.
+            if (!item.materialId || !item.characteristic) {
+                setParseError(`Item at index ${i} is missing required fields (materialId, characteristic).`);
                 return;
             }
         }
@@ -808,10 +874,14 @@ function InspectionLotJsonImportDialog({
         for (const item of items) {
             try {
                 await inspectionLotsService.create({
-                    lotId: String(item.lotId).trim(),
+                    ...(item.lotId ? { lotId: String(item.lotId).trim() } : {}),
                     materialId: String(item.materialId).trim(),
                     characteristic: String(item.characteristic).trim(),
                     equipment: item.equipment ? String(item.equipment).trim() : null,
+                    // Không suy từ `equipment` khi thiếu: nhập hàng loạt không có ai
+                    // ngồi xác nhận, và một trạm đoán sai thì im lặng đi thẳng vào
+                    // dữ liệu gốc.
+                    workCenterId: item.workCenterId ? String(item.workCenterId).trim() : null,
                     measuredValue: item.measuredValue != null ? String(item.measuredValue).trim() : null,
                     unit: item.unit ? String(item.unit).trim() : null,
                     conforming: item.conforming ?? true,
@@ -843,7 +913,7 @@ function InspectionLotJsonImportDialog({
                 <div className="p-5 sm:p-6 border-b border-border/70 bg-muted/20 shrink-0">
                     <DialogTitle className="text-base font-bold flex items-center gap-2">
                         <FileCode className="w-5 h-5 text-primary" />
-                        Import QM Inspection Lots from JSON
+                        Import Inspection History from JSON
                     </DialogTitle>
                     <p className="text-xs text-muted-foreground mt-1">
                         Paste single lot object or array of lot inspection records.

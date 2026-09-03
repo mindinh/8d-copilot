@@ -10,6 +10,19 @@ const inspectionLots = [];
 let lotSeq = 1;
 let itemSeq = 1;
 
+/**
+ * Work center của một fixture: 'WC-MILL-07-F1' → 'WC-MILL-07'.
+ *
+ * Quy ước đặt tên là của CHÍNH file này — mọi mã equipment dưới đây được viết ra
+ * theo dạng `<work center>-<fixture>`. Nên tách ở đây là đọc lại thứ ta vừa ghép,
+ * không phải đoán. Chỗ ĐOÁN là màn hình Inspection Lots, nơi cùng phép cắt này
+ * chạy trên dữ liệu bất kỳ kèm giá trị dự phòng cứng — cột `workCenterId` sinh ra
+ * để màn hình đó thôi phải đoán.
+ */
+function workCenterOf(equipment) {
+    return equipment.split('-').slice(0, 3).join('-');
+}
+
 function addLotPair(prefix, matId, char, eqBad, valBad, eqGood, valGood, unit, dateBase = '2026-02') {
     // 3 lots bad (100% non-conforming on eqBad)
     for (let i = 1; i <= 3; i++) {
@@ -21,6 +34,7 @@ function addLotPair(prefix, matId, char, eqBad, valBad, eqGood, valGood, unit, d
             materialId: matId,
             characteristic: char,
             equipment: eqBad,
+            workCenterId: workCenterOf(eqBad),
             measuredValue: `${valBad} ${unit}`.trim(),
             unit: unit,
             conforming: 'false',
@@ -38,6 +52,7 @@ function addLotPair(prefix, matId, char, eqBad, valBad, eqGood, valGood, unit, d
             materialId: matId,
             characteristic: char,
             equipment: eqGood,
+            workCenterId: workCenterOf(eqGood),
             measuredValue: `${valGood} ${unit}`.trim(),
             unit: unit,
             conforming: 'true',
@@ -92,10 +107,10 @@ addLotPair(13, 'MAT-88410', 'Helium Leak Rate at 8.0 bar test pressure', 'WC-TES
 addLotPair(13, 'MAT-88410', 'O-ring sealing seat surface roughness (Ra)', 'WC-TEST-03-CHAMBER1', '1.85', 'WC-TEST-03-CHAMBER2', '0.35', 'um');
 
 // Write InspectionLots.csv
-const inspHeader = 'ID;lotId;materialId;characteristic;equipment;measuredValue;unit;conforming;lotDate;plant';
+const inspHeader = 'ID;lotId;materialId;characteristic;equipment;workCenterId;measuredValue;unit;conforming;lotDate;plant';
 const inspLines = [
     inspHeader,
-    ...inspectionLots.map(r => `${r.ID};${r.lotId};${r.materialId};${r.characteristic};${r.equipment};${r.measuredValue};${r.unit};${r.conforming};${r.lotDate};${r.plant}`)
+    ...inspectionLots.map(r => `${r.ID};${r.lotId};${r.materialId};${r.characteristic};${r.equipment};${r.workCenterId};${r.measuredValue};${r.unit};${r.conforming};${r.lotDate};${r.plant}`)
 ];
 fs.writeFileSync('db/data/cnma.proresolve-InspectionLots.csv', inspLines.join('\n'), 'utf-8');
 console.log(`Generated ${inspectionLots.length} inspection lot rows.`);

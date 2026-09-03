@@ -17,7 +17,11 @@ const STEP_LABELS: Record<string, string> = {
     D5: 'Corrective',
     D6: 'Implement',
     D7: 'Preventive',
-    D8: 'Closure',
+    // "Team Recognition", không phải "Closure": SAP và trang /workflow đều gọi
+    // bước này như vậy, và D8 trong phương pháp 8D là ghi nhận công của nhóm chứ
+    // không phải đóng hồ sơ. Trùng chữ "Team" với D1 là chấp nhận được — số bước
+    // và mã đứng ngay trước nhãn nên không ai đọc nhầm hai bước này với nhau.
+    D8: 'Team Recognition',
 };
 
 export function CaseStepper({

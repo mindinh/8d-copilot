@@ -28,6 +28,9 @@ import {
 } from './precedentRepository';
 import { clearRetrievalConfigCache } from './configRepository';
 import { DEFAULT_STEP_PROMPTS } from './defaults';
+import { allocateNumber } from '../../numberRange';
+import { classifyTaskCode } from '../../../../../shared/task-catalogue';
+import type { CaseContext } from '../types';
 
 const LOG = cds.log('library-seed');
 
@@ -48,6 +51,160 @@ function numberOrNull(v: unknown): number | null {
 function emptyToNull(v: unknown): string | null {
     const s = String(v ?? '').trim();
     return s === '' ? null : s;
+}
+
+/** Hai đường vào kho. Không có đường thứ ba — xem `HistoricalCases.provenance`. */
+export type CaseProvenance = 'imported' | 'closed-in-app';
+
+export interface WriteCaseOptions {
+    provenance: CaseProvenance;
+    /** Lượt chạy 8D đã đóng case. Chỉ có với `closed-in-app`. */
+    sourceReportID?: string | null;
+    /**
+     * Ghi đè trạng thái SAP và ngày hoàn tất.
+     *
+     * Case đóng ở D8 thì trạng thái là một SỰ KIỆN vừa xảy ra, không phải thứ đọc
+     * lại từ payload lúc phân tích — payload đó được nhập khi case còn đang mở.
+     */
+    sapStatus?: string | null;
+    completionDate?: string | null;
+}
+
+/**
+ * Ghi MỘT case vào kho: dòng chính, nhóm 8D, và danh sách hành động.
+ *
+ * ── Vì sao là hàm riêng, không nằm trong `seedLibrary` ──
+ * Từ Phase 5 kho có hai đường vào — nạp hàng loạt, và case do chính app đóng ở
+ * D8. Cả hai phải sinh ra dòng GIỐNG HỆT nhau về hình dạng: cùng `defectKeywords`
+ * tách bằng cùng một hàm, cùng `searchText` ghép bằng cùng một công thức, cùng
+ * `attributesJson`. Hai chỗ chép lại logic này sẽ lệch nhau ở lần sửa kế tiếp, và
+ * hậu quả là những case app tự đóng lặng lẽ không bao giờ ăn điểm — đúng cái bẫy
+ * mà `EightDService.cds:88` đã cảnh báo.
+ *
+ * Thay thế theo `notificationId`: kho phải đúng MỘT dòng mỗi case.
+ */
+export async function writeHistoricalCase(
+    db: any,
+    ctx: CaseContext,
+    raw: unknown,
+    opts: WriteCaseOptions,
+): Promise<{ ID: string; replaced: boolean }> {
+    const notificationId = ctx.notificationId;
+
+    const existing = await db.run(
+        SELECT.one.from(HISTORICAL_CASES).columns('ID').where({ notificationId }),
+    );
+    if (existing) {
+        // Xoá con trước rồi mới xoá cha: ở tầng db thuần không có cascade
+        // nào chạy hộ, và team mồ côi sẽ vẫn được D1 đếm.
+        await db.run(DELETE.from(HISTORICAL_TEAM).where({ historicalCase_ID: existing.ID }));
+        await db.run(DELETE.from(HISTORICAL_ACTIONS).where({ historicalCase_ID: existing.ID }));
+        await db.run(DELETE.from(HISTORICAL_CASES).where({ ID: existing.ID }));
+    }
+
+    const ID = cds.utils.uuid();
+    await db.run(
+        INSERT.into(HISTORICAL_CASES).entries({
+            ID,
+            notificationId,
+            origin: emptyToNull(ctx.origin),
+            symptomShortText: emptyToNull(ctx.header.symptomShortText),
+            sapStatus: emptyToNull(opts.sapStatus ?? ctx.header.status),
+            foundDate: ctx.header.foundDate,
+            completionDate: opts.completionDate ?? ctx.header.completionDate,
+            quantityExtent: emptyToNull(ctx.header.quantityExtent),
+
+            workCenterId: emptyToNull(ctx.product.workCenterId),
+            workCenterDesc: emptyToNull(ctx.product.workCenterDesc),
+            defectCodeGroup: emptyToNull(ctx.product.defectCodeGroup),
+            defectCode: emptyToNull(ctx.product.defectCode),
+            defectText: emptyToNull(ctx.product.defectText),
+            materialId: emptyToNull(ctx.product.materialId),
+            materialDesc: emptyToNull(ctx.product.materialDesc),
+            materialFamily: emptyToNull(ctx.product.materialGroup),
+
+            // Tách bằng CHÍNH hàm mà lúc chấm điểm dùng. Hai cách tách
+            // khác nhau ở hai đầu là lỗi không bao giờ báo.
+            defectKeywords: tokenizeDefectText(ctx.product.defectText),
+
+            // Ghép sẵn; vector sinh sau ở `embedLibrary` để việc nạp kho
+            // không phụ thuộc AI Core có thông hay không.
+            searchText: buildSearchText(ctx),
+
+            provenance: opts.provenance,
+            sourceReportID: emptyToNull(opts.sourceReportID),
+
+            batchId: emptyToNull(ctx.product.batchId),
+            rootCauseCategory: ctx.rootCause?.category ?? null,
+            copqEur: numberOrNull(ctx.copqEur),
+            fmeaId: ctx.fmea?.fmeaId ?? null,
+
+            sourcePayload: JSON.stringify(raw),
+
+            // Làm phẳng NGAY lúc nạp, không parse lại lúc chấm: một lần
+            // chấm duyệt cả kho × mọi tiêu chí, parse `sourcePayload`
+            // trong vòng lặp đó là trả giá cho cùng một việc hàng nghìn lần.
+            attributesJson: JSON.stringify(flattenPayload(raw)),
+        }),
+    );
+
+    const team = [
+        ...(ctx.team.leader ? [ctx.team.leader] : []),
+        ...ctx.team.members,
+    ];
+    if (team.length) {
+        await db.run(
+            INSERT.into(HISTORICAL_TEAM).entries(
+                team.map((m) => ({
+                    ID: cds.utils.uuid(),
+                    historicalCase_ID: ID,
+                    partnerId: m.partnerId,
+                    partnerName: m.partnerName,
+                    functionTitle: m.functionTitle,
+                    partnerRole: m.partnerRole,
+                    email: emptyToNull(m.email),
+                    phone: emptyToNull(m.phone),
+                })),
+            ),
+        );
+    }
+
+    const allActions = [
+        ...ctx.actions.containment,
+        ...ctx.actions.corrective,
+        ...ctx.actions.preventive,
+    ];
+    if (allActions.length) {
+        await db.run(
+            INSERT.into(HISTORICAL_ACTIONS).entries(
+                allActions.map((a) => {
+                    // Mã hoá ở ĐÚNG CHỖ NÀY, không ở phía gọi. Mọi đường vào kho
+                    // — nạp dataset, đóng case trong app, seed lại — đều đi qua
+                    // đây, nên đều nhận cùng một bộ luật. Đặt ở phía gọi là mở
+                    // đường cho hai đường vào mã hoá khác nhau.
+                    const coded = classifyTaskCode(a.actionText);
+                    return {
+                        ID: cds.utils.uuid(),
+                        historicalCase_ID: ID,
+                        lineNo: a.lineNo,
+                        actionType: classifyAction(a.actionType) ?? a.actionType,
+                        actionText: a.actionText,
+                        status: a.status,
+                        taskCode: coded?.taskCode ?? null,
+                        taskCodeGroup: coded?.taskCodeGroup ?? null,
+                        // Null khi nguồn không có. Dataset nhập vào không bao giờ
+                        // có; case đóng trong app thì luôn có, vì người dùng đã
+                        // điền chúng trên màn hình D3/D5/D7.
+                        taskProcessor: emptyToNull(a.taskProcessor ?? ''),
+                        timeEffort: numberOrNull(a.timeEffort),
+                        plannedEndDate: emptyToNull(a.plannedEndDate ?? '') ,
+                    };
+                }),
+            ),
+        );
+    }
+
+    return { ID, replaced: Boolean(existing) };
 }
 
 /**
@@ -76,108 +233,31 @@ export async function seedLibrary(payloads: readonly unknown[]): Promise<SeedRep
 
             const ctx = mapCase(raw);
             notificationId = ctx.notificationId;
+
+            /**
+             * Payload không khai số thông báo thì CẤP số, không bỏ qua.
+             *
+             * Từ Phase 1.7 quy ước của app là "để trống thì server đánh số" —
+             * đúng cái mà màn Master Data hứa với người dùng. Bỏ qua ở đây nghĩa
+             * là dán một file cũ không có cột notification vào hộp thoại import
+             * thì mọi dòng biến mất kèm một lý do khó hiểu, trong khi tạo tay
+             * cùng dữ liệu đó lại chạy.
+             */
             if (!notificationId) {
-                report.skipped.push({ index: i, notificationId: null, reason: 'Case has no notification ID' });
-                continue;
+                notificationId = await allocateNumber(db, 'DEFECT', async (code: string) => {
+                    const hit = await db.run(
+                        SELECT.one.from(HISTORICAL_CASES).columns('ID').where({ notificationId: code }),
+                    );
+                    return Boolean(hit);
+                });
+                ctx.notificationId = notificationId;
             }
 
-            const existing = await db.run(
-                SELECT.one.from(HISTORICAL_CASES).columns('ID').where({ notificationId }),
-            );
-            if (existing) {
-                // Xoá con trước rồi mới xoá cha: ở tầng db thuần không có cascade
-                // nào chạy hộ, và team mồ côi sẽ vẫn được D1 đếm.
-                await db.run(DELETE.from(HISTORICAL_TEAM).where({ historicalCase_ID: existing.ID }));
-                await db.run(DELETE.from(HISTORICAL_ACTIONS).where({ historicalCase_ID: existing.ID }));
-                await db.run(DELETE.from(HISTORICAL_CASES).where({ ID: existing.ID }));
-            }
-
-            const ID = cds.utils.uuid();
-            await db.run(
-                INSERT.into(HISTORICAL_CASES).entries({
-                    ID,
-                    notificationId,
-                    origin: emptyToNull(ctx.origin),
-                    symptomShortText: emptyToNull(ctx.header.symptomShortText),
-                    sapStatus: emptyToNull(ctx.header.status),
-                    foundDate: ctx.header.foundDate,
-                    completionDate: ctx.header.completionDate,
-                    quantityExtent: emptyToNull(ctx.header.quantityExtent),
-
-                    workCenterId: emptyToNull(ctx.product.workCenterId),
-                    workCenterDesc: emptyToNull(ctx.product.workCenterDesc),
-                    defectCode: emptyToNull(ctx.product.defectCode),
-                    defectText: emptyToNull(ctx.product.defectText),
-                    materialId: emptyToNull(ctx.product.materialId),
-                    materialDesc: emptyToNull(ctx.product.materialDesc),
-                    materialFamily: emptyToNull(ctx.product.materialGroup),
-
-                    // Tách bằng CHÍNH hàm mà lúc chấm điểm dùng. Hai cách tách
-                    // khác nhau ở hai đầu là lỗi không bao giờ báo.
-                    defectKeywords: tokenizeDefectText(ctx.product.defectText),
-
-                    // Ghép sẵn; vector sinh sau ở `embedLibrary` để việc nạp kho
-                    // không phụ thuộc AI Core có thông hay không.
-                    searchText: buildSearchText(ctx),
-
-                    batchId: emptyToNull(ctx.product.batchId),
-                    rootCauseCategory: ctx.rootCause?.category ?? null,
-                    copqEur: numberOrNull(ctx.copqEur),
-                    fmeaId: ctx.fmea?.fmeaId ?? null,
-
-                    sourcePayload: JSON.stringify(raw),
-
-                    // Làm phẳng NGAY lúc nạp, không parse lại lúc chấm: một lần
-                    // chấm duyệt cả kho × mọi tiêu chí, parse `sourcePayload`
-                    // trong vòng lặp đó là trả giá cho cùng một việc hàng nghìn lần.
-                    attributesJson: JSON.stringify(flattenPayload(raw)),
-                }),
-            );
-
-            const team = [
-                ...(ctx.team.leader ? [ctx.team.leader] : []),
-                ...ctx.team.members,
-            ];
-            if (team.length) {
-                await db.run(
-                    INSERT.into(HISTORICAL_TEAM).entries(
-                        team.map((m) => ({
-                            ID: cds.utils.uuid(),
-                            historicalCase_ID: ID,
-                            partnerId: m.partnerId,
-                            partnerName: m.partnerName,
-                            functionTitle: m.functionTitle,
-                            partnerRole: m.partnerRole,
-                            email: emptyToNull(m.email),
-                            phone: emptyToNull(m.phone),
-                        })),
-                    ),
-                );
-            }
-
-            const allActions = [
-                ...ctx.actions.containment,
-                ...ctx.actions.corrective,
-                ...ctx.actions.preventive,
-            ];
-            if (allActions.length) {
-                await db.run(
-                    INSERT.into(HISTORICAL_ACTIONS).entries(
-                        allActions.map((a) => ({
-                            ID: cds.utils.uuid(),
-                            historicalCase_ID: ID,
-                            lineNo: a.lineNo,
-                            actionType: classifyAction(a.actionType) ?? a.actionType,
-                            actionText: a.actionText,
-                            status: a.status,
-                        })),
-                    ),
-                );
-            }
+            const { replaced } = await writeHistoricalCase(db, ctx, raw, { provenance: 'imported' });
 
             await ensureReportRecord(db, notificationId, ctx, raw);
 
-            if (existing) report.replaced++;
+            if (replaced) report.replaced++;
             else report.inserted++;
         } catch (e: any) {
             report.skipped.push({ index: i, notificationId, reason: e.message });
@@ -213,12 +293,17 @@ async function ensureReportRecord(db: any, notificationId: string, ctx: any, raw
             foundDate: ctx.header.foundDate,
             completionDate: ctx.header.completionDate,
             quantityExtent: emptyToNull(ctx.header.quantityExtent),
+            defectQuantity: ctx.header.defectQuantity,
+            defectQuantityUom: emptyToNull(ctx.header.defectQuantityUom ?? ''),
             teamSize: ctx.header.teamSize,
+            plant: emptyToNull(ctx.product.plant),
             materialId: emptyToNull(ctx.product.materialId),
             materialDesc: emptyToNull(ctx.product.materialDesc),
             batchId: emptyToNull(ctx.product.batchId),
+            defectCodeGroup: emptyToNull(ctx.product.defectCodeGroup),
             defectCode: emptyToNull(ctx.product.defectCode),
             defectText: emptyToNull(ctx.product.defectText),
+            defectClass: emptyToNull(ctx.product.defectClass),
             workCenterId: emptyToNull(ctx.product.workCenterId),
             workCenterDesc: emptyToNull(ctx.product.workCenterDesc),
             copqEur: numberOrNull(ctx.copqEur),

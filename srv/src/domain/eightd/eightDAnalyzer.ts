@@ -1152,6 +1152,12 @@ export async function analyzeDownstreamReport(
     }
 
     const context = mapCase(raw);
+
+    // Cùng một bổ trợ như `analyze`. Thiếu dòng này thì mọi lần chạy lại downstream
+    // âm thầm mất lịch sử kiểm tra lô của D2 và liên kết FMEA của D7 — báo cáo chạy
+    // lại nghèo dữ liệu hơn báo cáo chạy lần đầu, mà không có cảnh báo nào.
+    await enrichFromDatabase(context);
+
     const [
         { enrichment, tokens: parseTokens },
         { analysis: independent, tokens: diagnoseTokens },

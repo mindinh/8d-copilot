@@ -154,9 +154,21 @@ const GUIDE_SOURCE: Record<DisciplineCode, string> = {
     D2: `Write the problem twice from the SAME facts - one short paragraph, then
     the 5W2H grid. They must agree; the grid is not a second analysis.
 
-      What      the defect, and the measurement that proves it: measured value
-                against specification, with units, and say plainly whether it is
-                out of tolerance
+      What      the defect by its catalogue classification - code GROUP and
+                defect code together, with the catalogue description, e.g.
+                "QM-DIM / 0004 - Bore diameter out of tolerance". The code alone
+                is not a key: it is only unique inside its group. Where
+                product.defectCodeGroup is empty, give the code and say the group
+                is not recorded - do not guess it from the code.
+                Then the measurement that proves it: measured value against
+                specification, with units, and say plainly whether it is out of
+                tolerance. Quote the specification as the recorded limits
+                (specLowerLimit / specUpperLimit / specUom) when they are set;
+                specValue is display text and may be free prose. Where a row
+                carries a valuation, that is the inspector's judgement - report
+                it as the verdict, and do not overturn it with your own reading
+                of the numbers. Where outOfSpec is null, say the row was not
+                judged rather than deciding it yourself
       Where     the work centre, by ID and name
       When      the date the defect was found
       Who       for a customer complaint, cite the customer contact. For an

@@ -39,6 +39,7 @@ import {
     getClosureGate,
     getReportForRerun,
     getReviewTrail,
+    isoDateOrNull,
     listTaskEvidence,
     markAnalyzing,
     markFailed,
@@ -49,6 +50,7 @@ import {
     savePartialDiscipline,
     saveReportContext,
     saveResult,
+    setCaseCommitments,
     setDisciplineWorkState,
     sweepStuckAnalyzing,
     type AssignedTeamRow,
@@ -61,6 +63,9 @@ import {
 import { DISCIPLINE_CODES, STEP_CODES, PipelineError, type CaseContext, type DisciplineCode } from '../domain/eightd/types';
 import { findPrecedentsByStep } from '../domain/eightd/precedent/findPrecedents';
 import { clearLibrary, embedLibrary, seedLibrary } from '../domain/eightd/precedent/librarySeeder';
+import { tokenizeDefectText } from '../domain/eightd/precedent/scoring';
+import { allocateNumber, numericPart, raiseNumberRange } from '../domain/numberRange';
+import { buildDefectPayload } from '../domain/defectPayload';
 
 const LOG = cds.log('eightd-service');
 
@@ -77,6 +82,19 @@ function describe(e: any): string {
         return `${base} — Cause: ${e.cause.message ?? e.cause}`;
     }
     return base;
+}
+
+/**
+ * Payload có phải dạng PHẲNG một case không — dạng mà form ghi nhận lỗi gửi lên.
+ *
+ * Dùng để quyết định có được cấp số cho nó hay không. Hai dạng export cũ đều gom
+ * nhiều bảng lại và khoá chúng theo `notification_id`; ở đó số không phải một
+ * trường mà là một khoá ngoại rải khắp payload, nên nó nằm ngoài phạm vi.
+ */
+function isFlatCasePayload(raw: any): boolean {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    if (raw.nested_case_view || raw.data?.notifications || raw.notifications) return false;
+    return true;
 }
 
 /**
@@ -216,8 +234,33 @@ export function registerEightDHandlers(srv: any): void {
         // Validate và map TRƯỚC khi tạo bản ghi: payload rác thì đừng để lại một
         // hàng Failed rỗng không nói lên điều gì.
         let context;
+        let effectivePayload = payload;
         try {
             const raw = JSON.parse(payload);
+
+            // Cấp số cho case nhập tay. Form không còn tự bịa `8D-` + 8 chữ số
+            // ngẫu nhiên nữa: dải số đó chính là dải của kho case thật, nên một
+            // lần trùng là hai case khác nhau mang cùng một mã trong sổ.
+            //
+            // Chỉ động vào dạng payload PHẲNG — đúng dạng form của mình gửi. Các
+            // dạng export cũ (`data.notifications`, `nested_case_view`) khoá các
+            // bảng con theo `notification_id`; dán một số mới vào đó sẽ phải sửa
+            // mọi dòng con cho khớp, và những payload ấy vốn luôn mang số của
+            // SAP. Không có số ở đó là chuyện của validator, không phải của
+            // dải số.
+            if (isFlatCasePayload(raw) && !String(raw.notificationId ?? raw.notification_id ?? '').trim()) {
+                try {
+                    raw.notificationId = await allocateNumber(cds.tx(req) as any, 'DEFECT', async (code) => {
+                        const hit = await (cds.tx(req) as any).run(
+                            SELECT.one.from('cnma.proresolve.Reports').columns('ID').where({ notificationId: code }),
+                        );
+                        return !!hit;
+                    });
+                    effectivePayload = JSON.stringify(raw);
+                } catch (e: any) {
+                    return req.error(500, `Could not assign a notification number: ${describe(e)}`);
+                }
+            }
 
             // Chỉ chặn khi payload KHÔNG PHẢI một case. Vấn đề chất lượng —
             // thiếu nhánh Ishikawa, 5-Why cụt, action chưa phân loại — được đưa
@@ -238,15 +281,142 @@ export function registerEightDHandlers(srv: any): void {
             return req.error(code, describe(e));
         }
 
-        const reportID = await createReport(payload, context, title);
+        const reportID = await createReport(effectivePayload, context, title);
 
         // Nạp cấu hình model vào cache trong transaction ngắn của request, để
         // job nền không phải chạm DB giữa chừng.
         await getGlobalModelConfig();
 
-        runInBackground(reportID, payload);
+        runInBackground(reportID, effectivePayload);
 
         LOG.info(`Report ${reportID} (case ${context.notificationId}) đã xếp lịch phân tích`);
+        return reportID;
+    });
+
+    // ── startEightD ──────────────────────────────────────────────────────────
+    //
+    // Mở 8D TỪ một lỗi đã ghi nhận. Khác `analyzeFromJson` ở chỗ payload không do
+    // trình duyệt gửi lên mà được dựng lại ở đây từ bảng `Defects` — xem
+    // `buildDefectPayload` để biết vì sao chỗ dựng payload phải nằm ở server.
+    //
+    // Ba việc dưới đây phải xảy ra CÙNG NHAU, và đó là lý do nó là một action chứ
+    // không phải vài lời gọi OData nối tiếp từ trình duyệt:
+    //   1. Chỉ được một 8D cho mỗi lỗi (SAP: "only possible to create one Problem
+    //      Solution Process per Defect"). Kiểm ở client thì hai tab mở song song
+    //      lọt cả hai.
+    //   2. `Reports.notificationId` phải thừa hưởng `Defects.defectId` — cùng một
+    //      con số, không phải hai.
+    //   3. Lỗi lật sang `In Process` ngay khi 8D mở ra.
+    srv.on('startEightD', async (req: any) => {
+        const defectID = String(req.data?.defectID ?? '').trim();
+        const title = req.data?.title;
+        if (!defectID) return req.error(400, 'defectID is required.');
+
+        // Hạn cam kết: từ chối ngay thay vì lặng lẽ bỏ qua. `isoDateOrNull` trả
+        // null cho cả "không gửi" lẫn "gửi chuỗi rác", nên phân biệt hai trường
+        // hợp đó ở đây — người gõ nhầm ngày phải biết là ngày của mình bị bỏ.
+        const rawDueDate = String(req.data?.dueDate ?? '').trim();
+        const dueDate = isoDateOrNull(rawDueDate);
+        if (rawDueDate && !dueDate) {
+            return req.error(400, `dueDate '${rawDueDate}' is not a valid ISO date (YYYY-MM-DD).`);
+        }
+        const coordinator = String(req.data?.coordinator ?? '').trim() || null;
+
+        const tx: any = cds.tx(req);
+
+        // Nhận cả UUID kỹ thuật lẫn số lỗi: danh sách ở UI hiển thị số, còn
+        // bảng OData trả về ID. Bắt người gọi phải biết dùng cái nào là mời một
+        // lớp ánh xạ vô ích vào giữa.
+        const defect = await tx.run(
+            SELECT.one.from('cnma.proresolve.Defects').where(
+                defectID.includes('-') && defectID.length === 36
+                    ? { ID: defectID }
+                    : { defectId: defectID },
+            ),
+        );
+        if (!defect) return req.error(404, `Defect ${defectID} not found.`);
+
+        if (defect.status === 'Completed') {
+            return req.error(409, `Defect ${defect.defectId} is already completed.`);
+        }
+
+        // Chốt luật một-8D-mỗi-lỗi ở tầng dữ liệu. `@assert.unique` trên
+        // `sourceDefectId` là lưới cuối; kiểm ở đây chỉ để trả về câu 409 đọc
+        // được thay vì một lỗi ràng buộc của database.
+        const existing = await tx.run(
+            SELECT.one.from('cnma.proresolve.Reports')
+                .columns('ID')
+                .where({ sourceDefectId: defect.defectId }),
+        );
+        if (existing) {
+            return req.error(409, `Defect ${defect.defectId} already has an 8D report.`);
+        }
+
+        const characteristics = await tx.run(
+            SELECT.from('cnma.proresolve.DefectCharacteristics')
+                .where({ defect_ID: defect.ID })
+                .orderBy('lineNo'),
+        );
+
+        let context: CaseContext;
+        let payload: string;
+        try {
+            const raw = buildDefectPayload(defect, characteristics ?? []);
+            payload = JSON.stringify(raw);
+
+            const blocking = blockingIssues(validateDataset(raw));
+            if (blocking.length) {
+                return req.error(
+                    400,
+                    `Defect ${defect.defectId} cannot start an 8D: ` +
+                    blocking.map((i) => `[${i.constraintId}] ${i.message}`).join(' '),
+                );
+            }
+
+            context = mapCase(raw);
+        } catch (e: any) {
+            return req.error(e instanceof PipelineError ? e.code : 400, describe(e));
+        }
+
+        const reportID = await createReport(payload, context, title, defect.defectId, {
+            slaResponseDue: dueDate,
+            coordinator,
+        });
+
+        // Lỗi đã có người xử lý — lật trạng thái trong CÙNG transaction với lệnh
+        // tạo báo cáo, để không bao giờ tồn tại một 8D treo trên một lỗi vẫn còn
+        // `Open`.
+        await tx.run(
+            UPDATE('cnma.proresolve.Defects').set({ status: 'In Process' }).where({ ID: defect.ID }),
+        );
+
+        await getGlobalModelConfig();
+        runInBackground(reportID, payload);
+
+        LOG.info(`Report ${reportID} mở từ lỗi ${defect.defectId}, đã xếp lịch phân tích`);
+        return reportID;
+    });
+
+    // ── setCaseCommitments ───────────────────────────────────────────────────
+    //
+    // Sửa hạn và điều phối viên sau khi case đã mở. Chuỗi rỗng = xoá; xem lý do ở
+    // khai báo action trong `EightDService.cds`.
+    srv.on('setCaseCommitments', async (req: any) => {
+        const reportID = String(req.data?.reportID ?? '').trim();
+        if (!reportID) return req.error(400, 'reportID is required.');
+
+        const rawDueDate = String(req.data?.dueDate ?? '').trim();
+        const dueDate = isoDateOrNull(rawDueDate);
+        if (rawDueDate && !dueDate) {
+            return req.error(400, `dueDate '${rawDueDate}' is not a valid ISO date (YYYY-MM-DD).`);
+        }
+
+        const ok = await setCaseCommitments(reportID, {
+            slaResponseDue: dueDate,
+            coordinator: String(req.data?.coordinator ?? '').trim() || null,
+        });
+        if (!ok) return req.error(404, `Report ${reportID} not found.`);
+
         return reportID;
     });
 
@@ -561,6 +731,129 @@ export function registerEightDHandlers(srv: any): void {
         } catch (e: any) {
             return req.error(e?.code === 404 ? 404 : e?.code === 400 ? 400 : 500, describe(e));
         }
+    });
+
+    // ── Dải số ───────────────────────────────────────────────────────────────
+    //
+    // Cấp số ở đây, trong `before CREATE`, nghĩa là cấp TRONG transaction của
+    // lệnh insert: insert hỏng thì bộ đếm cuộn lại theo, và một form mở rồi bỏ dở
+    // không đốt số nào — vì tới đây thì người dùng đã bấm Lưu.
+    //
+    // Cấp phát chỉ xảy ra khi client KHÔNG gửi mã. Gửi thì giữ nguyên, và kéo bộ
+    // đếm lên cho khỏi tụt lại: SAP hỗ trợ cả hai kiểu, và dữ liệu nhập từ ngoài
+    // luôn mang số của chính nó.
+    async function assignBusinessKey(
+        req: any,
+        opts: {
+            field: string;
+            object: string;
+            entity: string;
+            label: string;
+            payloadField?: string;
+            /**
+             * Chỗ khác cũng tiêu số của cùng dải này. `DEFECT` được `Defects` và
+             * `Reports` dùng chung, nên chỉ dò trùng trong một bảng là bỏ sót
+             * đúng nửa còn lại của dải.
+             */
+            alsoCheck?: Array<{ entity: string; field: string }>;
+        },
+    ): Promise<void> {
+        const tx: any = cds.tx(req);
+        const given = String(req.data?.[opts.field] ?? '').trim();
+
+        if (given) {
+            req.data[opts.field] = given;
+            const n = numericPart(given);
+            if (n != null) await raiseNumberRange(tx, opts.object, n);
+            syncPayloadField(req, opts, given);
+            return;
+        }
+
+        const places = [{ entity: opts.entity, field: opts.field }, ...(opts.alsoCheck ?? [])];
+        try {
+            const code = await allocateNumber(tx, opts.object, async (candidate) => {
+                for (const place of places) {
+                    const hit = await tx.run(
+                        SELECT.one.from(place.entity).columns('ID').where({ [place.field]: candidate }),
+                    );
+                    if (hit) return true;
+                }
+                return false;
+            });
+            req.data[opts.field] = code;
+            syncPayloadField(req, opts, code);
+        } catch (e: any) {
+            return req.error(500, `Could not assign a ${opts.label}: ${describe(e)}`);
+        }
+    }
+
+    /**
+     * Vá lại số vào bên trong `sourcePayload`.
+     *
+     * `sourcePayload` là bản JSON gốc của case, và pipeline phân tích đọc số từ
+     * TRONG đó chứ không từ cột. Nếu để cột mang số vừa cấp còn payload mang chuỗi
+     * rỗng, cùng một bản ghi sẽ tự mâu thuẫn — và mâu thuẫn đó chỉ lộ ra ở lần
+     * chạy phân tích sau, xa chỗ gây lỗi.
+     *
+     * JSON hỏng thì bỏ qua: chỗ này không phải cổng kiểm tra payload, và một lỗi
+     * cú pháp ở đây không nên chặn việc cấp số.
+     */
+    function syncPayloadField(req: any, opts: { payloadField?: string }, code: string): void {
+        if (!opts.payloadField) return;
+        const raw = req.data?.sourcePayload;
+        if (typeof raw !== 'string' || !raw.trim()) return;
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return;
+            if (parsed[opts.payloadField] === code) return;
+            parsed[opts.payloadField] = code;
+            req.data.sourcePayload = JSON.stringify(parsed);
+        } catch {
+            /* payload không phải JSON hợp lệ — để nguyên, chỗ khác sẽ báo. */
+        }
+    }
+
+    // `prepend` chứ không phải `before` thẳng: `lotId` có `@mandatory`, và kiểm
+    // tra đầu vào tự sinh của CAP chạy ở đầu pha `before`. Đăng ký thường thì form
+    // gửi ô trống sẽ bị chặn TRƯỚC khi tới đây và không bao giờ được cấp số.
+    // `prepend` đẩy handler này lên trước cả handler tự sinh, nên tới lúc kiểm tra
+    // thì số đã có. `@mandatory` vẫn giữ nguyên tác dụng — nó vẫn bắt được trường
+    // hợp cấp số không ra gì.
+    //
+    // `HistoricalCases` từng có một handler y hệt. Bỏ đi ở Phase 5 vì entity đó
+    // không còn mở CREATE: số của case nhập kho do `seedLibrary` cấp, ở tầng
+    // domain, cùng chỗ tính `defectKeywords` và `searchText`.
+    srv.prepend(() => {
+        srv.before('CREATE', 'InspectionLots', (req: any) => assignBusinessKey(req, {
+            field: 'lotId',
+            object: 'INSPLOT',
+            entity: 'cnma.proresolve.InspectionLots',
+            label: 'inspection lot number',
+        }));
+
+        // Lỗi dùng CHUNG dải số `DEFECT` với `Reports.notificationId`. Cố ý: bên
+        // SAP thông báo lỗi CHÍNH LÀ vật mà 8D mở ra từ đó, nên hai bảng mang
+        // cùng một con số chứ không phải hai con số phải đối chiếu với nhau.
+        srv.before('CREATE', 'Defects', (req: any) => assignBusinessKey(req, {
+            field: 'defectId',
+            object: 'DEFECT',
+            entity: 'cnma.proresolve.Defects',
+            label: 'defect number',
+            alsoCheck: [{ entity: 'cnma.proresolve.Reports', field: 'notificationId' }],
+        }));
+    });
+
+    /**
+     * Sửa `defectText` trên một dòng kho thì phải tính lại từ khoá.
+     *
+     * `defectKeywords` là bản tách sẵn của `defectText`, và chấm điểm so CỘT ĐÓ
+     * chứ không so văn bản gốc. Sửa mô tả mà để nguyên cột từ khoá nghĩa là màn
+     * hình hiện một đằng, máy chấm điểm một nẻo — và không có gì báo, vì cả hai
+     * giá trị đều hợp lệ.
+     */
+    srv.before('UPDATE', 'HistoricalCases', (req: any) => {
+        if (!('defectText' in (req.data ?? {}))) return;
+        req.data.defectKeywords = tokenizeDefectText(String(req.data.defectText ?? ''));
     });
 
     // ── TaskEvidences ────────────────────────────────────────────────────────

@@ -44,16 +44,114 @@ entity Reports : cuid, managed {
      * Ép sang số là tự nhận rủi ro parse sai để đổi lấy một trường mà UI chỉ hiển thị.
      */
     quantityExtent    : String(60);
+    /**
+     * Lượng ảnh hưởng dạng SỐ + đơn vị (RKMNG / MGEIN của SAP).
+     *
+     * Đứng CẠNH `quantityExtent` chứ không thay nó: chuỗi trên là thứ model được
+     * phép trích dẫn (`header.quantityExtent`) và là thứ toàn bộ kho tiền lệ đang
+     * lưu. Hai cột này là thứ đếm và cộng được — báo cáo cần số, không cần văn xuôi.
+     * Null ở case cũ: workbook chỉ ghi câu chữ, và ép sang số là đoán.
+     */
+    defectQuantity    : Decimal(13, 3);
+    defectQuantityUom : String(3);
     teamSize          : Integer;
     entryMode         : String(30);
     inspectionLotId   : String(30);
+    /**
+     * Số tham chiếu bên ngoài của notification (QMEL-QMNUM_EXT): số phiếu khiếu nại
+     * của khách, số phiếu giao hàng của NCC, số ticket. Tự do có chủ đích — nó là
+     * khoá của HỆ THỐNG KHÁC, ta không có danh mục để tra.
+     */
+    referenceNumber   : String(60);
+
+    /**
+     * Số lỗi (`Defects.defectId`) mà báo cáo này được mở từ đó. Null với report
+     * dán JSON hoặc nạp dữ liệu cũ — chúng không đi qua một bản ghi lỗi nào.
+     *
+     * ── Vì sao lưu SỐ chứ không phải UUID ──
+     * Cùng lý do với `ReviewEvents.reportID`: một khoá dạng giá trị đọc được mà
+     * không cần join, hiện thẳng lên cột "Defect ID" của worklist, và sống sót khi
+     * dòng lỗi bị xoá — lúc đó ta vẫn biết case này từng đến từ đâu.
+     *
+     * ── Vì sao `@assert.unique` ──
+     * SAP: *"only possible to create one Problem Solution Process per Defect."*
+     * Không có ràng buộc này thì hai người cùng bấm "Start an 8D" trên một lỗi sẽ
+     * tạo hai báo cáo song song, mỗi cái có một nguyên nhân gốc riêng. Nhiều NULL
+     * được phép — chỉ khi có giá trị thì mới bị ép duy nhất.
+     */
+    sourceDefectId    : String(30)  @assert.unique;
+
+    // ── Ba cột của worklist ──────────────────────────────────────────────────
+    // Cả ba đã nằm trong `caseContext` từ lâu. Nhưng `caseContext` là một cột
+    // LargeString chứa JSON: OData không sắp xếp được theo nó, không lọc được
+    // theo nó, và một danh sách case không đọc được ba trường này thì không trả
+    // lời được ba câu người điều phối mở danh sách ra để hỏi — cái nào đến hạn,
+    // cái nào của tôi, cái nào đang nghiêm trọng. Nhân đôi dữ liệu ở đây là có
+    // chủ đích, và `caseContext` vẫn là bản gốc bất biến.
+
+    /**
+     * Số hiệu khiếu nại của khách (Q1), ví dụ 'CC-2026-0442'. Null ở Q2/Q3.
+     *
+     * ── Vì sao số hiệu chứ không phải tên khách ──
+     * Kế hoạch xin "tên khách hàng" ở cột Origin. Không có trường nào mang tên
+     * khách — không trong `Reports`, không trong `caseContext`, không ở đâu cả:
+     * `customer` chỉ có `complaintReference`, `plantContact` và `slaResponseDue`.
+     * Số hiệu khiếu nại là thứ DUY NHẤT trong dữ liệu chỉ đích danh vụ việc bên
+     * phía khách, và nó cũng là thứ người ta đọc lên khi gọi điện cho khách.
+     * Bịa ra một cột tên khách rồi để trống 26/26 dòng thì tệ hơn.
+     *
+     * Sentinel 'N/A - internal defect, no customer reference' của case nội bộ
+     * phải thành null — xem `customerRefOrNull`.
+     */
+    customerRef       : String(50);
+    /**
+     * Hạn phản hồi khách hàng (Q1). Null ở Q2/Q3 — và null là câu trả lời ĐÚNG:
+     * quyết định Q12 nói rõ không bịa hạn cho case nội bộ.
+     *
+     * ── Vì sao `Date` chứ không phải String ──
+     * `customer.slaResponseDue` trong payload là chuỗi tự do; ngoài ngày ISO nó
+     * còn mang sentinel 'N/A' và 'N/A - Internal Defect'. Cột này tồn tại để so
+     * với hôm nay và để sắp xếp — một cột đôi khi chứa 'N/A' thì không làm được
+     * cả hai. Giá trị không phải ngày để null; chuỗi gốc vẫn nguyên trong
+     * `caseContext`, không mất gì.
+     */
+    slaResponseDue    : Date;
+    /**
+     * Người điều phối notification (QMEL-QMNAM). Là người chịu trách nhiệm case
+     * cho tới khi D1 chốt được trưởng nhóm — nên nó là giá trị dự phòng của cột
+     * "8D Team Leader" trên worklist, chứ không phải một cột riêng ai cũng đọc.
+     */
+    coordinator       : String(100);
+    /**
+     * Trưởng nhóm 8D — người mang `partnerRole = '8D Team Leader'` trong
+     * `team.assignedRoster` của D1.
+     *
+     * ── Vì sao là cột trên Reports chứ không đọc từ D1 ──
+     * Đọc từ D1 nghĩa là mỗi dòng danh sách phải parse `resultJson` của một
+     * discipline. Ba mươi case đang mở là ba mươi lần parse JSON để vẽ một cột.
+     * Cột này được cập nhật ở đúng hai chỗ ghi `assignedRoster`, nên nó không
+     * lệch được — xem `syncTeamLeader` trong `eightDRepository.ts`.
+     *
+     * Null cho tới khi kỹ sư chốt bảng nhân sự ở D1. Worklist hiện `coordinator`
+     * làm giá trị tạm, in mờ, để phân biệt "chưa chốt" với "đã chốt là người này".
+     */
+    teamLeader        : String(100);
 
     // ── Master data đã join sẵn ──────────────────────────────────────────────
+    /** WERKS của SAP: CHAR(4) số trần ('1000'), KHÔNG phải 'PL-1000'. */
+    plant             : String(4);
     materialId        : String(30);
     materialDesc      : String(255);
     batchId           : String(30);
+    /**
+     * Nhóm mã lỗi (catalog type 9 của SAP). BẮT BUỘC đi kèm `defectCode`: mã lỗi
+     * chỉ duy nhất TRONG một nhóm, nên chỉ có mã thì khoá còn thiếu vế.
+     */
+    defectCodeGroup   : String(30);
     defectCode        : String(30);
     defectText        : String(255);
+    /** SAP FECLAS. UI gọi là "Severity"; một tên cho người dùng, một tên trong schema. */
+    defectClass       : String(20);
     workCenterId      : String(30);
     workCenterDesc    : String(255);
 
