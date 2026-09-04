@@ -36,7 +36,7 @@ function FieldChip({ field, disabled }: { field: SourceFieldInfo; disabled: bool
                     {...drag.attributes}
                     {...drag.listeners}
                     className={cn(
-                        'group relative flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border p-2 text-xs transition-all duration-150',
+                        'group relative flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border p-2 text-sm transition-all duration-150',
                         RISK_STYLE[risk],
                         disabled
                             ? 'cursor-not-allowed opacity-45 grayscale-[0.3]'
@@ -48,14 +48,14 @@ function FieldChip({ field, disabled }: { field: SourceFieldInfo; disabled: bool
                     
                     <div className="min-w-0 flex-1 overflow-hidden">
                         <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="truncate font-medium text-foreground min-w-0">{field.label}</span>
+                            <span className="truncate font-semibold text-foreground min-w-0 text-sm">{field.label}</span>
                             {disabled && (
-                                <Badge variant="secondary" className="h-4 shrink-0 px-1 font-mono text-[10px]">
+                                <Badge variant="secondary" className="h-4.5 shrink-0 px-1.5 font-mono text-xs font-semibold">
                                     Added
                                 </Badge>
                             )}
                         </div>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground/80">{field.path}</p>
+                        <p className="truncate font-mono text-xs text-muted-foreground/80">{field.path}</p>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -74,24 +74,24 @@ function FieldChip({ field, disabled }: { field: SourceFieldInfo; disabled: bool
             </TooltipTrigger>
             <TooltipContent
                 side="right"
-                className="max-w-85 space-y-2 rounded-xl border border-red-200 bg-white p-3.5 text-xs text-slate-800 shadow-2xl dark:border-red-200 dark:bg-white dark:text-slate-800"
+                className="max-w-85 space-y-2 rounded-xl border border-red-200 bg-white p-3.5 text-sm text-slate-800 shadow-2xl dark:border-red-200 dark:bg-white dark:text-slate-800"
             >
                 <div className="flex items-start justify-between gap-2 border-b border-red-100 pb-1.5">
-                    <span className="min-w-0 flex-1 break-all font-mono text-xs font-bold text-red-600 leading-tight">
+                    <span className="min-w-0 flex-1 break-all font-mono text-sm font-bold text-red-600 leading-tight">
                         {field.path}
                     </span>
-                    <span className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-red-700">
+                    <span className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-0.5 font-mono text-xs font-semibold text-red-700">
                         {field.origin === 'derived' ? 'Derived' : 'SAP Field'}
                     </span>
                 </div>
-                <p className="text-[11px] leading-relaxed text-slate-700">{field.note}</p>
+                <p className="text-xs leading-relaxed text-slate-700">{field.note}</p>
                 {field.sampleValues.length > 0 && (
-                    <div className="rounded-lg border border-red-100 bg-red-50/70 p-2 font-mono text-[11px] text-slate-700">
+                    <div className="rounded-lg border border-red-100 bg-red-50/70 p-2 font-mono text-xs text-slate-700">
                         <span className="font-sans font-bold text-red-700">Samples: </span>
                         {field.sampleValues.join(' · ')}
                     </div>
                 )}
-                <div className="flex items-center gap-2 pt-0.5 font-mono text-[11px] text-slate-500">
+                <div className="flex items-center gap-2 pt-0.5 font-mono text-xs text-slate-500">
                     <span>{field.occurrence} cases</span>
                     <span>•</span>
                     <span>{field.distinctValues} unique values</span>
@@ -157,14 +157,14 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
                         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
                             <Database className="h-4 w-4" />
                         </div>
-                        <span className="text-sm">Source Field Catalog</span>
+                        <span className="text-sm font-semibold">Source Field Catalog</span>
                     </div>
-                    <Badge variant="secondary" className="h-5 font-mono text-xs">
+                    <Badge variant="secondary" className="h-5 font-mono text-xs font-semibold px-1.5">
                         {fields.length}
                     </Badge>
                 </div>
 
-                <p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+                <p className="mt-1.5 text-sm text-muted-foreground leading-normal">
                     {caseCount > 0
                         ? `Scanned from ${caseCount} historical 8D cases. Drag fields into the profile to include them in similarity scoring.`
                         : 'No historical cases found. Load case library to scan SAP fields.'}
@@ -172,12 +172,12 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
 
                 {/* Search Bar */}
                 <div className="relative mt-3">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search field or path..."
-                        className="h-8.5 pl-8 pr-8 text-xs shadow-none focus-visible:ring-1"
+                        className="h-9 pl-8.5 pr-8 text-sm shadow-none focus-visible:ring-1"
                     />
                     {query && (
                         <button
@@ -191,7 +191,7 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
                 </div>
 
                 {/* Quick Filters */}
-                <div className="mt-2 flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-[11px]">
+                <div className="mt-2 flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-xs">
                     <button
                         type="button"
                         onClick={() => setFilterType('all')}
@@ -237,10 +237,10 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
                     {groups.map(([group, groupFields]) => (
                         <div key={group} className="space-y-1.5 w-full min-w-0">
                             <div className="flex items-center justify-between px-1 min-w-0">
-                                <span className="truncate text-[11px] font-semibold tracking-wider uppercase text-muted-foreground min-w-0">
+                                <span className="truncate text-xs font-semibold tracking-wider uppercase text-muted-foreground min-w-0">
                                     {group === 'derived' ? 'Derived Metrics' : group}
                                 </span>
-                                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                <span className="shrink-0 font-mono text-xs text-muted-foreground">
                                     {groupFields.length} {groupFields.length === 1 ? 'field' : 'fields'}
                                 </span>
                             </div>
@@ -257,10 +257,10 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
                     ))}
 
                     {!groups.length && (
-                        <div className="flex min-h-32 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                        <div className="flex min-h-32 flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground">
                             <Database className="mb-2 h-6 w-6 opacity-30" />
                             <p className="font-medium text-foreground">No fields match filter</p>
-                            <p className="mt-1 text-[11px]">
+                            <p className="mt-1 text-xs">
                                 {fields.length
                                     ? 'Try adjusting your search or category filter.'
                                     : 'Scan case library to generate source fields.'}
@@ -271,7 +271,7 @@ export function SourceFieldsPanel({ fields, caseCount, usedPaths }: SourceFields
             </div>
 
             {/* Legend Footer */}
-            <div className="space-y-1.5 border-t bg-card/80 p-3 text-[11px] text-muted-foreground w-full min-w-0">
+            <div className="space-y-1.5 border-t bg-card/80 p-3 text-xs text-muted-foreground w-full min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                         <Zap className="h-3 w-3" />

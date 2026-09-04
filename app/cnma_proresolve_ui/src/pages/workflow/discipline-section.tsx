@@ -253,10 +253,10 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                     <div className="flex items-center gap-2">
                         <span className="font-mono text-base font-bold text-primary">{activePrompt.stepCode}</span>
                         <h3 className="text-base font-semibold">{activePrompt.label}</h3>
-                        <Badge variant="outline" className="font-mono text-xs">v{activePrompt.version || 1}</Badge>
-                        {dirty && <Badge variant="secondary" className="text-xs">Unsaved changes</Badge>}
+                        <Badge variant="outline" className="font-mono text-sm font-semibold px-2 py-0.5">v{activePrompt.version || 1}</Badge>
+                        {dirty && <Badge variant="secondary" className="text-sm font-semibold px-2 py-0.5">Unsaved changes</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{activePrompt.description}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">{activePrompt.description}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -269,7 +269,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                                 if (onReload) onReload();
                             }}
                         />
-                        <Label htmlFor={`switch-${activePrompt.stepCode}`} className="text-xs cursor-pointer">Enabled</Label>
+                        <Label htmlFor={`switch-${activePrompt.stepCode}`} className="text-sm font-medium cursor-pointer">Enabled</Label>
                     </div>
 
                     <Button
@@ -277,7 +277,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                         size="sm"
                         disabled={saving}
                         onClick={handleRestore}
-                        className="text-xs"
+                        className="h-9 text-sm"
                     >
                         <RotateCcw className="h-3.5 w-3.5 mr-1" />
                         Restore Defaults
@@ -287,7 +287,7 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                         size="sm"
                         disabled={!dirty || saving || Boolean(form.error || constraints.error)}
                         onClick={handleSave}
-                        className="text-xs font-semibold"
+                        className="h-9 text-sm font-semibold"
                     >
                         {saving ? <Spinner className="h-3.5 w-3.5 mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
                         Save {activePrompt.stepCode} Configuration
@@ -310,16 +310,16 @@ export function DisciplineSection({ stepCode = 'D1', prompt, onReload }: { stepC
                                         <MessageSquareCode className="h-4 w-4 text-primary" />
                                         {activePrompt.stepCode} System Prompt & Agent Guidance
                                     </h4>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground">
                                         Define the AI reasoning rules and instructions for {activePrompt.label}.
                                     </p>
                                 </div>
-                                <Badge variant={draft.combinedPrompt.split(/\r?\n/).length > 80 ? 'destructive' : 'secondary'} className="text-xs">
+                                <Badge variant={draft.combinedPrompt.split(/\r?\n/).length > 80 ? 'destructive' : 'secondary'} className="text-xs font-semibold px-2 py-0.5">
                                     {draft.combinedPrompt.split(/\r?\n/).length}/80 lines
                                 </Badge>
                             </div>
                             <Textarea
-                                className="min-h-80 font-mono text-xs leading-relaxed border bg-background"
+                                className="min-h-80 font-mono text-sm leading-relaxed border bg-background"
                                 value={draft.combinedPrompt}
                                 onChange={(e) => setField('combinedPrompt', e.target.value)}
                                 placeholder="Enter system prompt instructions..."

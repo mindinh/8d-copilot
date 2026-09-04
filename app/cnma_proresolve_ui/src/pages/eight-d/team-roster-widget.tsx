@@ -432,7 +432,7 @@ export function AiSuggestWidget({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-[14px] font-bold tracking-tight text-foreground">
+                    <span className="text-base font-bold tracking-tight text-foreground">
                         AI Suggested Team Composition
                     </span>
                     <AiProvenanceInfo
@@ -450,14 +450,14 @@ export function AiSuggestWidget({
                                 suggestedRole: item.row.assigned8DRole,
                             })))}
                             disabled={ctx.saving}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:shadow active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:shadow active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                         >
                             <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                             <span>Accept all suggested</span>
                         </button>
                     )}
                     {pending.length === 0 && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-[11px] font-semibold text-success">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-sm font-semibold text-success">
                             <Check className="h-3.5 w-3.5" />
                             <span>All suggested added</span>
                         </span>
@@ -466,19 +466,19 @@ export function AiSuggestWidget({
             </div>
 
             {suggestedRoles.length > 0 && (
-                <p className="mb-2 mt-1 text-[12.5px] leading-relaxed">
+                <p className="mb-2 mt-1 text-sm leading-relaxed">
                     <span className="font-semibold text-foreground">Suggested roles:</span> {suggestedRoles.join(', ')}
                 </p>
             )}
 
-            <p className="mb-1.5 text-[12.5px] font-semibold text-foreground">Suggested individuals:</p>
+            <p className="mb-1.5 text-sm font-semibold text-foreground">Suggested individuals:</p>
             <ul className="ml-4 list-disc space-y-1">
                 {suggestions.map(({ row, partnerId }, index) => (
-                    <li key={`${row.name ?? 'row'}-${index}`} className="text-[12.5px] leading-relaxed">
+                    <li key={`${row.name ?? 'row'}-${index}`} className="text-sm leading-relaxed">
                         <span className="font-medium text-foreground">{row.name || 'Unassigned'}</span>
                         {row.organizationalRole && <> ({row.organizationalRole})</>}
                         {typeof row.servedOnCount === 'number' && row.servedOnCount > 0 && (
-                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-primary/10 text-primary border border-primary/20">
                                 served on {row.servedOnCount} similar case{row.servedOnCount > 1 ? 's' : ''}
                             </span>
                         )}
@@ -486,7 +486,7 @@ export function AiSuggestWidget({
                             <span className="text-muted-foreground"> — {row.caseResponsibility}</span>
                         )}
                         {ctx.onTeam(partnerId) ? (
-                            <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-success">
+                            <span className="ml-2 inline-flex items-center gap-1 text-sm font-semibold text-success">
                                 <Check className="h-3 w-3" />
                                 <span>Accepted</span>
                             </span>
@@ -495,17 +495,17 @@ export function AiSuggestWidget({
                                 type="button"
                                 onClick={() => ctx.addOne({ partnerId, suggestedRole: row.assigned8DRole })}
                                 title="Accept this member"
-                                className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer"
+                                className="ml-2 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer"
                             >
                                 <Check className="h-3 w-3" />
                                 <span>Accept</span>
                             </button>
                         ) : partnerId && ctx.readOnly ? (
-                            <span className="ml-2 text-[10px] text-muted-foreground italic">Not assigned</span>
+                            <span className="ml-2 text-sm text-muted-foreground italic">Not assigned</span>
                         ) : (
                             // Khong noi duoc ve mot Business Partner that thi KHONG cho
                             // them: bang quyet dinh chi chua nguoi co ID tra cuu duoc.
-                            <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-warning">
+                            <span className="ml-2 inline-flex items-center gap-1 text-sm text-warning">
                                 <TriangleAlert className="h-3 w-3" /> no matching business partner
                             </span>
                         )}
@@ -539,7 +539,7 @@ export function DecisionTableWidget({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Users className="h-3.5 w-3.5" />
                     </span>
-                    <span className="min-w-0 break-words text-[14px] font-bold tracking-tight text-foreground">
+                    <span className="min-w-0 break-words text-base font-bold tracking-tight text-foreground">
                         Team Members
                     </span>
                 </div>
@@ -549,7 +549,7 @@ export function DecisionTableWidget({
                             type="button"
                             onClick={ctx.addEmpty}
                             disabled={ctx.saving}
-                            className="rounded-md border border-input bg-card px-3 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50 cursor-pointer"
+                            className="rounded-md border border-input bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50 cursor-pointer"
                         >
                             Add
                         </button>
@@ -562,7 +562,7 @@ export function DecisionTableWidget({
                     <thead>
                         <tr>
                             {['', 'Partner', 'Partner Role', 'E-Mail Address', 'Telephone number', ''].map((label, index) => (
-                                <th key={index} className="border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                <th key={index} className="border-b px-2.5 py-2 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                                     {label}
                                 </th>
                             ))}
@@ -571,7 +571,7 @@ export function DecisionTableWidget({
                     <tbody>
                         {ctx.rows.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-2.5 py-5 text-center text-[13.5px] text-muted-foreground">
+                                <td colSpan={6} className="px-2.5 py-5 text-center text-sm text-muted-foreground">
                                     No team members assigned yet.
                                 </td>
                             </tr>
@@ -580,7 +580,7 @@ export function DecisionTableWidget({
                             return (
                                 <tr key={row.key} className={cn(isLocked && 'opacity-90')}>
                                     <td className="border-b px-2.5 py-2 align-middle">
-                                        <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[#0a6ed1] text-[10.5px] font-bold text-white">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#0a6ed1] text-xs font-bold text-white">
                                             {partner ? initials(partner.partnerName) : '?'}
                                         </div>
                                     </td>
@@ -592,7 +592,7 @@ export function DecisionTableWidget({
                                                 partnerId: value === UNASSIGNED ? '' : value,
                                             })}
                                         >
-                                            <SelectTrigger className={cn('h-8 max-w-[220px] text-[13.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}>
+                                            <SelectTrigger className={cn('h-9 max-w-[240px] text-sm', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}>
                                                 <SelectValue placeholder="— select partner —" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -600,7 +600,7 @@ export function DecisionTableWidget({
                                                 {ctx.directory.map((entry) => {
                                                     const cleanId = entry.partnerId.replace(/^BP-/i, '');
                                                     return (
-                                                        <SelectItem key={entry.partnerId} value={entry.partnerId}>
+                                                        <SelectItem key={entry.partnerId} value={entry.partnerId} className="text-sm">
                                                             {cleanId} — {entry.partnerName}
                                                             {entry.functionTitle ? ` (${entry.functionTitle})` : ''}
                                                         </SelectItem>
@@ -615,18 +615,18 @@ export function DecisionTableWidget({
                                             value={row.partnerRole}
                                             onValueChange={(value) => ctx.patch(row.key, { partnerRole: value })}
                                         >
-                                            <SelectTrigger className={cn('h-8 max-w-[190px] text-[13.5px]', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className={cn('h-9 max-w-[210px] text-sm', isLocked && 'cursor-not-allowed opacity-75 bg-muted/40')}><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {PARTNER_ROLES.map((role) => (
-                                                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                                                    <SelectItem key={role} value={role} className="text-sm">{role}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] text-muted-foreground">
+                                    <td className="border-b px-2.5 py-2 align-middle text-sm text-muted-foreground">
                                         {partner?.email || '—'}
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] text-muted-foreground">
+                                    <td className="border-b px-2.5 py-2 align-middle text-sm text-muted-foreground">
                                         {partner?.phone || '—'}
                                     </td>
                                     <td className="border-b px-2.5 py-2 text-right align-middle">
@@ -634,7 +634,7 @@ export function DecisionTableWidget({
                                             <button
                                                 type="button"
                                                 onClick={() => ctx.remove(row.key)}
-                                                className="rounded-md px-2.5 py-1.5 text-[13.5px] font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+                                                className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
                                             >
                                                 Remove
                                             </button>
@@ -648,12 +648,12 @@ export function DecisionTableWidget({
             </div>
 
             {ctx.saveError && (
-                <p className="flex items-start gap-1.5 text-[11px] text-destructive">
-                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                <p className="flex items-start gap-1.5 text-sm text-destructive">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     Could not save: {ctx.saveError}
                 </p>
             )}
-            <p className={cn('border-t pt-3 text-[11px] leading-relaxed', ctx.dirty ? 'text-warning' : 'text-muted-foreground')}>
+            <p className={cn('border-t pt-3 text-sm leading-relaxed', ctx.dirty ? 'text-warning' : 'text-muted-foreground')}>
                 {ctx.dirty
                     ? 'Unsaved changes — click Save to store this team on the report.'
                     : ctx.savedLabel
@@ -661,8 +661,8 @@ export function DecisionTableWidget({
                         : 'Partner and role are assigned manually, matching the Business Partner (BP) assignment in SAP’s Resolve Internal Problems app. E-mail and telephone are queried automatically from the BP master record — never typed by hand.'}
             </p>
             {ctx.directoryError && (
-                <p className="flex items-start gap-1.5 text-[11px] text-warning">
-                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                <p className="flex items-start gap-1.5 text-sm text-warning">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     Partner directory could not be loaded ({ctx.directoryError}) — only people already on this case are selectable.
                 </p>
             )}

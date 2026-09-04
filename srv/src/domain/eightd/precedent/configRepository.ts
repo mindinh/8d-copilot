@@ -200,7 +200,7 @@ export async function seedRetrievalConfig(): Promise<void> {
             LOG.info(`Đã seed ${missing.length} dòng prompt bước D`);
         }
 
-        for (const configuredDefault of DEFAULT_STEP_PROMPTS.filter((prompt) => ['D1', 'D2', 'D3', 'D4'].includes(prompt.stepCode))) {
+        for (const configuredDefault of DEFAULT_STEP_PROMPTS) {
             const current = await db.run(SELECT.one.from(STEP_PROMPTS).where({ stepCode: configuredDefault.stepCode }));
             const patch: Record<string, string | number> = {};
             for (const field of ['inputSchemaJson', 'combinedPrompt', 'formSchemaJson', 'constraintsJson'] as const) {
@@ -209,7 +209,8 @@ export async function seedRetrievalConfig(): Promise<void> {
             // Upgrade only the original narrative-only defaults. Admin-authored structured
             // schemas are preserved; resetStep remains the explicit way to replace them.
             try {
-                const currentFields = (JSON.parse(String(current?.formSchemaJson ?? '{}')) as { fields?: Array<{ key?: string }> }).fields?.map((field) => field.key).filter(Boolean) ?? [];
+                const parsedCurrent = JSON.parse(String(current?.formSchemaJson ?? '{}')) as { fields?: Array<{ key?: string; widget?: string }> };
+                const currentFields = parsedCurrent.fields?.map((field) => field.key).filter(Boolean) ?? [];
                 const defaultFields = (JSON.parse(String(configuredDefault.formSchemaJson ?? '{}')) as { fields?: Array<{ key?: string }> }).fields?.map((field) => field.key).filter(Boolean) ?? [];
                 const legacyFields = new Set(['summary', 'content', 'actionItems', 'sources', 'confidence', 'dataBacked']);
                 const isLegacyDefault = currentFields.length > 0 && currentFields.every((key) => legacyFields.has(String(key)));
@@ -219,6 +220,23 @@ export async function seedRetrievalConfig(): Promise<void> {
                     }
                     patch.version = Math.max(2, Number(current?.version ?? 1) + 1);
                 }
+                // Upgrade D3 if it has legacy widget 'table' on containment.actions
+                const isD3OldTable = configuredDefault.stepCode === 'D3' && (parsedCurrent.fields ?? []).some((f) => f.key === 'containment.actions' && f.widget === 'table');
+                // Upgrade D4 if it has legacy widget 'table' on fiveWhy or missing ishikawaBoard
+                const isD4OldTable = configuredDefault.stepCode === 'D4' && (
+                    (parsedCurrent.fields ?? []).some((f) => f.key === 'rootCause.fiveWhy' && f.widget === 'table')
+                    || !(parsedCurrent.fields ?? []).some((f) => f.key === 'rootCause.ishikawaBoard')
+                );
+                // Upgrade D5..D8 if missing or empty formSchemaJson
+                const isD5to8MissingForm = ['D5', 'D6', 'D7', 'D8'].includes(configuredDefault.stepCode) && (!current?.formSchemaJson || !String(current.formSchemaJson).trim());
+
+                if (isD3OldTable || isD4OldTable || isD5to8MissingForm) {
+                    for (const field of ['inputSchemaJson', 'formSchemaJson', 'combinedPrompt', 'constraintsJson'] as const) {
+                        if (configuredDefault[field]) patch[field] = configuredDefault[field];
+                    }
+                    patch.version = Math.max(7, Number(current?.version ?? 1) + 1);
+                }
+
                 const usesStructuredDefaultForm = currentFields.length > 0
                     && currentFields.length === defaultFields.length
                     && currentFields.every((key, index) => key === defaultFields[index]);

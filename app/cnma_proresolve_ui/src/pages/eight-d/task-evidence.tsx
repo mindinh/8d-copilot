@@ -60,10 +60,10 @@ export function PdfPreviewDialog({
                                 <FileText className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                                <DialogTitle className="text-sm font-semibold truncate" title={file.fileName}>
+                                <DialogTitle className="text-base font-semibold truncate" title={file.fileName}>
                                     {file.fileName}
                                 </DialogTitle>
-                                <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-0.5">
+                                <DialogDescription className="text-sm text-muted-foreground flex flex-wrap items-center gap-2 mt-0.5">
                                     <span>{formatFileSize(file.fileSize)}</span>
                                     <span>•</span>
                                     <span>Uploaded by <strong>{file.uploadedBy || 'User'}</strong></span>
@@ -92,7 +92,7 @@ export function PdfPreviewDialog({
                                 href={downloadUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                             >
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 Open in Tab
@@ -100,7 +100,7 @@ export function PdfPreviewDialog({
                             <a
                                 href={downloadUrl}
                                 download={file.fileName}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 px-3 text-xs font-medium transition-colors"
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 px-3 text-sm font-medium transition-colors"
                             >
                                 <Download className="h-3.5 w-3.5" />
                                 Download
@@ -129,11 +129,13 @@ export function TaskEvidenceSection({
     disciplineCode,
     task,
     readOnly = false,
+    onEvidenceUploaded,
 }: {
     reportID: string;
     disciplineCode: string;
     task: ActionTask;
     readOnly?: boolean;
+    onEvidenceUploaded?: () => void;
 }) {
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,6 +164,7 @@ export function TaskEvidenceSection({
             setClientError(null);
             toast.success(`Evidence uploaded: ${created.fileName}`);
             void queryClient.invalidateQueries({ queryKey: ['8d', 'evidence', reportID] });
+            onEvidenceUploaded?.();
         },
         onError: (e: any) => {
             toast.error(e?.response?.data?.error?.message ?? e?.message ?? 'Could not upload evidence.');
@@ -180,6 +183,11 @@ export function TaskEvidenceSection({
     });
 
     const isBusy = uploadMutation.isPending || deleteMutation.isPending;
+    const statusLower = String(task.status || '').trim().toLowerCase();
+    const isActionDiscipline = disciplineCode === 'D3' || disciplineCode === 'D5' || disciplineCode === 'D7';
+    const canUpload = isActionDiscipline
+        ? (statusLower === 'open' || statusLower === 'done')
+        : (statusLower === 'done' || statusLower === 'in progress');
 
     const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -206,134 +214,134 @@ export function TaskEvidenceSection({
     return (
         <div className="space-y-2 rounded-lg border bg-muted/10 p-3.5">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-base font-semibold text-foreground">
                     <Paperclip className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     <span>Completion Evidence</span>
                 </div>
                 {taskEvidences.length > 0 && (
-                    <span className="text-[11px] font-medium text-success">
+                    <span className="text-sm font-medium text-success">
                         {taskEvidences.length} {taskEvidences.length === 1 ? 'PDF' : 'PDFs'} attached
                     </span>
                 )}
             </div>
 
-            {task.status !== 'Done' ? (
-                <p className="text-xs italic text-muted-foreground">
-                    Upload becomes available once this task is marked Done.
-                </p>
-            ) : (
-                <div className="space-y-3">
-                    {/* List existing files */}
-                    {taskEvidences.length > 0 && (
-                        <div className="space-y-2">
-                            {taskEvidences.map((file) => (
-                                <div
-                                    key={file.ID}
-                                    className="flex items-center justify-between gap-3 rounded-lg border bg-card p-2.5 shadow-2xs hover:bg-muted/20 transition-colors"
-                                >
-                                    <div className="flex min-w-0 items-center gap-2.5">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-                                            <FileText className="h-4 w-4" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewFile(file)}
-                                                    className="max-w-[200px] sm:max-w-[280px] md:max-w-[380px] truncate text-xs font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left cursor-pointer"
-                                                    title={`Click to preview ${file.fileName}`}
-                                                >
-                                                    {file.fileName}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewFile(file)}
-                                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                                                    title="Preview PDF"
-                                                    aria-label="Preview PDF"
-                                                >
-                                                    <Eye className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground">
-                                                {formatFileSize(file.fileSize)} · by {file.uploadedBy || 'User'} ·{' '}
-                                                {file.uploadedAt ? new Date(file.uploadedAt).toLocaleString('en-GB') : '—'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex shrink-0 items-center gap-1">
-                                        <a
-                                            href={getEvidenceDownloadUrl(file.ID)}
-                                            download={file.fileName}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex h-7 items-center gap-1 rounded border border-border bg-background px-2 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
-                                        >
-                                            <Download className="h-3 w-3" />
-                                            Download
-                                        </a>
-                                        {!readOnly && (
-                                            <button
-                                                type="button"
-                                                disabled={isBusy}
-                                                onClick={() => deleteMutation.mutate(file.ID)}
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 cursor-pointer"
-                                                title="Remove evidence"
-                                                aria-label="Remove evidence"
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
+            {/* List existing files */}
+            {taskEvidences.length > 0 && (
+                <div className="space-y-2">
+                    {taskEvidences.map((file) => (
+                        <div
+                            key={file.ID}
+                            className="flex items-center justify-between gap-3 rounded-lg border bg-card p-2.5 shadow-2xs hover:bg-muted/20 transition-colors"
+                        >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+                                    <FileText className="h-4 w-4" />
                                 </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Upload Box */}
-                    {!readOnly && (
-                        <div className="rounded-lg border border-dashed border-border/80 bg-background/50 p-4 text-center">
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="application/pdf"
-                                onChange={handleFileSelected}
-                                className="hidden"
-                                disabled={isBusy}
-                            />
-                            <div className="flex flex-col items-center justify-center space-y-1.5">
-                                <UploadCloud className="h-6 w-6 text-muted-foreground" />
-                                <div className="space-y-0.5">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isBusy}
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="h-7 text-xs gap-1.5"
-                                    >
-                                        {isBusy ? <Spinner className="h-3.5 w-3.5" /> : <UploadCloud className="h-3.5 w-3.5" />}
-                                        Upload evidence (PDF)
-                                    </Button>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        PDF only, max 10 MB.
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreviewFile(file)}
+                                            className="max-w-[200px] sm:max-w-[280px] md:max-w-[380px] truncate text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left cursor-pointer"
+                                            title={`Click to preview ${file.fileName}`}
+                                        >
+                                            {file.fileName}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreviewFile(file)}
+                                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                            title="Preview PDF"
+                                            aria-label="Preview PDF"
+                                        >
+                                            <Eye className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                        {formatFileSize(file.fileSize)} · by {file.uploadedBy || 'User'} ·{' '}
+                                        {file.uploadedAt ? new Date(file.uploadedAt).toLocaleString('en-GB') : '—'}
                                     </p>
                                 </div>
                             </div>
-                        </div>
-                    )}
 
-                    {clientError && (
-                        <p className="text-xs font-medium text-destructive">{clientError}</p>
-                    )}
-
-                    {isLoading && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Spinner className="h-3.5 w-3.5" />
-                            Loading evidence...
+                            <div className="flex shrink-0 items-center gap-1">
+                                <a
+                                    href={getEvidenceDownloadUrl(file.ID)}
+                                    download={file.fileName}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex h-8 items-center gap-1 rounded border border-border bg-background px-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                                >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download
+                                </a>
+                                {!readOnly && (
+                                    <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => deleteMutation.mutate(file.ID)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 cursor-pointer"
+                                        title="Remove evidence"
+                                        aria-label="Remove evidence"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                    )}
+                    ))}
+                </div>
+            )}
+
+            {!canUpload && taskEvidences.length === 0 && (
+                <p className="text-sm italic text-muted-foreground">
+                    {isActionDiscipline
+                        ? 'Upload becomes available once this task is published (Open).'
+                        : 'Upload becomes available once this task is marked Done.'}
+                </p>
+            )}
+
+            {/* Upload Box */}
+            {!readOnly && canUpload && (
+                <div className="rounded-lg border border-dashed border-border/80 bg-background/50 p-4 text-center">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleFileSelected}
+                        className="hidden"
+                        disabled={isBusy}
+                    />
+                    <div className="flex flex-col items-center justify-center space-y-1.5">
+                        <UploadCloud className="h-6 w-6 text-muted-foreground" />
+                        <div className="space-y-0.5">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={isBusy}
+                                onClick={() => fileInputRef.current?.click()}
+                                className="h-8 text-sm gap-1.5"
+                            >
+                                {isBusy ? <Spinner className="h-3.5 w-3.5" /> : <UploadCloud className="h-3.5 w-3.5" />}
+                                Upload evidence (PDF)
+                            </Button>
+                            <p className="text-sm text-muted-foreground">
+                                PDF only, max 10 MB.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {clientError && (
+                <p className="text-sm font-medium text-destructive">{clientError}</p>
+            )}
+
+            {isLoading && (
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Spinner className="h-3.5 w-3.5" />
+                    Loading evidence...
                 </div>
             )}
 
@@ -367,7 +375,7 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground space-y-2">
+            <div className="flex flex-col items-center justify-center py-12 text-center text-sm text-muted-foreground space-y-2">
                 <Spinner className="h-5 w-5 text-primary" />
                 <p>Loading completion evidence...</p>
             </div>
@@ -376,7 +384,7 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
 
     if (evidences.length === 0) {
         return (
-            <div className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
+            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
                 No completion evidence submitted yet.
             </div>
         );
@@ -401,10 +409,10 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
                 return (
                     <div key={code} className="space-y-2.5 rounded-lg border bg-card p-3 shadow-2xs">
                         <div className="flex items-center justify-between border-b pb-1.5">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                            <h4 className="text-base font-bold uppercase tracking-wider text-foreground">
                                 {label}
                             </h4>
-                            <span className="text-[11px] font-medium text-muted-foreground">
+                            <span className="text-sm font-medium text-muted-foreground">
                                 {items.length} file{items.length > 1 ? 's' : ''}
                             </span>
                         </div>
@@ -413,7 +421,7 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
                             {items.map((file) => (
                                 <div
                                     key={file.ID}
-                                    className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 p-2.5 text-xs hover:bg-muted/30 transition-colors"
+                                    className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 p-2.5 text-sm hover:bg-muted/30 transition-colors"
                                 >
                                     <div className="flex min-w-0 items-center gap-2.5">
                                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-destructive/10 text-destructive">
@@ -424,7 +432,7 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
                                                 <button
                                                     type="button"
                                                     onClick={() => setPreviewFile(file)}
-                                                    className="max-w-[160px] sm:max-w-[200px] truncate font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left cursor-pointer"
+                                                    className="max-w-[160px] sm:max-w-[200px] truncate text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left cursor-pointer"
                                                     title={`Click to preview ${file.fileName}`}
                                                 >
                                                     {file.fileName}
@@ -439,7 +447,7 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
                                                     <Eye className="h-3.5 w-3.5" />
                                                 </button>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">
+                                            <p className="text-sm text-muted-foreground">
                                                 Task: <strong className="font-medium text-foreground">{file.taskId}</strong> ·{' '}
                                                 {formatFileSize(file.fileSize)} · by {file.uploadedBy || 'User'} ·{' '}
                                                 {file.uploadedAt ? new Date(file.uploadedAt).toLocaleString('en-GB') : '—'}
@@ -452,9 +460,9 @@ export function EvidenceArchivePanel({ reportID }: { reportID: string }) {
                                         download={file.fileName}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border bg-background px-2.5 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+                                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded border border-border bg-background px-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                                     >
-                                        <Download className="h-3 w-3" />
+                                        <Download className="h-3.5 w-3.5" />
                                         Download
                                     </a>
                                 </div>

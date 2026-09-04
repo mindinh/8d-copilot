@@ -27,8 +27,8 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
             </CardHeader>
             <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">{cases.length} cases</Badge>
-                    <Badge variant={embeddedCount === cases.length ? 'secondary' : 'destructive'}>
+                    <Badge variant="secondary" className="text-sm font-semibold">{cases.length} cases</Badge>
+                    <Badge variant={embeddedCount === cases.length ? 'secondary' : 'destructive'} className="text-sm font-semibold">
                         {embeddedCount} embedded
                     </Badge>
                 </div>
@@ -36,7 +36,7 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                 {cases.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed py-8 text-center text-sm text-muted-foreground">
                         <p className="font-medium">The library is empty</p>
-                        <p className="mt-1 text-xs">
+                        <p className="mt-1 text-sm">
                             Until closed cases are loaded, every analysis can only answer
                             &quot;no comparable case found&quot;.
                         </p>
@@ -55,10 +55,10 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                                 {cases.map((c) => (
                                     <TableRow key={c.notificationId}>
                                         <TableCell>
-                                            <span className="font-mono text-xs">{c.notificationId}</span>
+                                            <span className="font-mono text-sm">{c.notificationId}</span>
                                             <span className="ml-2 text-muted-foreground">{c.symptomShortText}</span>
                                         </TableCell>
-                                        <TableCell className="text-xs">
+                                        <TableCell className="text-sm">
                                             {(() => {
                                                 const s = (c.sapStatus || 'Closed').trim();
                                                 const sLower = s.toLowerCase();
@@ -66,7 +66,7 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                                                     return (
                                                         <Badge
                                                             variant="outline"
-                                                            className="border-success/30 text-success bg-success/10 text-[10.5px] font-medium"
+                                                            className="border-success/30 text-success bg-success/10 text-xs font-semibold px-2 py-0.5"
                                                         >
                                                             {s}
                                                         </Badge>
@@ -76,7 +76,7 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                                                     return (
                                                         <Badge
                                                             variant="outline"
-                                                            className="border-info/30 text-info bg-info/10 text-[10.5px] font-medium"
+                                                            className="border-info/30 text-info bg-info/10 text-xs font-semibold px-2 py-0.5"
                                                         >
                                                             {s}
                                                         </Badge>
@@ -85,14 +85,14 @@ export function CaseLibrarySection({ cfg }: { cfg: RetrievalConfigState }) {
                                                 return (
                                                     <Badge
                                                         variant="secondary"
-                                                        className="text-[10.5px] text-muted-foreground bg-muted border border-border/60 font-normal"
+                                                        className="text-xs text-muted-foreground bg-muted border border-border/60 font-medium px-2 py-0.5"
                                                     >
                                                         {s}
                                                     </Badge>
                                                 );
                                             })()}
                                         </TableCell>
-                                        <TableCell className="text-right text-xs">
+                                        <TableCell className="text-right text-sm">
                                             {c.embeddingModel
                                                 ? <span className="text-success">yes</span>
                                                 : <span className="text-warning">not embedded</span>}

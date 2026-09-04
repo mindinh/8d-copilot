@@ -50,14 +50,14 @@ function Setting({ label, hint, children }: { label: string; hint: string; child
     return (
         <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {label}
                 </Label>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Info className="h-3 w-3 cursor-help text-muted-foreground/50 hover:text-muted-foreground" />
+                        <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/50 hover:text-muted-foreground" />
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-64 text-xs">{hint}</TooltipContent>
+                    <TooltipContent side="bottom" className="max-w-64 text-sm">{hint}</TooltipContent>
                 </Tooltip>
             </div>
             {children}
@@ -98,24 +98,24 @@ function FieldCard({
                     <span
                         {...drag.attributes}
                         {...drag.listeners}
-                        className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground active:cursor-grabbing"
+                        className="flex h-8 w-6 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground active:cursor-grabbing"
                         title="Drag out to remove"
                     >
                         <GripVertical className="h-4 w-4" />
                     </span>
 
                     <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-bold text-foreground">{labelText}</div>
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                        <div className="truncate text-sm font-bold text-foreground">{labelText}</div>
+                        <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
                             <span className="truncate rounded bg-muted/70 px-1.5 py-0.5">
                                 {methodKey === 'rerank' ? 'LLM · stage-2 pass' : c.sourceField}
                             </span>
                             {field?.indexed && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Zap className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                        <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                     </TooltipTrigger>
-                                    <TooltipContent side="bottom" className="text-xs">
+                                    <TooltipContent side="bottom" className="text-sm">
                                         Indexed column — filtered in SQL before scoring.
                                     </TooltipContent>
                                 </Tooltip>
@@ -123,9 +123,9 @@ function FieldCard({
                             {field?.multiValued && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Sigma className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />
+                                        <Sigma className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
                                     </TooltipTrigger>
-                                    <TooltipContent side="bottom" className="text-xs">
+                                    <TooltipContent side="bottom" className="text-sm">
                                         Multiple values per case.
                                     </TooltipContent>
                                 </Tooltip>
@@ -157,15 +157,15 @@ function FieldCard({
                                 : {}),
                         })}
                     >
-                        <SelectTrigger className={cn('h-7 w-28 sm:w-32 border text-[11px] font-medium', methodInfo.className)}>
+                        <SelectTrigger className={cn('h-8 w-32 sm:w-36 border text-xs font-semibold', methodInfo.className)}>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             {METHODS.map((m) => (
-                                <SelectItem key={m.value} value={m.value} className="text-xs">
+                                <SelectItem key={m.value} value={m.value} className="text-sm">
                                     {m.label}
                                     {field?.methods.includes(m.value) && (
-                                        <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
+                                        <Badge variant="outline" className="ml-2 h-4 px-1 text-xs font-semibold">
                                             suggested
                                         </Badge>
                                     )}
@@ -178,13 +178,13 @@ function FieldCard({
                         <Input
                             type="number" min={0} max={99}
                             value={c.weight ?? 0}
-                            className="h-7 w-12 text-right text-xs font-semibold"
+                            className="h-8 w-14 text-right text-sm font-semibold"
                             onChange={(e) => {
                                 const v = Number(e.target.value);
                                 if (Number.isFinite(v) && v >= 0) onPatch({ weight: v });
                             }}
                         />
-                        <span className="w-7 text-right font-mono text-[11px] text-muted-foreground">
+                        <span className="w-7 text-right font-mono text-xs text-muted-foreground">
                             {share}%
                         </span>
                     </div>
@@ -193,24 +193,24 @@ function FieldCard({
 
                     <button
                         type="button"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         onClick={onRemove}
                         title="Remove from profile"
                     >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                     </button>
                 </div>
             </div>
 
             {methodKey === 'cosine' && (
                 <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
-                    <Label className="text-[11px] font-medium text-muted-foreground">
+                    <Label className="text-xs font-semibold text-muted-foreground">
                         Minimum cosine
                     </Label>
                     <Input
                         type="number" min={0} max={1} step={0.01}
                         value={c.minSimilarity ?? 0.7}
-                        className="h-7 w-20 text-right text-xs"
+                        className="h-8 w-20 text-right text-sm font-semibold"
                         onChange={(e) => {
                             const v = Number(e.target.value);
                             if (Number.isFinite(v) && v >= 0 && v <= 1) onPatch({ minSimilarity: v });
@@ -220,7 +220,7 @@ function FieldCard({
                         <TooltipTrigger asChild>
                             <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
                         </TooltipTrigger>
-                        <TooltipContent side="bottom" className="max-w-72 text-xs">
+                        <TooltipContent side="bottom" className="max-w-72 text-sm">
                             Unrelated English defect narratives already sit around 0.60. A floor below
                             that scores every pair and lets baseline noise decide the ranking.
                         </TooltipContent>
@@ -231,13 +231,13 @@ function FieldCard({
             {methodKey === 'rerank' && (
                 <div className="mt-2.5 space-y-2 border-t pt-2.5">
                     <div className="flex items-center gap-2">
-                        <Label className="text-[11px] font-medium text-muted-foreground">
+                        <Label className="text-xs font-semibold text-muted-foreground">
                             Minimum score
                         </Label>
                         <Input
                             type="number" min={0} max={1} step={0.05}
                             value={c.minSimilarity ?? 0.5}
-                            className="h-7 w-20 text-right text-xs"
+                            className="h-8 w-20 text-right text-sm font-semibold"
                             onChange={(e) => {
                                 const v = Number(e.target.value);
                                 if (Number.isFinite(v) && v >= 0 && v <= 1) onPatch({ minSimilarity: v });
@@ -247,21 +247,21 @@ function FieldCard({
                             <TooltipTrigger asChild>
                                 <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
                             </TooltipTrigger>
-                            <TooltipContent side="bottom" className="max-w-72 text-xs">
+                            <TooltipContent side="bottom" className="max-w-72 text-sm">
                                 On the model's 0–1 scale: 0.5 means a candidate scoring below 50/100
                                 gets zero points from this criterion.
                             </TooltipContent>
                         </Tooltip>
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-[11px] font-medium text-muted-foreground">
+                        <Label className="text-xs font-semibold text-muted-foreground">
                             Rerank instruction — the question the model ranks by
                         </Label>
                         <textarea
                             value={c.description ?? ''}
                             rows={2}
                             placeholder='e.g. "Rank by same physical failure mechanism; ignore superficial code matches."'
-                            className="w-full rounded-md border bg-background px-2 py-1.5 text-xs leading-relaxed"
+                            className="w-full rounded-md border bg-background px-2 py-1.5 text-sm leading-relaxed"
                             onChange={(e) => onPatch({ description: e.target.value })}
                         />
                     </div>
@@ -269,7 +269,7 @@ function FieldCard({
             )}
 
             {!field && methodKey !== 'rerank' && (
-                <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+                <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                     Field <span className="font-mono font-semibold">{c.sourceField}</span> is not in the
                     catalog — this criterion can never score.
                 </div>
@@ -337,7 +337,7 @@ export function ProfileConfigPanel({
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-1 text-xs font-medium shrink-0">
+                    <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-1 text-sm font-medium shrink-0">
                         {([['visual', LayoutGrid, 'Visual Editor'], ['json', Code2, 'JSON Schema']] as const)
                             .map(([id, Icon, text]) => (
                                 <button
@@ -351,7 +351,7 @@ export function ProfileConfigPanel({
                                             : 'text-muted-foreground hover:bg-background/40 hover:text-foreground',
                                     )}
                                 >
-                                    <Icon className="h-3.5 w-3.5" />
+                                    <Icon className="h-4 w-4" />
                                     {text}
                                 </button>
                             ))}
@@ -364,11 +364,11 @@ export function ProfileConfigPanel({
                     <div className="flex items-center justify-between rounded-t-xl border border-b-0 bg-card px-4 py-2.5">
                         <div className="flex items-center gap-2">
                             <Code2 className="h-4 w-4 text-primary" />
-                            <span className="text-xs font-semibold text-foreground">{profileKey}.json</span>
+                            <span className="text-sm font-semibold text-foreground">{profileKey}.json</span>
                         </div>
                         <Button
                             size="sm" variant="outline"
-                            className="h-7 gap-1.5 text-xs font-medium"
+                            className="h-8 gap-1.5 text-sm font-semibold"
                             onClick={() => {
                                 void navigator.clipboard.writeText(jsonString);
                                 setCopied(true);
@@ -380,7 +380,7 @@ export function ProfileConfigPanel({
                             {copied ? 'Copied' : 'Copy JSON'}
                         </Button>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden rounded-b-xl border bg-slate-950 p-4 font-mono text-xs text-slate-100 dark:bg-slate-900">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden rounded-b-xl border bg-slate-950 p-4 font-mono text-sm text-slate-100 dark:bg-slate-900">
                         <pre className="whitespace-pre-wrap leading-relaxed">{jsonString}</pre>
                     </div>
                 </div>
@@ -390,7 +390,7 @@ export function ProfileConfigPanel({
                         {/* ── Identity ── */}
                         <div className="grid gap-3 rounded-xl border bg-card p-3.5 shadow-xs grid-cols-1 md:grid-cols-2">
                             <div className="space-y-1.5">
-                                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Profile Name
                                 </Label>
                                 <Input
@@ -401,7 +401,7 @@ export function ProfileConfigPanel({
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Description
                                 </Label>
                                 <Input
@@ -419,7 +419,7 @@ export function ProfileConfigPanel({
                                 <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
                                     <Target className="h-3.5 w-3.5" />
                                 </div>
-                                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                                     Retrieval Settings
                                 </h3>
                             </div>
@@ -469,7 +469,7 @@ export function ProfileConfigPanel({
                                         <span className="min-w-0 truncate font-mono text-xl font-bold text-foreground" title={String(maxScore)}>
                                             {maxScore}
                                         </span>
-                                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                                        <span className="shrink-0 text-xs text-muted-foreground">
                                             {enabledCount}/{draft.fields.length} on
                                         </span>
                                     </div>
@@ -484,7 +484,7 @@ export function ProfileConfigPanel({
                                     <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
                                         <Users className="h-3.5 w-3.5" />
                                     </div>
-                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                    <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                                         Assigned 8D Step
                                     </h3>
                                 </div>
@@ -493,11 +493,11 @@ export function ProfileConfigPanel({
                                     value={draft.steps[0] ?? 'none'}
                                     onValueChange={(val) => onChange({ steps: val === 'none' ? [] : [val] })}
                                 >
-                                    <SelectTrigger className="h-9 max-w-md text-xs font-medium">
+                                    <SelectTrigger className="h-9 max-w-md text-sm font-medium">
                                         <SelectValue placeholder="Select an 8D step..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none" className="text-xs text-muted-foreground">
+                                        <SelectItem value="none" className="text-sm text-muted-foreground">
                                             None (Unassigned)
                                         </SelectItem>
                                         {STEP_CODES.map((code) => {
@@ -505,12 +505,12 @@ export function ProfileConfigPanel({
                                             const owner = ownerByStep[code];
                                             const isOwnedByOther = owner && owner !== profileKey;
                                             return (
-                                                <SelectItem key={code} value={code} className="text-xs">
+                                                <SelectItem key={code} value={code} className="text-sm">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-mono font-bold text-primary">{code}</span>
                                                         <span>{meta.title}</span>
                                                         {isOwnedByOther && (
-                                                            <span className="text-[10px] text-muted-foreground">
+                                                            <span className="text-xs text-muted-foreground">
                                                                 (currently {profileLabelOf(owner)})
                                                             </span>
                                                         )}
@@ -526,10 +526,10 @@ export function ProfileConfigPanel({
                         {/* ── Criteria dropzone ── */}
                         <div className="space-y-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
                                     Matching Criteria ({draft.fields.length})
                                 </span>
-                                <span className="text-[11px] text-muted-foreground">
+                                <span className="text-xs text-muted-foreground">
                                     Drag in from the catalog · drag out to remove
                                 </span>
                             </div>
@@ -566,7 +566,7 @@ export function ProfileConfigPanel({
                                         <p className="mt-3 text-sm font-semibold text-foreground">
                                             No matching criteria yet
                                         </p>
-                                        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                                        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                                             Drag fields from the catalog on the left to decide what makes two
                                             cases similar.
                                         </p>

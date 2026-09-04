@@ -98,7 +98,7 @@ export function RetrievalEngineSection() {
                             <CardTitle className="text-base font-semibold">
                                 Precedent Retrieval Engine (D1 – D8)
                             </CardTitle>
-                            <CardDescription className="text-xs">
+                            <CardDescription className="text-sm">
                                 Choose how the 8D Copilot searches and surfaces past closed cases across all eight disciplines.
                             </CardDescription>
                         </div>
@@ -135,7 +135,7 @@ export function RetrievalEngineSection() {
                                     <span className="font-semibold text-sm">HANA Knowledge Graph</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0 font-medium">
+                                    <Badge className="bg-primary text-primary-foreground text-xs px-2 py-0.5 font-semibold">
                                         Default · Recommended
                                     </Badge>
                                     {isGraph && (
@@ -145,21 +145,21 @@ export function RetrievalEngineSection() {
                                     )}
                                 </div>
                             </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
+                            <p className="text-sm text-muted-foreground leading-relaxed">
                                 Uses <strong>SAP HANA Graph Engine</strong> and <strong>OpenCypher</strong> to traverse verified relationships
                                 across Defects, Materials, Work Centers, FMEA and Actions.
                             </p>
-                            <ul className="text-[11px] text-muted-foreground/90 space-y-1 pt-1 border-t border-border/50">
+                            <ul className="text-sm text-muted-foreground/90 space-y-1.5 pt-1.5 border-t border-border/50">
                                 <li className="flex items-center gap-1.5">
-                                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                                    <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
                                     <span>Exact, auditable evidence paths (no hallucinated citations)</span>
                                 </li>
                                 <li className="flex items-center gap-1.5">
-                                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                                    <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
                                     <span>Zero embedding latency and zero vector token costs</span>
                                 </li>
                                 <li className="flex items-center gap-1.5">
-                                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                                    <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
                                     <span>Specific relation weights tailored per discipline (D1 – D8)</span>
                                 </li>
                             </ul>
@@ -182,7 +182,7 @@ export function RetrievalEngineSection() {
                                     <span className="font-semibold text-sm">Vector Search & Heuristic Scoring</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+                                    <Badge variant="outline" className="text-xs px-2 py-0.5 font-semibold text-muted-foreground">
                                         Legacy
                                     </Badge>
                                     {!isGraph && (
@@ -192,17 +192,17 @@ export function RetrievalEngineSection() {
                                     )}
                                 </div>
                             </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
+                            <p className="text-sm text-muted-foreground leading-relaxed">
                                 Uses <strong>Cosine similarity on text embeddings</strong> combined with multi-attribute
                                 scoring tables (0–16 scale) configured in Retrieval Profiles.
                             </p>
-                            <ul className="text-[11px] text-muted-foreground/90 space-y-1 pt-1 border-t border-border/50">
+                            <ul className="text-sm text-muted-foreground/90 space-y-1.5 pt-1.5 border-t border-border/50">
                                 <li className="flex items-center gap-1.5">
-                                    <ShieldCheck className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                     <span>Keyword tokenization + AI Core embedding models</span>
                                 </li>
                                 <li className="flex items-center gap-1.5">
-                                    <ShieldCheck className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                     <span>Subjective score accumulation across fields</span>
                                 </li>
                             </ul>
@@ -219,16 +219,16 @@ export function RetrievalEngineSection() {
                             onCheckedChange={(c) => handleToggleFallback(Boolean(c))}
                         />
                         <div className="grid gap-0.5 leading-none">
-                            <Label htmlFor="fallback-enabled" className="text-xs font-medium cursor-pointer">
+                            <Label htmlFor="fallback-enabled" className="text-sm font-medium cursor-pointer">
                                 Automatic fallback to Scoring if Graph is unavailable
                             </Label>
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 Recommended. Ensures analysis runs smoothly on non-HANA environments (like local SQLite).
                             </p>
                         </div>
                     </div>
 
-                    <Button size="sm" onClick={handleSave} disabled={saving} className="self-end sm:self-auto text-xs px-4">
+                    <Button size="sm" onClick={handleSave} disabled={saving} className="self-end sm:self-auto h-9 text-sm px-4 font-semibold">
                         {saving ? (
                             <>
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />

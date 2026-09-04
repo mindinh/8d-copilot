@@ -190,7 +190,7 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
                     disabled={disabled}
                     aria-invalid={strict && outside}
                     className={cn(
-                        'font-mono text-xs',
+                        'font-mono text-sm',
                         // Chừa chỗ cho nút xoá và mũi tên ở mép phải.
                         hasClear ? 'pr-14' : 'pr-8',
                         showUnknown && (strict ? 'border-destructive' : 'border-warning/60'),
@@ -315,9 +315,9 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
                                         )}
                                     >
                                         <span className="min-w-0 flex-1">
-                                            <span className="block font-mono text-xs font-medium">{String(entry.key)}</span>
+                                            <span className="block font-mono text-sm font-semibold">{String(entry.key)}</span>
                                             {entry.text && (
-                                                <span className="block truncate text-[11px] text-muted-foreground">
+                                                <span className="block truncate text-xs text-muted-foreground">
                                                     {String(entry.text)}
                                                 </span>
                                             )}
@@ -335,7 +335,7 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
                 {open && typed && Boolean(query) && !loading && entries.length > 0 && matches.length === 0 && (
                     <div
                         className={cn(
-                            'absolute z-50 w-full rounded-md border bg-popover p-2 text-[11px] text-muted-foreground shadow-md left-0',
+                            'absolute z-50 w-full rounded-md border bg-popover p-2 text-sm text-muted-foreground shadow-md left-0',
                             dropdownPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
                         )}
                     >
@@ -347,11 +347,11 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
             {showUnknown && (
                 <p
                     className={cn(
-                        'mt-1 flex items-start gap-1 text-[10.5px] leading-snug',
+                        'mt-1 flex items-start gap-1 text-xs leading-normal',
                         strict ? 'text-destructive' : 'text-warning',
                     )}
                 >
-                    <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
                         Not in {catalogLabel}.{scoringNote ? ` ${scoringNote}` : ''}
                         {strict ? ` ${maintenanceHint}` : ''}
@@ -360,8 +360,8 @@ export function ValueHelpInput(props: ValueHelpInputProps) {
             )}
 
             {!quiet && !query && !loading && entries.length > 0 && (
-                <p className="mt-1 flex items-start gap-1 text-[10.5px] leading-snug text-muted-foreground">
-                    <Info className="mt-px h-3 w-3 shrink-0" />
+                <p className="mt-1 flex items-start gap-1 text-xs leading-normal text-muted-foreground">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>{entries.length} in {catalogLabel} — start typing to pick one.</span>
                 </p>
             )}

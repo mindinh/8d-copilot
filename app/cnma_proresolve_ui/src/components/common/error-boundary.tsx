@@ -43,6 +43,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                         {this.state.error?.message ?? 'An unexpected error occurred. Please refresh the page.'}
                     </p>
                     <Button
+                        className="h-9 text-sm font-semibold"
                         onClick={() => window.location.reload()}
                     >
                         Refresh Page

@@ -344,7 +344,7 @@ function EvidenceList({ paths, context }: { paths: string[]; context: Record<str
     return <div className="space-y-2">{paths.map((path) => {
         const value = context ? getPath(context, path) : undefined;
         const description = value === undefined && path.startsWith('precedents#') ? 'Similar completed case retrieved during analysis' : value === undefined && path.startsWith('derivedFacts') ? 'Derived from verified case measurements during enrichment' : compactValue(value);
-        return <div key={path} className="flex min-w-0 items-start gap-3 rounded-lg border bg-muted/20 p-3"><div className="shrink-0 rounded-full bg-info-bg p-1.5 text-info"><Link2 className="h-3.5 w-3.5" /></div><div className="min-w-0"><div className="break-words text-sm font-medium">{humanize(path)}</div><div className="break-words text-xs text-muted-foreground">{description}</div><code className="mt-1 block break-all text-xs text-muted-foreground/70">{path}</code></div></div>;
+        return <div key={path} className="flex min-w-0 items-start gap-3 rounded-lg border bg-muted/20 p-3"><div className="shrink-0 rounded-full bg-info-bg p-1.5 text-info"><Link2 className="h-3.5 w-3.5" /></div><div className="min-w-0"><div className="break-words text-sm font-medium">{humanize(path)}</div><div className="break-words text-sm text-muted-foreground">{description}</div><code className="mt-1 block break-all text-sm text-muted-foreground/70">{path}</code></div></div>;
     })}</div>;
 }
 
@@ -432,8 +432,8 @@ function FieldValue({ field, value, context, disciplineID, data, siblings, readO
         if (field.widget === 'warning-list') return <div className="space-y-2">{value.length ? value.map((item, index) => <div key={index} className="flex gap-2 rounded-md bg-warning-bg px-3 py-2 text-sm text-warning"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{String(item)}</span></div>) : <div className="flex gap-2 text-sm text-success"><CheckCircle2 className="h-4 w-4" />No open gaps</div>}</div>;
         return <div className="flex flex-wrap gap-1.5">{value.map((item, index) => <Badge key={`${String(item)}-${index}`} variant="outline" className="max-w-full whitespace-normal break-words">{String(item)}</Badge>)}</div>;
     }
-    if (typeof value === 'object') return <pre className="max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{JSON.stringify(value, null, 2)}</pre>;
-    return <span className="break-words whitespace-pre-wrap text-[13.5px] font-normal leading-relaxed">{String(value)}</span>;
+    if (typeof value === 'object') return <pre className="max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{JSON.stringify(value, null, 2)}</pre>;
+    return <span className="break-words whitespace-pre-wrap text-sm font-normal leading-relaxed">{String(value)}</span>;
 }
 
 export function FieldBlock({
@@ -479,7 +479,7 @@ export function FieldBlock({
             {!isSelfLabelled && (
                 <div className="mb-2.5 pb-1.5 border-b border-border/60 flex min-w-0 items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="min-w-0 break-words text-[14px] font-bold uppercase tracking-wider text-foreground/90">
+                        <span className="min-w-0 break-words text-base font-bold uppercase tracking-wider text-foreground/90">
                             {field.label || humanize(field.key)}
                         </span>
                         <AiProvenanceInfo
@@ -512,7 +512,7 @@ export function FieldBlock({
             {violations.length > 0 && (
                 <div className="mt-2 space-y-1">
                     {violations.map((violation, index) => (
-                        <div key={index} className={cn('text-xs', violation.severity === 'error' ? 'text-destructive' : 'text-warning')}>
+                        <div key={index} className={cn('text-sm', violation.severity === 'error' ? 'text-destructive' : 'text-warning')}>
                             {violation.message}
                         </div>
                     ))}
@@ -573,6 +573,8 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
     if (code === 'D6') {
         if (
             key === 'sources'
+            || key === 'verification.objective'
+            || key === 'verification.plan'
             || key === 'verification.evidenceStatus'
             || key === 'verification.status'
             || key === 'evidenceStatus'
@@ -582,9 +584,15 @@ function isExcludedField(code: string, key: string, label?: string, value?: unkn
             || key === 'verification.unprovenGaps'
             || key === 'whatIsStillUnproven'
             || key === 'unproven'
+            || key === 'objective'
+            || key === 'plan'
         ) return true;
         if (
-            l.includes('evidence status')
+            l.includes('verification objective')
+            || l.includes('verification plan')
+            || l.includes('objective')
+            || l.includes('plan')
+            || l.includes('evidence status')
             || l.includes('unproven')
             || l.includes('evidence and traceability')
             || l.includes('source records')

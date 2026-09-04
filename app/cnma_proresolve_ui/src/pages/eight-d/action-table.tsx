@@ -19,6 +19,7 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    Switch,
     Textarea,
     cn,
 } from '@cnma/react-ui';
@@ -70,14 +71,9 @@ import { TaskEvidenceSection } from './task-evidence';
  */
 
 const STATUS_TONE: Record<string, string> = {
-    'Planned': 'border-slate-300 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700',
-    'Not started': 'border-slate-300 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700',
-    'In Progress': 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
-    'In progress': 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
-    'Implemented': 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800',
-    'Done': 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800',
-    'Verified': 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
-    'Blocked': 'border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+    'Planned': 'border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    'Open': 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
+    'Done': 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
 };
 
 function StatusChip({ status }: { status: string }) {
@@ -86,13 +82,20 @@ function StatusChip({ status }: { status: string }) {
         <span
             title={norm}
             className={cn(
-                'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]',
+                'inline-flex items-center rounded-full border px-2.5 py-0.5 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[160px]',
                 STATUS_TONE[norm] ?? STATUS_TONE['Planned'],
             )}
         >
             {norm}
         </span>
     );
+}
+
+/** Task được coi là đã publish nếu cờ published bật hoặc trạng thái không còn là Planned */
+function isTaskPublished(task: ActionTask): boolean {
+    if (typeof task.published === 'boolean') return task.published;
+    const s = String(task.status || '').trim().toLowerCase();
+    return s !== 'planned' && s !== 'not started' && s !== '';
 }
 
 /** Ô trống phải nói RÕ là chưa ai điền, không được để trắng như lỗi hiển thị. */
@@ -147,7 +150,7 @@ function DatePickerField({
                 <button
                     id={id}
                     type="button"
-                    className="flex h-8 w-full items-center justify-between rounded-md border-2 border-[var(--input-border)] hover:border-[var(--input-border-hover)] focus-visible:border-[var(--color-brand)] outline-none bg-background px-3 py-1 text-[13px] text-foreground text-left transition-[color,box-shadow,border-color] cursor-pointer"
+                    className="flex h-9 w-full items-center justify-between rounded-md border-2 border-[var(--input-border)] hover:border-[var(--input-border-hover)] focus-visible:border-[var(--color-brand)] outline-none bg-background px-3 py-1.5 text-sm text-foreground text-left transition-[color,box-shadow,border-color] cursor-pointer"
                 >
                     <span className={cn('truncate', !value && 'text-muted-foreground')}>
                         {value ? formatDate(value) || value : 'YYYY-MM-DD'}
@@ -199,7 +202,7 @@ function TaskCodeChip({ code }: { code: string }) {
     return (
         <span
             title={text ? `${code} — ${text}` : code}
-            className="inline-flex items-center rounded border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground"
+            className="inline-flex items-center rounded border border-border/70 bg-muted/50 px-2 py-0.5 font-mono text-sm font-medium text-foreground"
         >
             {code}
         </span>
@@ -210,7 +213,7 @@ function TaskCodeChip({ code }: { code: string }) {
 function RootCauseChip({ category }: { category?: string | null }) {
     const raw = String(category ?? '').trim();
     if (!raw || raw === '—') {
-        return <span className="text-muted-foreground font-mono text-[13px]">—</span>;
+        return <span className="text-muted-foreground font-mono text-sm">—</span>;
     }
     const cat = raw.toLowerCase();
     const isMan = cat === 'man';
@@ -242,12 +245,12 @@ function RootCauseChip({ category }: { category?: string | null }) {
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11.5px] font-semibold border font-mono tracking-tight',
+                'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-sm font-semibold border font-mono tracking-tight',
                 toneClass,
             )}
             title={`Root Cause from D4: ${displayTitle}`}
         >
-            <Icon className="h-3 w-3 shrink-0" />
+            <Icon className="h-3.5 w-3.5 shrink-0" />
             <span>{displayTitle}</span>
         </span>
     );
@@ -295,7 +298,7 @@ function TaskCodeField({
     return (
         <>
             <div className="space-y-1.5">
-                <Label htmlFor={`${idPrefix}-task-code`} className="text-[14px] font-medium text-muted-foreground">
+                <Label htmlFor={`${idPrefix}-task-code`} className="text-sm font-semibold text-muted-foreground">
                     Task Code
                 </Label>
                 <ValueHelpInput
@@ -308,26 +311,26 @@ function TaskCodeField({
                     dropdownPlacement="top"
                     catalogLabel="the task catalogue"
                     placeholder="e.g. TSK-1010"
-                    inputClassName="text-[13px]"
+                    inputClassName="text-sm"
                 />
                 {suggestion && (
                     <button
                         type="button"
                         onClick={() => onCodeChange(suggestion)}
-                        className="flex items-start gap-1 text-left text-[10.5px] leading-snug text-primary hover:underline cursor-pointer"
+                        className="flex items-start gap-1 text-left text-sm leading-snug text-primary hover:underline cursor-pointer"
                     >
-                        <Sparkles className="mt-px h-3 w-3 shrink-0" />
+                        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
                         <span>Suggested from the task name: {suggestion} — {taskCodeTextOf(suggestion)}</span>
                     </button>
                 )}
             </div>
             <div className="space-y-1.5">
-                <Label className="text-[14px] font-medium text-muted-foreground">Code Group</Label>
+                <Label className="text-sm font-semibold text-muted-foreground">Code Group</Label>
                 <Input
                     value={group}
                     readOnly
                     placeholder="— from Task Code —"
-                    className="h-8 text-[13px] bg-muted/40 font-mono"
+                    className="h-9 text-sm bg-muted/40 font-mono"
                 />
             </div>
         </>
@@ -365,6 +368,7 @@ function TaskDetail({
     reportID = '',
     disciplineCode = '',
     rootCause = '',
+    overrideActionDiscipline = false,
     onClose,
     onSave,
 }: {
@@ -374,67 +378,129 @@ function TaskDetail({
     reportID?: string;
     disciplineCode?: string;
     rootCause?: string;
+    /** When true, forces D3/D7 operational behaviour (Publish, Evidence, Notes)
+     *  regardless of disciplineCode. Used when TaskDetail is embedded inside D6. */
+    overrideActionDiscipline?: boolean;
     onClose: () => void;
     onSave: (updatedTask: ActionTask) => void;
 }) {
+    // D5 operational features are managed in D6. When overrideActionDiscipline=true
+    // (D6 embedding), unlock full D3/D7 flow: Publish button, Evidence, Notes.
+    const isD3orD7 = overrideActionDiscipline || disciplineCode === 'D3' || disciplineCode === 'D7';
     const partnerVh = usePartnerValueHelp();
     const [isEditing, setIsEditing] = useState(initialEditing);
     const [name, setName] = useState(task?.name ?? '');
     const [assignee, setAssignee] = useState(task?.assignee ?? '');
     const [durationDays, setDurationDays] = useState<number | string>(task?.durationDays ? String(task.durationDays) : '');
-    const [status, setStatus] = useState(task?.status || 'Not started');
+    const [status, setStatus] = useState(task?.status || 'Planned');
     const [description, setDescription] = useState(task?.description ?? '');
     const [taskCode, setTaskCode] = useState(task?.taskCode ?? '');
     const [plannedEndDate, setPlannedEndDate] = useState(task?.plannedEndDate ?? '');
+    const [startDate, setStartDate] = useState(task?.startDate ?? '');
+    const [note, setNote] = useState(task?.note ?? '');
 
     useEffect(() => {
         if (!task) return;
         setName(task.name);
         setAssignee(task.assignee);
         setDurationDays(task.durationDays ? String(task.durationDays) : '');
-        setStatus(task.status || 'Not started');
+        setStatus(task.status || 'Planned');
         setDescription(task.description);
         setTaskCode(task.taskCode);
+        setStartDate(task.startDate ?? '');
         setPlannedEndDate(task.plannedEndDate);
+        setNote(task.note ?? '');
+    }, [task]);
+
+    useEffect(() => {
         setIsEditing(initialEditing);
-    }, [task, initialEditing]);
+    }, [task?.id, initialEditing]);
 
     if (!task) return null;
 
+    const handleClose = () => {
+        if (isD3orD7 && !isEditing && note !== (task.note ?? '')) {
+            const isEvidenceReq = task.evidenceRequired ?? true;
+            const shouldMarkDone = !isEvidenceReq && task.status === 'Open' && note.trim().length > 0;
+            const nextStatus = shouldMarkDone ? 'Done' : task.status;
+            onSave({
+                ...task,
+                note: note.trim(),
+                status: nextStatus,
+            });
+        }
+        onClose();
+    };
+
     const handleSave = () => {
-        // Mã viết hoa trước khi lưu: danh mục là chữ hoa, và `TSK-1010` gõ thành
-        // `tsk-1010` sẽ đếm thành một mã thứ hai lúc tra cứu.
         const code = taskCode.trim().toUpperCase();
         onSave({
             ...task,
             name: name.trim() || task.name,
             assignee: assignee.trim(),
             durationDays: Math.max(0, Number(durationDays) || 0),
-            status,
+            status: isD3orD7 ? (task.status || 'Planned') : status,
             description: description.trim(),
             taskCode: code,
-            // Nhóm KHÔNG lấy từ state riêng: nó là hàm của mã. Giữ hai state rồi
-            // lưu cả hai là cách để chúng lệch nhau đúng lúc không ai nhìn.
             taskCodeGroup: taskCodeGroupOf(code) ?? '',
+            startDate: startDate || undefined,
             plannedEndDate,
+            note: note.trim(),
+            published: task.published,
+            evidenceRequired: task.evidenceRequired,
         });
         setIsEditing(false);
+        if (isD3orD7) {
+            onClose();
+        }
+    };
+
+    const handlePublish = () => {
+        const code = taskCode.trim().toUpperCase();
+        onSave({
+            ...task,
+            name: name.trim() || task.name,
+            assignee: assignee.trim(),
+            durationDays: Math.max(0, Number(durationDays) || 0),
+            status: 'Open',
+            published: true,
+            description: description.trim(),
+            taskCode: code,
+            taskCodeGroup: taskCodeGroupOf(code) ?? '',
+            startDate: startDate || undefined,
+            plannedEndDate,
+            note: note.trim(),
+            evidenceRequired: task.evidenceRequired ?? true,
+        });
+        setIsEditing(false);
+        onClose();
+    };
+
+    const handleSaveNote = () => {
+        const isEvidenceReq = task.evidenceRequired ?? true;
+        const shouldMarkDone = !isEvidenceReq && task.status === 'Open' && note.trim().length > 0;
+        const nextStatus = shouldMarkDone ? 'Done' : task.status;
+        onSave({
+            ...task,
+            note: note.trim(),
+            status: nextStatus,
+        });
     };
 
     return (
-        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+        <Dialog open onOpenChange={(open) => { if (!open) handleClose(); }}>
             <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl md:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader className="space-y-2 border-b pb-3">
                     <div className="flex items-center justify-between gap-2 pr-6">
                         <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                <ClipboardList className="h-4 w-4" />
+                                <CheckSquare className="h-4 w-4" />
                             </span>
                             <div>
                                 <DialogTitle className="text-base font-semibold">
                                     {isEditing ? 'Edit Task Details' : 'Task Details'}
                                 </DialogTitle>
-                                <DialogDescription className="text-xs text-muted-foreground">
+                                <DialogDescription className="text-sm text-muted-foreground">
                                     {isEditing
                                         ? 'Update task assignment, schedule, and scope'
                                         : 'View detailed task instructions and assignment status'}
@@ -443,15 +509,15 @@ function TaskDetail({
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                             {task.origin === 'AI suggestion' ? (
-                                <Badge variant="outline" className="gap-1 text-[11px] font-normal border-primary/30 text-primary bg-primary/5">
+                                <Badge variant="outline" className="gap-1 text-sm font-normal border-primary/30 text-primary bg-primary/5 px-2.5 py-0.5">
                                     <Sparkles className="h-3.5 w-3.5" /> AI Suggestion
                                 </Badge>
                             ) : (
-                                <Badge variant="outline" className="gap-1 text-[11px] font-normal text-muted-foreground">
+                                <Badge variant="outline" className="gap-1 text-sm font-normal text-muted-foreground px-2.5 py-0.5">
                                     <User className="h-3.5 w-3.5" /> User Added
                                 </Badge>
                             )}
-                            <StatusChip status={isEditing ? status : task.status} />
+                            <StatusChip status={isEditing ? (isD3orD7 ? (task.status || 'Planned') : status) : task.status} />
                         </div>
                     </div>
                 </DialogHeader>
@@ -460,28 +526,28 @@ function TaskDetail({
                     <div className="space-y-4 pt-2">
                         {/* Task Name */}
                         <div className="space-y-1.5">
-                            <Label className="text-[14px] font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Task Name <span className="text-destructive">*</span>
                             </Label>
                             <Textarea
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 rows={2}
-                                className="text-[13px] font-normal leading-relaxed bg-background min-h-[56px] resize-y"
+                                className="text-sm font-normal leading-relaxed bg-background min-h-[56px] resize-y"
                                 placeholder="Task name..."
                             />
                         </div>
 
                         {/* Description */}
                         <div className="space-y-1.5">
-                            <Label className="text-[14px] font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Description & Instructions
                             </Label>
                             <Textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={4}
-                                className="text-[13px] leading-relaxed bg-background min-h-[80px]"
+                                className="text-sm leading-relaxed bg-background min-h-[80px]"
                                 placeholder="Detailed instructions, scope of work, or criteria..."
                             />
                         </div>
@@ -489,7 +555,7 @@ function TaskDetail({
                         {/* Grid */}
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                             <div className="space-y-1.5 sm:col-span-6">
-                                <Label className="text-[14px] font-medium text-muted-foreground">
+                                <Label className="text-sm font-semibold text-muted-foreground">
                                     Assignee
                                 </Label>
                                 <ValueHelpInput
@@ -499,13 +565,13 @@ function TaskDetail({
                                     loading={partnerVh.loading}
                                     quiet
                                     dropdownPlacement="top"
-                                    inputClassName="text-[13px]"
+                                    inputClassName="text-sm"
                                     placeholder="e.g. Quality Engineer"
                                     catalogLabel="the team directory"
                                 />
                             </div>
                             <div className="space-y-1.5 sm:col-span-2">
-                                <Label className="text-[14px] font-medium text-muted-foreground">
+                                <Label className="text-sm font-semibold text-muted-foreground">
                                     Duration (Days)
                                 </Label>
                                 <Input
@@ -514,39 +580,61 @@ function TaskDetail({
                                     placeholder="0"
                                     value={durationDays}
                                     onChange={(e) => setDurationDays(e.target.value)}
-                                    className="h-8 text-[13px] bg-background"
+                                    className="h-9 text-sm bg-background"
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-4">
-                                <Label className="text-[14px] font-medium text-muted-foreground">
-                                    Status
-                                </Label>
-                                <Select value={status} onValueChange={setStatus}>
-                                    <SelectTrigger className="h-8 text-[13px] bg-background w-full">
-                                        <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent side="top">
-                                        {TASK_STATUSES.map((st) => (
-                                            <SelectItem key={st} value={st} className="text-[13px]">{st}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {isD3orD7 ? (
+                                <div className="space-y-1.5 sm:col-span-4">
+                                    <Label className="text-sm font-semibold text-muted-foreground">
+                                        Status
+                                    </Label>
+                                    <div className="flex items-center h-9">
+                                        <StatusChip status={task.status || 'Planned'} />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5 sm:col-span-4">
+                                    <Label className="text-sm font-semibold text-muted-foreground">
+                                        Status
+                                    </Label>
+                                    <Select value={status} onValueChange={setStatus}>
+                                        <SelectTrigger className="h-9 text-sm bg-background w-full">
+                                            <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                        <SelectContent side="top">
+                                            {TASK_STATUSES.map((st) => (
+                                                <SelectItem key={st} value={st} className="text-sm">{st}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </div>
 
                         {/* Quality Task coding / Root Cause */}
                         {disciplineCode === 'D5' ? (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <div className="space-y-1.5">
-                                    <Label className="text-[14px] font-medium text-muted-foreground">
+                                    <Label className="text-sm font-semibold text-muted-foreground">
                                         Root Cause (from D4)
                                     </Label>
-                                    <div className="flex items-center h-8">
+                                    <div className="flex items-center h-9">
                                         <RootCauseChip category={(task as any)?.rootCause || rootCause} />
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
+                                    <Label htmlFor={`task-detail-${task.id}-start`} className="text-sm font-semibold text-muted-foreground">
+                                        Start Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-start`}
+                                        value={startDate}
+                                        onChange={setStartDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-sm font-semibold text-muted-foreground">
                                         Planned End Date
                                     </Label>
                                     <DatePickerField
@@ -558,19 +646,32 @@ function TaskDetail({
                                 </div>
                             </div>
                         ) : (disciplineCode === 'D3' || disciplineCode === 'D7') ? (
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
-                                    Planned End Date
-                                </Label>
-                                <DatePickerField
-                                    id={`task-detail-${task.id}-due`}
-                                    value={plannedEndDate}
-                                    onChange={setPlannedEndDate}
-                                    dropdownPlacement="top"
-                                />
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-start`} className="text-sm font-semibold text-muted-foreground">
+                                        Start Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-start`}
+                                        value={startDate}
+                                        onChange={setStartDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-sm font-semibold text-muted-foreground">
+                                        Planned End Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-due`}
+                                        value={plannedEndDate}
+                                        onChange={setPlannedEndDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                                 <TaskCodeField
                                     code={taskCode}
                                     onCodeChange={setTaskCode}
@@ -578,7 +679,18 @@ function TaskDetail({
                                     idPrefix={`task-detail-${task.id}`}
                                 />
                                 <div className="space-y-1.5">
-                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-[14px] font-medium text-muted-foreground">
+                                    <Label htmlFor={`task-detail-${task.id}-start`} className="text-sm font-semibold text-muted-foreground">
+                                        Start Date
+                                    </Label>
+                                    <DatePickerField
+                                        id={`task-detail-${task.id}-start`}
+                                        value={startDate}
+                                        onChange={setStartDate}
+                                        dropdownPlacement="top"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`task-detail-${task.id}-due`} className="text-sm font-semibold text-muted-foreground">
                                         Planned End Date
                                     </Label>
                                     <DatePickerField
@@ -592,23 +704,34 @@ function TaskDetail({
                         )}
 
                         <div className="flex items-center justify-end gap-2 pt-3 border-t">
-                            <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs">
+                            <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-9 text-sm px-3">
                                 Cancel
                             </Button>
-                            <Button size="sm" onClick={handleSave} disabled={!name.trim()} className="h-8 text-xs">
+                            <Button size="sm" variant="outline" onClick={handleSave} disabled={!name.trim()} className="h-9 text-sm px-3">
                                 Save changes
                             </Button>
+                            {isD3orD7 && !task.published && (
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={handlePublish}
+                                    disabled={!name.trim()}
+                                    className="h-9 text-sm px-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                                >
+                                    Publish
+                                </Button>
+                            )}
                         </div>
                     </div>
                 ) : (
                     <div className="space-y-4 pt-2">
                         {/* Task Title Box */}
                         <div className="rounded-lg border bg-card p-3.5 space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                 <Target className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                                 <span>Task Statement</span>
                             </div>
-                            <p className="text-[13px] font-normal leading-relaxed text-foreground break-words">
+                            <p className="text-sm font-normal leading-relaxed text-foreground break-words">
                                 {task.name}
                             </p>
                         </div>
@@ -616,27 +739,27 @@ function TaskDetail({
                         {/* Attribute Cards Grid */}
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                     <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                                     <span>Assignee</span>
                                 </div>
-                                <div className="text-[13px] font-normal text-foreground truncate">
+                                <div className="text-sm font-normal text-foreground truncate">
                                     {task.assignee || <Blank label="Unassigned" />}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                     <Timer className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                                     <span>Duration</span>
                                 </div>
-                                <div className="text-[13px] font-normal text-foreground">
+                                <div className="text-sm font-normal text-foreground">
                                     {task.durationDays > 0 ? `${task.durationDays} day${task.durationDays > 1 ? 's' : ''}` : <Blank label="Not estimated" />}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
-                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                     <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                     <span>Status</span>
                                 </div>
@@ -647,8 +770,8 @@ function TaskDetail({
 
                             {/* Task Code / Root Cause */}
                             {disciplineCode === 'D5' ? (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
-                                    <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-1">
+                                    <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                         <Sparkles className="h-4 w-4 text-primary" />
                                         <span>Root Cause</span>
                                     </div>
@@ -657,8 +780,8 @@ function TaskDetail({
                                     </div>
                                 </div>
                             ) : (disciplineCode === 'D3' || disciplineCode === 'D7') ? null : (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-2">
-                                    <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-1 sm:col-span-1">
+                                    <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                         <Hash className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                                         <span>Task Code</span>
                                     </div>
@@ -667,32 +790,47 @@ function TaskDetail({
                                             <div className="flex items-center gap-1.5">
                                                 <TaskCodeChip code={task.taskCode} />
                                                 {task.taskCodeGroup && (
-                                                    <span className="font-mono text-[12px] text-muted-foreground">
+                                                    <span className="font-mono text-sm text-muted-foreground">
                                                         {task.taskCodeGroup}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-[13px] font-normal leading-snug text-muted-foreground">
+                                            <div className="text-sm font-normal leading-snug text-muted-foreground">
                                                 {taskCodeTextOf(task.taskCode) ?? 'Not in the task catalogue.'}
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="text-[13px] font-normal">
+                                        <div className="text-sm font-normal">
                                             <Blank label="Not coded" />
                                         </div>
                                     )}
                                 </div>
                             )}
 
+                            {/* Start Date */}
                             <div className={cn(
                                 'rounded-lg border bg-muted/20 p-3 space-y-1',
-                                (disciplineCode === 'D3' || disciplineCode === 'D7') ? 'sm:col-span-3' : 'sm:col-span-1',
+                                (disciplineCode === 'D3' || disciplineCode === 'D7') ? 'sm:col-span-1' : 'sm:col-span-1',
                             )}>
-                                <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                                <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                                    <CalendarDays className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                                    <span>Start Date</span>
+                                </div>
+                                <div className="text-sm font-normal text-foreground">
+                                    {formatDate(task.startDate ?? '') || <Blank label="No start date" />}
+                                </div>
+                            </div>
+
+                            {/* Planned End Date */}
+                            <div className={cn(
+                                'rounded-lg border bg-muted/20 p-3 space-y-1',
+                                (disciplineCode === 'D3' || disciplineCode === 'D7') ? 'sm:col-span-2' : 'sm:col-span-1',
+                            )}>
+                                <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                     <CalendarDays className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                                     <span>Planned End Date</span>
                                 </div>
-                                <div className="text-[13px] font-normal text-foreground">
+                                <div className="text-sm font-normal text-foreground">
                                     {formatDate(task.plannedEndDate) || <Blank label="No date committed" />}
                                 </div>
                             </div>
@@ -700,11 +838,11 @@ function TaskDetail({
 
                         {/* Description Section */}
                         <div className="rounded-lg border bg-muted/10 p-3.5 space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                                 <AlignLeft className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                                 <span>Description & Instructions</span>
                             </div>
-                            <div className="text-[13px] font-normal leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                            <div className="text-sm font-normal leading-relaxed text-foreground whitespace-pre-wrap break-words">
                                 {task.description ? (
                                     task.description
                                 ) : (
@@ -713,27 +851,102 @@ function TaskDetail({
                             </div>
                         </div>
 
+                        {/* Execution Notes Section (D3 & D7) */}
+                        {isD3orD7 && (
+                            <div className="rounded-lg border bg-card p-3.5 space-y-2 border-border/80">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                                        <ClipboardList className="h-4 w-4 text-primary" />
+                                        <span>Execution Notes & Remarks</span>
+                                    </div>
+                                    {!readOnly && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleSaveNote}
+                                            className="h-7 text-xs px-2.5 font-medium cursor-pointer"
+                                        >
+                                            Save Note
+                                        </Button>
+                                    )}
+                                </div>
+                                <Textarea
+                                    value={note}
+                                    disabled={readOnly}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    onBlur={() => {
+                                        if (note !== (task.note ?? '')) {
+                                            handleSaveNote();
+                                        }
+                                    }}
+                                    rows={3}
+                                    className="text-sm leading-relaxed bg-background min-h-[70px] resize-y"
+                                    placeholder="Enter execution details, findings, or notes..."
+                                />
+                                {!(task.evidenceRequired ?? true) && task.status === 'Open' && (
+                                    <p className="text-xs text-muted-foreground italic">
+                                        Evidence document is optional for this task. Saving an execution note will mark this task as Done.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {/* Completion Evidence Section */}
                         {reportID && disciplineCode && (
-                            <TaskEvidenceSection
-                                reportID={reportID}
-                                disciplineCode={disciplineCode}
-                                task={task}
-                                readOnly={readOnly}
-                            />
+                            <div className="space-y-2">
+                                {isD3orD7 && (
+                                    <div className={cn(
+                                        'p-2.5 rounded-lg border text-sm',
+                                        task.status === 'Done'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200'
+                                            : (task.evidenceRequired ?? true)
+                                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200'
+                                                : 'bg-muted/40 border-border/70 text-muted-foreground'
+                                    )}>
+                                        {task.status === 'Done' ? (
+                                            <span>
+                                                <strong>Status: Done.</strong> Completion criteria satisfied. You may still upload additional evidence or update remarks.
+                                            </span>
+                                        ) : (task.evidenceRequired ?? true) ? (
+                                            <span>
+                                                <strong>Evidence Requirement:</strong> Upload at least one completion document below to mark this task as <strong>Done</strong>.
+                                            </span>
+                                        ) : (
+                                            <span>
+                                                <strong>Evidence Optional:</strong> Document upload is optional. Adding an execution note above or uploading a document will mark this task as <strong>Done</strong>.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                <TaskEvidenceSection
+                                    reportID={reportID}
+                                    disciplineCode={disciplineCode}
+                                    task={task}
+                                    readOnly={readOnly}
+                                    onEvidenceUploaded={() => {
+                                        const s = String(task.status || '').trim().toLowerCase();
+                                        if (isD3orD7 && s === 'open') {
+                                            onSave({
+                                                ...task,
+                                                status: 'Done',
+                                            });
+                                        }
+                                    }}
+                                />
+                            </div>
                         )}
 
                         {/* Attachments Section */}
                         {task.attachments && task.attachments.length > 0 && (
                             <div className="space-y-1.5">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                                     Attachments ({task.attachments.length})
                                 </div>
                                 <ul className="flex flex-wrap gap-2">
                                     {task.attachments.map((file) => (
                                         <li
                                             key={file.name}
-                                            className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs"
+                                            className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-sm"
                                         >
                                             <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
                                             <span className="font-medium text-foreground">{file.kind}</span>
@@ -746,12 +959,12 @@ function TaskDetail({
 
                         {/* Footer */}
                         <div className="flex items-center justify-end gap-2 pt-3 border-t">
-                            {!readOnly && (
-                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs gap-1.5">
+                            {!readOnly && (!isD3orD7 || !isTaskPublished(task)) && (
+                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-9 text-sm gap-1.5 px-3">
                                     <Edit2 className="h-3.5 w-3.5" /> Edit Task
                                 </Button>
                             )}
-                            <Button size="sm" variant="default" onClick={onClose} className="h-8 text-xs">
+                            <Button size="sm" variant="default" onClick={handleClose} className="h-9 text-sm px-3">
                                 Close
                             </Button>
                         </div>
@@ -781,6 +994,7 @@ export function TaskTable({
     reportID = '',
     disciplineCode = '',
     rootCause = '',
+    overrideActionDiscipline = false,
 }: {
     tasks: ActionTask[];
     onChange: (next: ActionTask[]) => void;
@@ -788,6 +1002,9 @@ export function TaskTable({
     reportID?: string;
     disciplineCode?: string;
     rootCause?: string;
+    /** When true, forces isD3orD7=true regardless of disciplineCode.
+     *  Used by D6 to embed D5 tasks with full operational controls (evidence, publish, notes). */
+    overrideActionDiscipline?: boolean;
 }) {
     const [selectedTask, setSelectedTask] = useState<ActionTask | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -795,8 +1012,12 @@ export function TaskTable({
     const partnerVh = usePartnerValueHelp();
 
     const isD5 = disciplineCode === 'D5';
-    const isD3orD7 = disciplineCode === 'D3' || disciplineCode === 'D7';
+    // D5 operational features are now in D6. Only D3 and D7 retain them in their own view.
+    // When overrideActionDiscipline=true (D6 embedding), all features are unlocked.
+    const isD3orD7 = overrideActionDiscipline || disciplineCode === 'D3' || disciplineCode === 'D7';
 
+    // Evidence column is hidden in pure D5 view — managed in D6 instead.
+    const showEvidenceColumn = isD3orD7 || !isD5;
     const headers: Array<{ label: string; className?: string }> = useMemo(() => [
         { label: 'Task', className: 'min-w-[240px]' },
         ...(isD5 ? [{ label: 'Root Cause', className: 'whitespace-nowrap' }] : []),
@@ -804,9 +1025,9 @@ export function TaskTable({
         { label: 'Assignee' },
         { label: 'Duration' },
         { label: 'Status' },
-        { label: 'Evidence' },
+        ...(showEvidenceColumn ? [{ label: 'Evidence' }] : []),
         { label: '' },
-    ], [isD5, isD3orD7]);
+    ], [isD5, isD3orD7, showEvidenceColumn]);
 
     const [newTaskName, setNewTaskName] = useState('');
     const [newDescription, setNewDescription] = useState('');
@@ -828,10 +1049,14 @@ export function TaskTable({
         persist(tasks.filter((t) => t.id !== id));
     };
 
-    const updateTask = (updated: ActionTask) => {
+    const updateTask = (updated: ActionTask, keepOpen = false) => {
         const next = tasks.map((t) => (t.id === updated.id ? updated : t));
         persist(next);
-        setSelectedTask(null);
+        if (keepOpen) {
+            setSelectedTask(updated);
+        } else {
+            setSelectedTask(null);
+        }
     };
 
     const handleCreateTask = () => {
@@ -849,12 +1074,16 @@ export function TaskTable({
             description: newDescription.trim(),
             assignee: newAssignee.trim(),
             durationDays: Math.max(0, Number(newDurationDays) || 0),
-            status: newStatus || TASK_STATUSES[0],
+            status: isD3orD7 ? 'Planned' : (newStatus || TASK_STATUSES[0]),
             origin: 'User added',
             attachments: [],
             taskCode: code,
             taskCodeGroup: taskCodeGroupOf(code) ?? '',
+            startDate: undefined,
             plannedEndDate: newPlannedEndDate,
+            evidenceRequired: true,
+            published: false,
+            note: '',
         }]);
         setNewTaskName('');
         setNewDescription('');
@@ -873,7 +1102,7 @@ export function TaskTable({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <CheckSquare className="h-3.5 w-3.5" />
                     </span>
-                    <span className="min-w-0 break-words text-[14px] font-bold tracking-tight text-foreground">
+                    <span className="min-w-0 break-words text-base font-bold tracking-tight text-foreground">
                         Assigned Tasks
                     </span>
                 </div>
@@ -882,7 +1111,7 @@ export function TaskTable({
                         <button
                             type="button"
                             onClick={() => setAdding(true)}
-                            className="rounded-md border border-input bg-card px-3 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50 cursor-pointer"
+                            className="rounded-md border border-input bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50 cursor-pointer"
                         >
                             Add
                         </button>
@@ -898,7 +1127,7 @@ export function TaskTable({
                                 <th
                                     key={index}
                                     className={cn(
-                                        'border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
+                                        'border-b px-2.5 py-2 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground',
                                         className,
                                     )}
                                 >
@@ -910,7 +1139,7 @@ export function TaskTable({
                     <tbody>
                         {tasks.length === 0 ? (
                             <tr>
-                                <td colSpan={headers.length} className="px-2.5 py-5 text-center text-[13.5px] font-normal text-muted-foreground">
+                                <td colSpan={headers.length} className="px-2.5 py-5 text-center text-sm font-normal text-muted-foreground">
                                     No task accepted yet. Use <span className="font-medium text-foreground">Accept</span> on a
                                     suggestion above, or add one by hand.
                                 </td>
@@ -919,7 +1148,8 @@ export function TaskTable({
                             const taskFiles = evidences.filter(
                                 (e) => e.taskId === task.id && (disciplineCode ? e.disciplineCode === disciplineCode : true),
                             );
-                            const isMissingEvidence = task.status === 'Done' && taskFiles.length === 0;
+                            const isMissingEvidence = task.status === 'Done' && (task.evidenceRequired ?? true) && taskFiles.length === 0;
+                            const isPublished = isTaskPublished(task);
 
                             return (
                                 <tr
@@ -930,7 +1160,7 @@ export function TaskTable({
                                     )}
                                 >
                                     <td className="border-b px-2.5 py-2 align-middle">
-                                        <span className="flex items-center gap-1.5 text-[13.5px]">
+                                        <span className="flex items-center gap-1.5 text-sm">
                                             {task.origin === 'AI suggestion' && (
                                                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
                                             )}
@@ -938,16 +1168,16 @@ export function TaskTable({
                                         </span>
                                     </td>
                                     {isD5 && (
-                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
+                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-sm font-normal">
                                             <RootCauseChip category={(task as any)?.rootCause || rootCause} />
                                         </td>
                                     )}
                                     {!isD5 && !isD3orD7 && (
-                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
+                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-sm font-normal">
                                             <TaskCodeChip code={task.taskCode} />
                                         </td>
                                     )}
-                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] font-normal">
+                                    <td className="border-b px-2.5 py-2 align-middle text-sm font-normal">
                                         {task.assignee
                                             ? <span className="inline-flex items-center gap-1.5 text-foreground">
                                                 <User className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -955,65 +1185,136 @@ export function TaskTable({
                                             </span>
                                             : <Blank label="Unassigned" />}
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle text-[13.5px] font-normal tabular-nums">
+                                    <td className="border-b px-2.5 py-2 align-middle text-sm font-normal tabular-nums">
                                         {task.durationDays > 0 ? `${task.durationDays}d` : <Blank label="—" />}
                                     </td>
                                     <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap">
                                         <StatusChip status={task.status} />
                                     </td>
-                                    <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-[13.5px] font-normal">
-                                        {task.status !== 'Done' ? (
-                                            <span className="text-muted-foreground">—</span>
-                                        ) : taskFiles.length === 0 ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
-                                                className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning hover:bg-warning/20 transition-colors cursor-pointer"
-                                                title="Completion evidence required. Click to view or upload."
-                                            >
-                                                Required
-                                            </button>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
-                                                className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors cursor-pointer"
-                                                title="View attached evidence"
-                                            >
-                                                {taskFiles.length} {taskFiles.length === 1 ? 'PDF' : 'PDFs'}
-                                            </button>
-                                        )}
-                                    </td>
+                                    {showEvidenceColumn && (
+                                        <td className="border-b px-2.5 py-2 align-middle whitespace-nowrap text-sm font-normal">
+                                            {isD3orD7 ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={task.evidenceRequired ?? true}
+                                                        disabled={readOnly}
+                                                        onCheckedChange={(checked) => {
+                                                            const next = tasks.map((t) => (t.id === task.id ? { ...t, evidenceRequired: checked } : t));
+                                                            persist(next);
+                                                        }}
+                                                    />
+                                                    <span className={cn('text-xs font-medium', (task.evidenceRequired ?? true) ? 'text-foreground' : 'text-muted-foreground')}>
+                                                        {(task.evidenceRequired ?? true) ? 'Required' : 'Optional'}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                task.status !== 'Done' ? (
+                                                    <span className="text-muted-foreground">—</span>
+                                                ) : taskFiles.length === 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                        className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 text-sm font-semibold text-warning hover:bg-warning/20 transition-colors cursor-pointer"
+                                                        title="Completion evidence required. Click to view or upload."
+                                                    >
+                                                        Required
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                        className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-2.5 py-0.5 text-sm font-semibold text-success hover:bg-success/20 transition-colors cursor-pointer"
+                                                        title="View attached evidence"
+                                                    >
+                                                        {taskFiles.length} {taskFiles.length === 1 ? 'PDF' : 'PDFs'}
+                                                    </button>
+                                                )
+                                            )}
+                                        </td>
+                                    )}
                                     <td className="border-b px-2.5 py-2 text-right align-middle">
                                         <div className="inline-flex items-center gap-1 justify-end">
-                                            <button
-                                                type="button"
-                                                onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
-                                                aria-label="View details"
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                                                title="View details"
-                                            >
-                                                <Eye className="h-3.5 w-3.5" />
-                                            </button>
-                                            {!readOnly && (
+                                            {isD3orD7 ? (
+                                                <>
+                                                    {(!isPublished && !readOnly) ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
+                                                            aria-label="Edit task"
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                                            title="Edit task"
+                                                        >
+                                                            <Edit2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                            aria-label="View details"
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                                            title="View details"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                    {!readOnly && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeTask(task.id)}
+                                                            className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+                                                            title="Remove task"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </>
+                                            ) : isD5 ? (
+                                                /* D5 thuần: không có eye/pencil — chỉ Remove.
+                                                   Operational controls (evidence, notes, publish) đã được chuyển sang D6. */
+                                                <>
+                                                    {!readOnly && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeTask(task.id)}
+                                                            className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+                                                            title="Remove task"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </>
+                                            ) : (
                                                 <>
                                                     <button
                                                         type="button"
-                                                        onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
-                                                        aria-label="Edit task"
-                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                                                        title="Edit task"
+                                                        onClick={() => { setSelectedTask(task); setIsEditMode(false); }}
+                                                        aria-label="View details"
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                                        title="View details"
                                                     >
-                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                        <Eye className="h-3.5 w-3.5" />
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeTask(task.id)}
-                                                        className="rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
-                                                        title="Remove task"
-                                                    >
-                                                        Remove
-                                                    </button>
+                                                    {!readOnly && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setSelectedTask(task); setIsEditMode(true); }}
+                                                                aria-label="Edit task"
+                                                                className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                                                title="Edit task"
+                                                            >
+                                                                <Edit2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeTask(task.id)}
+                                                                className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+                                                                title="Remove task"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -1027,9 +1328,9 @@ export function TaskTable({
 
             {!readOnly && adding && (
                 <div className="mt-3 rounded-lg border bg-muted/20 p-3.5 space-y-3">
-                    <p className="text-xs font-semibold text-foreground">Add New Task</p>
+                    <p className="text-base font-semibold text-foreground">Add New Task</p>
                     <div className="space-y-1.5">
-                        <Label className="text-[14px] font-medium text-muted-foreground">
+                        <Label className="text-sm font-semibold text-muted-foreground">
                             Task Name <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
@@ -1037,12 +1338,12 @@ export function TaskTable({
                             value={newTaskName}
                             onChange={(e) => setNewTaskName(e.target.value)}
                             rows={2}
-                            className="text-[13px] font-normal leading-relaxed bg-background min-h-[56px] resize-y"
+                            className="text-sm font-normal leading-relaxed bg-background min-h-[56px] resize-y"
                             autoFocus
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-[14px] font-medium text-muted-foreground">
+                        <Label className="text-sm font-semibold text-muted-foreground">
                             Description & Instructions
                         </Label>
                         <Textarea
@@ -1050,12 +1351,12 @@ export function TaskTable({
                             value={newDescription}
                             onChange={(e) => setNewDescription(e.target.value)}
                             rows={2}
-                            className="text-[13px] leading-relaxed bg-background min-h-[60px]"
+                            className="text-sm leading-relaxed bg-background min-h-[60px]"
                         />
                     </div>
                     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
                         <div className="space-y-1.5 sm:col-span-6">
-                            <Label className="text-[14px] font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Assignee
                             </Label>
                             <ValueHelpInput
@@ -1065,13 +1366,13 @@ export function TaskTable({
                                 loading={partnerVh.loading}
                                 quiet
                                 dropdownPlacement="top"
-                                inputClassName="text-[13px]"
+                                inputClassName="text-sm"
                                 placeholder="e.g. Quality Engineer"
                                 catalogLabel="the team directory"
                             />
                         </div>
                         <div className="space-y-1.5 sm:col-span-2">
-                            <Label className="text-[14px] font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Duration (Days)
                             </Label>
                             <Input
@@ -1080,40 +1381,51 @@ export function TaskTable({
                                 placeholder="0"
                                 value={newDurationDays}
                                 onChange={(e) => setNewDurationDays(e.target.value)}
-                                className="h-8 text-[13px] bg-background"
+                                className="h-9 text-sm bg-background"
                             />
                         </div>
-                        <div className="space-y-1.5 sm:col-span-4">
-                            <Label className="text-[14px] font-medium text-muted-foreground">
-                                Status
-                            </Label>
-                            <Select value={newStatus} onValueChange={setNewStatus}>
-                                <SelectTrigger className="h-8 text-[13px] bg-background w-full">
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent side="top">
-                                    {TASK_STATUSES.map((st) => (
-                                        <SelectItem key={st} value={st} className="text-[13px]">
-                                            {st}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {isD3orD7 ? (
+                            <div className="space-y-1.5 sm:col-span-4">
+                                <Label className="text-sm font-semibold text-muted-foreground">
+                                    Status
+                                </Label>
+                                <div className="flex items-center h-9">
+                                    <StatusChip status="Planned" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-1.5 sm:col-span-4">
+                                <Label className="text-sm font-semibold text-muted-foreground">
+                                    Status
+                                </Label>
+                                <Select value={newStatus} onValueChange={setNewStatus}>
+                                    <SelectTrigger className="h-9 text-sm bg-background w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent side="top">
+                                        {TASK_STATUSES.map((st) => (
+                                            <SelectItem key={st} value={st} className="text-sm">
+                                                {st}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
                     {/* Quality Task coding / Root Cause */}
                     {isD5 ? (
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                             <div className="space-y-1.5">
-                                <Label className="text-[14px] font-medium text-muted-foreground">
+                                <Label className="text-sm font-semibold text-muted-foreground">
                                     Root Cause (from D4)
                                 </Label>
-                                <div className="flex items-center h-8">
+                                <div className="flex items-center h-9">
                                     <RootCauseChip category={rootCause} />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
+                                <Label htmlFor="new-task-due" className="text-sm font-semibold text-muted-foreground">
                                     Planned End Date
                                 </Label>
                                 <DatePickerField
@@ -1126,7 +1438,7 @@ export function TaskTable({
                         </div>
                     ) : isD3orD7 ? (
                         <div className="space-y-1.5 sm:col-span-1">
-                            <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
+                            <Label htmlFor="new-task-due" className="text-sm font-semibold text-muted-foreground">
                                 Planned End Date
                             </Label>
                             <DatePickerField
@@ -1145,7 +1457,7 @@ export function TaskTable({
                                 idPrefix="new-task"
                             />
                             <div className="space-y-1.5">
-                                <Label htmlFor="new-task-due" className="text-[14px] font-medium text-muted-foreground">
+                                <Label htmlFor="new-task-due" className="text-sm font-semibold text-muted-foreground">
                                     Planned End Date
                                 </Label>
                                 <DatePickerField
@@ -1158,10 +1470,10 @@ export function TaskTable({
                         </div>
                     )}
                     <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()}>
+                        <Button size="sm" onClick={handleCreateTask} disabled={!newTaskName.trim()} className="h-9 text-sm px-3">
                             Add task
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+                        <Button size="sm" variant="ghost" onClick={() => setAdding(false)} className="h-9 text-sm px-3">
                             Cancel
                         </Button>
                     </div>
@@ -1176,8 +1488,9 @@ export function TaskTable({
                     reportID={reportID}
                     disciplineCode={disciplineCode}
                     rootCause={rootCause}
+                    overrideActionDiscipline={overrideActionDiscipline}
                     onClose={() => setSelectedTask(null)}
-                    onSave={updateTask}
+                    onSave={(updated) => updateTask(updated, true)}
                 />
             )}
         </div>

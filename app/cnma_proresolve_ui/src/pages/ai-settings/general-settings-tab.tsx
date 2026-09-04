@@ -84,7 +84,7 @@ export function GeneralSettingsTab() {
                 <Card className="p-1">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Model per processing step</CardTitle>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             Each step can run on a different model. Leave a step empty to inherit
                             the default on the first row. With nothing configured, everything runs
                             on <span className="font-mono">gemini-2.5-pro</span>.
@@ -98,7 +98,7 @@ export function GeneralSettingsTab() {
                 <Card className="p-1">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Raw configuration (JSON)</CardTitle>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             For keys that have no dedicated field above — for example{' '}
                             <span className="font-mono">maxIterations</span> or{' '}
                             <span className="font-mono">&lt;activity&gt;ThinkingBudget</span>.
@@ -117,10 +117,11 @@ export function GeneralSettingsTab() {
                         size="sm"
                         disabled={saving}
                         onClick={() => form.reset()}
+                        className="h-9 text-sm"
                     >
                         Discard
                     </Button>
-                    <Button type="submit" size="sm" disabled={saving}>
+                    <Button type="submit" size="sm" disabled={saving} className="h-9 text-sm font-semibold">
                         {saving ? 'Saving…' : 'Save configuration'}
                     </Button>
                 </div>

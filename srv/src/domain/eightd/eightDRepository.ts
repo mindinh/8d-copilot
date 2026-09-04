@@ -883,20 +883,20 @@ export async function reviewDiscipline(
                 .where({ report_ID: reportID });
 
             for (const s of siblings) {
-                if (['D3', 'D5', 'D7'].includes(String(s.code))) {
+                if (String(s.code) === 'D5') {
                     let parsed: any = {};
                     try {
                         parsed = JSON.parse(String(s.resultJson ?? '{}'));
                     } catch { /* empty */ }
-                    const keyPrefix = s.code === 'D3' ? 'containment' : s.code === 'D5' ? 'corrective' : 'preventive';
+                    const keyPrefix = 'corrective';
                     const tasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions || [];
                     if (Array.isArray(tasks) && tasks.length > 0) {
                         for (const t of tasks) {
                             const status = normalizeActionStatus(t?.status);
-                            if (status !== 'Done' && status !== 'Verified') {
+                            if (status !== 'Done') {
                                 const taskName = t?.name || t?.actionText || t?.action || 'Task';
                                 throw Object.assign(
-                                    new Error(`There are tasks in ${s.code} still not complete.`),
+                                    new Error(`There are tasks in D5 still not complete.`),
                                     { code: 400 },
                                 );
                             }
@@ -1063,6 +1063,49 @@ export function findTaskInResultJson(resultJson: string | null | undefined, task
     }
 }
 
+export function markTaskStatusInResultJson(
+    resultJson: string | null | undefined,
+    taskId: string,
+    newStatus: string,
+): string | null {
+    if (!resultJson) return null;
+    try {
+        const data = typeof resultJson === 'string' ? JSON.parse(resultJson) : resultJson;
+        if (!data || typeof data !== 'object') return null;
+
+        let modified = false;
+        const updateArray = (arr: unknown[]) => {
+            if (!Array.isArray(arr)) return;
+            for (let i = 0; i < arr.length; i++) {
+                const item = arr[i];
+                if (item && typeof item === 'object' && (item as any).id === taskId) {
+                    (item as any).status = newStatus;
+                    modified = true;
+                }
+            }
+        };
+
+        if (data.containment?.assignedActions) updateArray(data.containment.assignedActions);
+        if (data.corrective?.assignedActions) updateArray(data.corrective.assignedActions);
+        if (data.preventive?.assignedActions) updateArray(data.preventive.assignedActions);
+        if (Array.isArray(data.assignedActions)) updateArray(data.assignedActions);
+        if (Array.isArray(data.tasks)) updateArray(data.tasks);
+
+        for (const val of Object.values(data)) {
+            if (Array.isArray(val)) updateArray(val);
+            else if (val && typeof val === 'object') {
+                for (const subVal of Object.values(val as Record<string, unknown>)) {
+                    if (Array.isArray(subVal)) updateArray(subVal);
+                }
+            }
+        }
+
+        return modified ? JSON.stringify(data) : null;
+    } catch {
+        return null;
+    }
+}
+
 export async function createTaskEvidence(params: {
     reportID: string;
     disciplineCode: string;
@@ -1110,9 +1153,14 @@ export async function createTaskEvidence(params: {
     }
 
     const task = findTaskInResultJson((discipline as any).resultJson, taskId);
-    if (!task || (task.status !== 'Done' && task.status !== 'Verified')) {
+    const taskStatus = String(task?.status || '').trim().toLowerCase();
+    const allowedStatuses = isActionStep
+        ? ['open', 'done', 'verified']
+        : ['done', 'verified'];
+
+    if (!task || !allowedStatuses.includes(taskStatus)) {
         throw Object.assign(
-            new Error('Evidence can only be uploaded for tasks with status Done or Verified.'),
+            new Error(`Evidence can only be uploaded for tasks with status ${allowedStatuses.join(' or ')}.`),
             { code: 400 },
         );
     }
@@ -1132,6 +1180,15 @@ export async function createTaskEvidence(params: {
         uploadedBy: actor || 'anonymous',
         uploadedAt,
     });
+
+    if (taskStatus === 'open') {
+        const updatedJson = markTaskStatusInResultJson((discipline as any).resultJson, taskId, 'Done');
+        if (updatedJson) {
+            await UPDATE(DISCIPLINES)
+                .set({ resultJson: updatedJson })
+                .where({ ID: (discipline as any).ID });
+        }
+    }
 
     cds.log('eightd-repo').info(
         `Created task evidence ${ID} (${fileName}) for task ${taskId} on report ${reportID} (${disciplineCode}) by ${actor}`,

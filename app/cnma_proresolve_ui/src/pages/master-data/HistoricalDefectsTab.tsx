@@ -109,7 +109,7 @@ export function HistoricalDefectsTab() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by Case ID, Material, Symptom, Defect..."
-                        className="pl-8 text-xs h-9 bg-background"
+                        className="pl-8 text-sm h-9 bg-background"
                     />
                 </div>
 
@@ -119,7 +119,7 @@ export function HistoricalDefectsTab() {
                         size="sm"
                         onClick={() => refetch()}
                         disabled={isFetching}
-                        className="h-9 gap-1.5 text-xs"
+                        className="h-9 gap-1.5 text-sm"
                     >
                         <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
                         Refresh
@@ -127,7 +127,7 @@ export function HistoricalDefectsTab() {
                     <Button
                         size="sm"
                         onClick={() => setJsonImportOpen(true)}
-                        className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground font-semibold"
+                        className="h-9 gap-1.5 text-sm bg-primary text-primary-foreground font-semibold"
                     >
                         <FileCode className="w-4 h-4" />
                         Import JSON
@@ -153,7 +153,7 @@ export function HistoricalDefectsTab() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table className="w-full text-left text-sm border-collapse">
                             <thead>
                                 <tr className="border-b border-border/80 bg-muted/50 font-semibold text-muted-foreground">
                                     <th className="py-3 px-4 w-36">Case ID</th>
@@ -177,7 +177,7 @@ export function HistoricalDefectsTab() {
                                             <Badge
                                                 variant="outline"
                                                 className={cn(
-                                                    'text-[10.5px]',
+                                                    'text-sm font-semibold px-2.5 py-0.5',
                                                     row.origin?.includes('Customer') || row.origin?.startsWith('Q1')
                                                         ? 'border-destructive/30 text-destructive bg-destructive/5'
                                                         : 'border-info/30 text-info bg-info/5'
@@ -189,22 +189,22 @@ export function HistoricalDefectsTab() {
                                         <td className="py-3 px-4">
                                             <div className="font-medium text-foreground">{row.materialDesc || row.materialId}</div>
                                             {row.materialDesc && row.materialId && (
-                                                <div className="font-mono text-[10.5px] text-muted-foreground">{row.materialId}</div>
+                                                <div className="font-mono text-sm text-muted-foreground">{row.materialId}</div>
                                             )}
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="font-mono text-foreground font-semibold">{row.workCenterId || '—'}</div>
-                                            <div className="text-[10.5px] text-muted-foreground">{row.workCenterDesc || ''}</div>
+                                            <div className="text-sm text-muted-foreground">{row.workCenterDesc || ''}</div>
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="font-medium text-foreground line-clamp-1">{row.symptomShortText || '—'}</div>
-                                            <div className="text-[10.5px] text-muted-foreground line-clamp-1">
+                                            <div className="text-sm text-muted-foreground line-clamp-1">
                                                 {row.defectCode ? `[${row.defectCode}] ` : ''}{row.defectText || ''}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
                                             {row.rootCauseCategory ? (
-                                                <Badge variant="secondary" className="text-[11px] font-normal">
+                                                <Badge variant="secondary" className="text-sm font-semibold px-2.5 py-0.5">
                                                     {row.rootCauseCategory}
                                                 </Badge>
                                             ) : '—'}
@@ -217,7 +217,7 @@ export function HistoricalDefectsTab() {
                                                     return (
                                                         <Badge
                                                             variant="outline"
-                                                            className="border-success/30 text-success bg-success/10 text-[10.5px] font-medium"
+                                                            className="border-success/30 text-success bg-success/10 text-sm font-semibold px-2.5 py-0.5"
                                                         >
                                                             {s}
                                                         </Badge>
@@ -227,7 +227,7 @@ export function HistoricalDefectsTab() {
                                                     return (
                                                         <Badge
                                                             variant="outline"
-                                                            className="border-info/30 text-info bg-info/10 text-[10.5px] font-medium"
+                                                            className="border-info/30 text-info bg-info/10 text-sm font-semibold px-2.5 py-0.5"
                                                         >
                                                             {s}
                                                         </Badge>
@@ -236,7 +236,7 @@ export function HistoricalDefectsTab() {
                                                 return (
                                                     <Badge
                                                         variant="secondary"
-                                                        className="text-[10.5px] text-muted-foreground bg-muted border border-border/60 font-normal"
+                                                        className="text-sm font-semibold px-2.5 py-0.5 text-muted-foreground bg-muted border border-border/60"
                                                     >
                                                         {s}
                                                     </Badge>
@@ -254,17 +254,17 @@ export function HistoricalDefectsTab() {
                                             {row.provenance === 'closed-in-app' ? (
                                                 <Badge
                                                     variant="outline"
-                                                    className="border-success/30 text-success bg-success/10 text-[10.5px] font-medium gap-1"
+                                                    className="border-success/30 text-success bg-success/10 text-sm font-semibold px-2.5 py-0.5 gap-1"
                                                 >
-                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
                                                     Closed in app
                                                 </Badge>
                                             ) : (
                                                 <Badge
                                                     variant="secondary"
-                                                    className="text-[10.5px] text-muted-foreground bg-muted border border-border/60 font-normal gap-1"
+                                                    className="text-sm font-semibold px-2.5 py-0.5 text-muted-foreground bg-muted border border-border/60 gap-1"
                                                 >
-                                                    <FileCode className="w-3 h-3" />
+                                                    <FileCode className="w-3.5 h-3.5" />
                                                     Imported
                                                 </Badge>
                                             )}
@@ -274,18 +274,18 @@ export function HistoricalDefectsTab() {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => setEditItem(row)}
                                                 >
-                                                    <Edit className="w-3.5 h-3.5" />
+                                                    <Edit className="w-4 h-4" />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                                     onClick={() => setDeleteItem(row)}
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </Button>
                                             </div>
                                         </td>
@@ -328,17 +328,18 @@ export function HistoricalDefectsTab() {
                                 Delete Historical Case
                             </DialogTitle>
                         </DialogHeader>
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-sm text-muted-foreground mt-2">
                             Are you sure you want to delete case <strong className="font-mono text-foreground">{deleteItem.notificationId}</strong>?
                             This action cannot be undone.
                         </p>
                         <DialogFooter className="gap-2 mt-4">
-                            <Button variant="outline" size="sm" onClick={() => setDeleteItem(null)}>Cancel</Button>
+                            <Button variant="outline" size="sm" onClick={() => setDeleteItem(null)} className="h-9 text-sm">Cancel</Button>
                             <Button
                                 variant="destructive"
                                 size="sm"
                                 disabled={deleteMutation.isPending}
                                 onClick={() => deleteMutation.mutate(deleteItem.ID)}
+                                className="h-9 text-sm"
                             >
                                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                             </Button>
@@ -583,7 +584,7 @@ function CaseFormDialog({
                         <FolderKanban className="w-5 h-5 text-primary" />
                         {title}
                     </DialogTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Complete SAP QM Quality Notification master data specification according to ISO 9001 / IATF 16949 standards.
                     </p>
                 </div>
@@ -592,15 +593,15 @@ function CaseFormDialog({
                     <div className="p-5 sm:p-6 space-y-6 flex-1 overflow-y-auto min-h-0">
                         {/* Section 1: SAP Notification & Header */}
                         <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/60">
-                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                            <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-primary">
                                 <FileText className="w-4 h-4" />
                                 1. SAP Notification & General Header
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-semibold">Notification ID (QMNUM)</Label>
-                                        <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                        <Label className="text-sm font-semibold">Notification ID (QMNUM)</Label>
+                                        <Badge variant="outline" className="text-xs font-semibold border-primary/30 bg-primary/10 text-primary">
                                             {isEdit ? 'Assigned' : 'System Assigned'}
                                         </Badge>
                                     </div>
@@ -608,13 +609,13 @@ function CaseFormDialog({
                                         value={displayedNotificationId}
                                         disabled
                                         readOnly
-                                        className="font-mono text-xs h-8 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
+                                        className="font-mono text-sm h-9 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Origin / Type (QMART)</Label>
+                                    <Label className="text-sm font-semibold">Origin / Type (QMART)</Label>
                                     <Select value={origin} onValueChange={setOrigin}>
-                                        <SelectTrigger className="text-xs h-8">
+                                        <SelectTrigger className="text-sm h-9">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -625,9 +626,9 @@ function CaseFormDialog({
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">SAP Status (QSTAT)</Label>
+                                    <Label className="text-sm font-semibold">SAP Status (QSTAT)</Label>
                                     <Select value={sapStatus} onValueChange={setSapStatus}>
-                                        <SelectTrigger className="text-xs h-8">
+                                        <SelectTrigger className="text-sm h-9">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -642,75 +643,75 @@ function CaseFormDialog({
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Found Date (QMDAT)</Label>
+                                    <Label className="text-sm font-semibold">Found Date (QMDAT)</Label>
                                     <Input
                                         type="date"
                                         value={foundDate}
                                         onChange={(e) => setFoundDate(e.target.value)}
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Completion Date (QMDAB)</Label>
+                                    <Label className="text-sm font-semibold">Completion Date (QMDAB)</Label>
                                     <Input
                                         type="date"
                                         value={completionDate}
                                         onChange={(e) => setCompletionDate(e.target.value)}
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Quantity on Hold / Extent (RKMNG)</Label>
+                                    <Label className="text-sm font-semibold">Quantity on Hold / Extent (RKMNG)</Label>
                                     <Input
                                         value={quantityExtent}
                                         onChange={(e) => setQuantityExtent(e.target.value)}
                                         placeholder="e.g. 61 units on hold"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Reported By / Creator (PARNR)</Label>
+                                    <Label className="text-sm font-semibold">Reported By / Creator (PARNR)</Label>
                                     <Input
                                         value={reportedBy}
                                         onChange={(e) => setReportedBy(e.target.value)}
                                         placeholder="e.g. Hans Weber (Line 7)"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Coordinator / Partner (PARNR_KO)</Label>
+                                    <Label className="text-sm font-semibold">Coordinator / Partner (PARNR_KO)</Label>
                                     <Input
                                         value={coordinator}
                                         onChange={(e) => setCoordinator(e.target.value)}
                                         placeholder="e.g. Klaus Schmidt (Quality Mgr)"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <Label className="text-xs font-semibold">Symptom Short Text / Primary Description (QMTXT)</Label>
+                                <Label className="text-sm font-semibold">Symptom Short Text / Primary Description (QMTXT)</Label>
                                 <Textarea
                                     value={symptomShortText}
                                     onChange={(e) => setSymptomShortText(e.target.value)}
                                     placeholder="e.g. Operator stopped the line - rough edge felt on flange after milling"
-                                    className="text-xs resize-y min-h-[50px]"
+                                    className="text-sm resize-y min-h-[50px]"
                                 />
                             </div>
                         </div>
 
                         {/* Section 2: Material & Production Context */}
                         <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/60">
-                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                            <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-primary">
                                 <Layers className="w-4 h-4" />
                                 2. Material & Production Master Data
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Material ID (MATNR) *</Label>
+                                    <Label className="text-sm font-semibold">Material ID (MATNR) *</Label>
                                     <ValueHelpInput
                                         value={materialId}
                                         onChange={setMaterialId}
@@ -727,37 +728,37 @@ function CaseFormDialog({
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Material Description (MAKTX)</Label>
+                                    <Label className="text-sm font-semibold">Material Description (MAKTX)</Label>
                                     <Input
                                         value={materialDesc}
                                         onChange={(e) => setMaterialDesc(e.target.value)}
                                         placeholder="e.g. Bracket Housing X240"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Material Family / Group (MATKL)</Label>
+                                    <Label className="text-sm font-semibold">Material Family / Group (MATKL)</Label>
                                     <Input
                                         value={materialFamily}
                                         onChange={(e) => setMaterialFamily(e.target.value)}
                                         placeholder="e.g. MG-HOUSING / CAST_BRACKET"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Batch ID (CHARG)</Label>
+                                    <Label className="text-sm font-semibold">Batch ID (CHARG)</Label>
                                     <Input
                                         value={batchId}
                                         onChange={(e) => setBatchId(e.target.value)}
                                         placeholder="e.g. B-55901"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Work Center ID (ARBPL)</Label>
+                                    <Label className="text-sm font-semibold">Work Center ID (ARBPL)</Label>
                                     <ValueHelpInput
                                         value={workCenterId}
                                         onChange={setWorkCenterId}
@@ -773,12 +774,12 @@ function CaseFormDialog({
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Work Center Description (KTEXT)</Label>
+                                    <Label className="text-sm font-semibold">Work Center Description (KTEXT)</Label>
                                     <Input
                                         value={workCenterDesc}
                                         onChange={(e) => setWorkCenterDesc(e.target.value)}
                                         placeholder="e.g. CNC Milling Line 7"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                             </div>
@@ -788,13 +789,13 @@ function CaseFormDialog({
                             như hộp thoại ghi nhận lỗi — S7 bỏ "Defect Class" khỏi
                             giao diện, nên tiêu đề cũng không giữ lại "Classification". */}
                         <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/60">
-                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                            <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-primary">
                                 <Microscope className="w-4 h-4" />
                                 3. Defect Codes & QM Measurements
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Defect Code (FECOD)</Label>
+                                    <Label className="text-sm font-semibold">Defect Code (FECOD)</Label>
                                     <ValueHelpInput
                                         value={defectCode}
                                         onChange={setDefectCode}
@@ -815,60 +816,60 @@ function CaseFormDialog({
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Code Group</Label>
+                                    <Label className="text-sm font-semibold">Code Group</Label>
                                     <Input
                                         value={defectCodeGroup}
                                         readOnly
                                         placeholder="— from Defect Code —"
-                                        className="text-xs h-8 font-mono bg-muted/40"
+                                        className="text-sm h-9 font-mono bg-muted/40"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Defect Description (FETXT)</Label>
+                                    <Label className="text-sm font-semibold">Defect Description (FETXT)</Label>
                                     <Input
                                         value={defectText}
                                         onChange={(e) => setDefectText(e.target.value)}
                                         placeholder="e.g. Flange edge burr above limit"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1 border-t border-border/40">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Inspection Characteristic</Label>
+                                    <Label className="text-sm font-semibold">Inspection Characteristic</Label>
                                     <Input
                                         value={characteristic}
                                         onChange={(e) => setCharacteristic(e.target.value)}
                                         placeholder="e.g. Flange burr height"
-                                        className="text-xs h-8"
+                                        className="text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Measured Value</Label>
+                                    <Label className="text-sm font-semibold">Measured Value</Label>
                                     <Input
                                         value={measuredValue}
                                         onChange={(e) => setMeasuredValue(e.target.value)}
                                         placeholder="e.g. 0.32 mm"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Spec Limit / Tolerance</Label>
+                                    <Label className="text-sm font-semibold">Spec Limit / Tolerance</Label>
                                     <Input
                                         value={specValue}
                                         onChange={(e) => setSpecValue(e.target.value)}
                                         placeholder="e.g. max 0.10 mm"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Equipment / Fixture (EQUNR)</Label>
+                                    <Label className="text-sm font-semibold">Equipment / Fixture (EQUNR)</Label>
                                     <Input
                                         value={equipment}
                                         onChange={(e) => setEquipment(e.target.value)}
                                         placeholder="e.g. WC-MILL-07-F1"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                             </div>
@@ -876,15 +877,15 @@ function CaseFormDialog({
 
                         {/* Section 4: Root Cause, FMEA & Financial Impact */}
                         <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/60">
-                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                            <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-primary">
                                 <Wrench className="w-4 h-4" />
                                 4. Root Cause Analysis, FMEA & Financial Impact (D4 / D7 / D8)
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Ishikawa 6M Category (URCOD)</Label>
+                                    <Label className="text-sm font-semibold">Ishikawa 6M Category (URCOD)</Label>
                                     <Select value={rootCauseCategory} onValueChange={setRootCauseCategory}>
-                                        <SelectTrigger className="text-xs h-8">
+                                        <SelectTrigger className="text-sm h-9">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -898,43 +899,43 @@ function CaseFormDialog({
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">FMEA Reference ID (FMEAR)</Label>
+                                    <Label className="text-sm font-semibold">FMEA Reference ID (FMEAR)</Label>
                                     <Input
                                         value={fmeaId}
                                         onChange={(e) => setFmeaId(e.target.value)}
                                         placeholder="e.g. FMEA-MILL07-03"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">COPQ (Cost of Poor Quality in EUR)</Label>
+                                    <Label className="text-sm font-semibold">COPQ (Cost of Poor Quality in EUR)</Label>
                                     <Input
                                         type="number"
                                         value={copqEur}
                                         onChange={(e) => setCopqEur(e.target.value)}
                                         placeholder="e.g. 14200"
-                                        className="font-mono text-xs h-8"
+                                        className="font-mono text-sm h-9"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Root Cause Detail / 5-Why Conclusion (URTXT)</Label>
+                                    <Label className="text-sm font-semibold">Root Cause Detail / 5-Why Conclusion (URTXT)</Label>
                                     <Textarea
                                         value={rootCauseDetail}
                                         onChange={(e) => setRootCauseDetail(e.target.value)}
                                         placeholder="e.g. Hydraulic clamping cylinder internal piston seal degradation on fixture F1"
-                                        className="text-xs resize-y min-h-[50px]"
+                                        className="text-sm resize-y min-h-[50px]"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold">Proven Corrective Action (PCA / D5)</Label>
+                                    <Label className="text-sm font-semibold">Proven Corrective Action (PCA / D5)</Label>
                                     <Textarea
                                         value={correctiveAction}
                                         onChange={(e) => setCorrectiveAction(e.target.value)}
                                         placeholder="e.g. Replaced cylinder seal kit with Viton seals; installed digital pressure sensor interlock"
-                                        className="text-xs resize-y min-h-[50px]"
+                                        className="text-sm resize-y min-h-[50px]"
                                     />
                                 </div>
                             </div>
@@ -942,10 +943,10 @@ function CaseFormDialog({
                     </div>
 
                     <div className="flex flex-row items-center justify-end gap-2.5 p-4 sm:px-6 border-t border-border/80 bg-background shrink-0">
-                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 text-sm">
                             Cancel
                         </Button>
-                        <Button type="submit" size="sm" disabled={isPending || defectCodeOutside} className="bg-primary font-semibold gap-1.5">
+                        <Button type="submit" size="sm" disabled={isPending || defectCodeOutside} className="h-9 text-sm bg-primary font-semibold gap-1.5">
                             {isPending ? <Spinner className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                             Save Historical Case
                         </Button>
@@ -1139,14 +1140,14 @@ function CaseJsonImportDialog({
                         <FileCode className="w-5 h-5 text-primary" />
                         Import Historical Defect Cases from JSON
                     </DialogTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Supports both flat JSON and full nested SAP Golden Case format.
                     </p>
                 </div>
 
                 <div className="p-5 sm:p-6 flex flex-col flex-1 min-h-0 space-y-3 overflow-hidden">
                     <div className="flex items-center justify-between shrink-0">
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                             Paste a single JSON object or an array of defect case objects:
                         </p>
                         <Button
@@ -1154,7 +1155,7 @@ function CaseJsonImportDialog({
                             variant="ghost"
                             size="sm"
                             onClick={handleLoadSample}
-                            className="h-7 text-xs text-primary hover:underline cursor-pointer gap-1"
+                            className="h-8 text-sm text-primary hover:underline cursor-pointer gap-1"
                         >
                             <Sparkles className="w-3.5 h-3.5" />
                             Insert Sample Template
@@ -1166,22 +1167,22 @@ function CaseJsonImportDialog({
                             value={jsonText}
                             onChange={(e) => { setJsonText(e.target.value); setParseError(null); }}
                             placeholder={sampleJson}
-                            className="font-mono text-xs h-[360px] max-h-[50vh] sm:max-h-[55vh] w-full bg-background resize-none overflow-y-auto"
+                            className="font-mono text-sm h-[360px] max-h-[50vh] sm:max-h-[55vh] w-full bg-background resize-none overflow-y-auto"
                         />
                     </div>
 
                     {parseError && (
-                        <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 p-2.5 rounded-md shrink-0">
+                        <div className="flex items-center gap-1.5 text-sm text-destructive bg-destructive/10 p-2.5 rounded-md shrink-0">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             <span>{parseError}</span>
                         </div>
                     )}
 
                     <div className="flex flex-row items-center justify-end gap-2.5 pt-3 border-t border-border/80 shrink-0">
-                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing} className="h-9 text-sm">
                             Cancel
                         </Button>
-                        <Button type="button" size="sm" onClick={handleImport} disabled={importing} className="bg-primary font-semibold gap-1.5">
+                        <Button type="button" size="sm" onClick={handleImport} disabled={importing} className="h-9 text-sm bg-primary font-semibold gap-1.5">
                             {importing ? <Spinner className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                             Import Cases
                         </Button>

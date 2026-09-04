@@ -76,7 +76,7 @@ function CompletenessCell({ report }: { report: Report8D }) {
                     style={{ width: `${(approved / TOTAL_STEPS) * 100}%` }}
                 />
             </div>
-            <span className="mt-1 block text-[10.5px] tabular-nums text-muted-foreground">
+            <span className="mt-1 block text-sm tabular-nums text-muted-foreground">
                 {approved}/{TOTAL_STEPS} steps
             </span>
         </div>
@@ -114,7 +114,7 @@ function RunningSpinner() {
     return (
         <div className="flex items-center gap-1.5 text-primary">
             <Spinner className="w-3.5 h-3.5" />
-            <span className="text-xs">Analyzing…</span>
+            <span className="text-sm font-medium">Analyzing…</span>
         </div>
     );
 }
@@ -139,7 +139,7 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         labelKey: '8D ID',
         width: 140,
         minWidth: 120,
-        className: 'font-mono text-xs font-semibold',
+        className: 'font-mono text-sm font-semibold',
     },
     {
         // Mắt xích ngược về bản ghi lỗi. Hiện Ở ĐÂY chứ không chỉ ở trang chi
@@ -155,8 +155,8 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => (
             row.sourceDefectId
-                ? <span className="font-mono text-xs">{row.sourceDefectId}</span>
-                : <span className="text-xs text-muted-foreground" title="Imported as JSON — no defect record">—</span>
+                ? <span className="font-mono text-sm">{row.sourceDefectId}</span>
+                : <span className="text-sm text-muted-foreground" title="Imported as JSON — no defect record">—</span>
         ),
     },
     {
@@ -178,7 +178,7 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
                 <div className="min-w-0">
                     <span
                         className={cn(
-                            'inline-block rounded-full px-2 py-0.5 text-[11px] font-medium',
+                            'inline-block rounded-full px-2.5 py-1 text-sm font-medium',
                             q1 ? 'bg-destructive/10 text-destructive' : 'bg-info/10 text-info',
                         )}
                     >
@@ -186,7 +186,7 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
                     </span>
                     {q1 && row.customerRef && (
                         <div
-                            className="mt-0.5 font-mono text-[10.5px] text-muted-foreground truncate"
+                            className="mt-0.5 font-mono text-sm text-muted-foreground truncate"
                             title="Customer complaint reference"
                         >
                             {row.customerRef}
@@ -206,9 +206,9 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         // doc, con "MAT-10247" thi chi noi duoc voi he thong.
         render: (_v, row) => (
             <div className="min-w-0">
-                <div className="text-xs">{row.materialDesc || row.materialId || '-'}</div>
+                <div className="text-sm">{row.materialDesc || row.materialId || '-'}</div>
                 {row.materialDesc && row.materialId && (
-                    <div className="font-mono text-[10.5px] text-muted-foreground">{row.materialId}</div>
+                    <div className="font-mono text-sm text-muted-foreground">{row.materialId}</div>
                 )}
             </div>
         ),
@@ -220,7 +220,7 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         minWidth: 200,
         renderType: 'custom',
         render: (_v, row) => (
-            <span className="text-xs">{row.symptomShortText || '-'}</span>
+            <span className="text-sm">{row.symptomShortText || '-'}</span>
         ),
     },
     {
@@ -239,11 +239,11 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => {
             const cls = row.work.defectClass;
-            if (!cls) return <span className="text-xs text-muted-foreground">—</span>;
+            if (!cls) return <span className="text-sm text-muted-foreground">—</span>;
             return (
                 <span
                     className={cn(
-                        'inline-block rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        'inline-block rounded-full px-2.5 py-1 text-sm font-medium',
                         SEVERITY_TONE[cls] ?? 'bg-muted text-muted-foreground',
                     )}
                     title={`${PRIORITY_LABEL[row.work.priority]} priority — ${row.work.priorityReason}`}
@@ -268,20 +268,20 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => {
             const { currentStep, currentStepLabel, changeRequested, closed } = row.work;
-            if (closed) return <span className="text-xs text-success">Signed off</span>;
+            if (closed) return <span className="text-sm text-success">Signed off</span>;
             if (changeRequested.length) {
                 return (
                     <span
-                        className="inline-block rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning"
+                        className="inline-block rounded-full bg-warning/10 px-2.5 py-1 text-sm font-medium text-warning"
                         title={`Sent back for changes: ${changeRequested.join(', ')}`}
                     >
                         {changeRequested[0]} · changes
                     </span>
                 );
             }
-            if (!currentStep) return <span className="text-xs text-muted-foreground">—</span>;
+            if (!currentStep) return <span className="text-sm text-muted-foreground">—</span>;
             return (
-                <span className="text-xs">
+                <span className="text-sm">
                     <span className="font-mono font-semibold">{currentStep}</span>
                     <span className="text-muted-foreground"> {currentStepLabel ?? STEP_SHORT_LABEL[currentStep]}</span>
                 </span>
@@ -320,11 +320,11 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => {
             const { ageDays, closed, closureOverdue } = row.work;
-            if (ageDays === null) return <span className="text-xs text-muted-foreground">—</span>;
+            if (ageDays === null) return <span className="text-sm text-muted-foreground">—</span>;
             return (
                 <span
                     className={cn(
-                        'text-xs tabular-nums',
+                        'text-sm tabular-nums',
                         closureOverdue ? 'font-semibold text-destructive' : 'text-foreground',
                     )}
                     title={closed ? `Closed after ${ageDays} days` : `Opened ${formatDate(row.createdAt)}`}
@@ -357,7 +357,7 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
             if (!dueDate) {
                 return (
                     <span
-                        className="text-xs text-muted-foreground"
+                        className="text-sm text-muted-foreground"
                         title="No due date committed — set one on the case overview"
                     >
                         —
@@ -366,12 +366,12 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
             }
             return (
                 <div className="min-w-0">
-                    <div className={cn('text-xs tabular-nums', slaOverdue && 'font-semibold text-destructive')}>
+                    <div className={cn('text-sm tabular-nums', slaOverdue && 'font-semibold text-destructive')}>
                         {formatDate(dueDate)}
                     </div>
                     {!closed && dueIn !== null && (
                         <div className={cn(
-                            'text-[10.5px] tabular-nums',
+                            'text-sm tabular-nums',
                             slaOverdue ? 'text-destructive' : dueIn <= 3 ? 'text-warning' : 'text-muted-foreground',
                         )}>
                             {dueIn < 0 ? `${Math.abs(dueIn)}d overdue` : dueIn === 0 ? 'due today' : `in ${dueIn}d`}
@@ -396,10 +396,10 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => {
             const { owner, ownerIsFallback } = row.work;
-            if (!owner) return <span className="text-xs text-muted-foreground">Unassigned</span>;
+            if (!owner) return <span className="text-sm text-muted-foreground">Unassigned</span>;
             return (
                 <span
-                    className={cn('text-xs truncate', ownerIsFallback ? 'text-muted-foreground italic' : 'text-foreground')}
+                    className={cn('text-sm truncate', ownerIsFallback ? 'text-muted-foreground italic' : 'text-foreground')}
                     title={ownerIsFallback ? 'Coordinator — 8D team leader not confirmed in D1 yet' : '8D Team Leader (D1)'}
                 >
                     {owner}
@@ -418,10 +418,10 @@ const CORE_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => (
             <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground truncate">
+                <div className="text-sm font-medium text-foreground truncate">
                     {row.modifiedBy || row.createdBy || 'System'}
                 </div>
-                <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                <div className="text-sm text-muted-foreground tabular-nums mt-0.5">
                     {formatDateTime(row.modifiedAt || row.createdAt)}
                 </div>
             </div>
@@ -439,7 +439,7 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         // Vô nghĩa trước D4 và dài sau D4 — hai lý do để nó không nằm ở bộ mặc định.
         render: (_v, row) => (
-            <span className="text-xs text-muted-foreground">{row.rootCauseCategory || '—'}</span>
+            <span className="text-sm text-muted-foreground">{row.rootCauseCategory || '—'}</span>
         ),
     },
     {
@@ -456,10 +456,10 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => {
             const lag = row.work.responseLagDays;
-            if (lag === null) return <span className="text-xs text-muted-foreground">—</span>;
+            if (lag === null) return <span className="text-sm text-muted-foreground">—</span>;
             return (
                 <span
-                    className={cn('text-xs tabular-nums', lag > 7 ? 'text-warning' : 'text-muted-foreground')}
+                    className={cn('text-sm tabular-nums', lag > 7 ? 'text-warning' : 'text-muted-foreground')}
                     title={`Defect found ${formatDate(row.foundDate)}, 8D opened ${formatDate(row.createdAt)}`}
                 >
                     {lag}d
@@ -476,7 +476,7 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         render: (_v, row) => {
             const value = row.copqEur === null || row.copqEur === undefined ? null : Number(row.copqEur);
             return (
-                <span className="text-xs tabular-nums">
+                <span className="text-sm tabular-nums">
                     {value === null || Number.isNaN(value)
                         ? '—'
                         : value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}
@@ -492,9 +492,9 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => (
             <div className="min-w-0">
-                <div className="text-xs truncate">{row.workCenterDesc || row.workCenterId || '—'}</div>
+                <div className="text-sm truncate">{row.workCenterDesc || row.workCenterId || '—'}</div>
                 {row.workCenterDesc && row.workCenterId && (
-                    <div className="font-mono text-[10.5px] text-muted-foreground">{row.workCenterId}</div>
+                    <div className="font-mono text-sm text-muted-foreground">{row.workCenterId}</div>
                 )}
             </div>
         ),
@@ -505,7 +505,7 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         width: 90,
         minWidth: 80,
         renderType: 'custom',
-        render: (_v, row) => <span className="font-mono text-xs">{row.plant || '—'}</span>,
+        render: (_v, row) => <span className="font-mono text-sm">{row.plant || '—'}</span>,
     },
     {
         key: 'createdBy',
@@ -515,8 +515,8 @@ const OPTIONAL_COLUMNS: DataTableColumn<WorklistRow>[] = [
         renderType: 'custom',
         render: (_v, row) => (
             <div className="min-w-0">
-                <div className="text-xs truncate">{row.createdBy || 'System'}</div>
-                <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                <div className="text-sm truncate">{row.createdBy || 'System'}</div>
+                <div className="text-sm text-muted-foreground tabular-nums mt-0.5">
                     {formatDateTime(row.createdAt)}
                 </div>
             </div>
@@ -654,7 +654,7 @@ export function EightDListPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-foreground">8D Reports</h1>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-sm text-muted-foreground mt-0.5">
                             Open cases first, most urgent at the top — by severity, customer commitment, then age
                         </p>
                     </div>
@@ -682,7 +682,7 @@ export function EightDListPage() {
             </div>
 
             {running > 0 && (
-                <div className="flex items-center gap-2 text-xs text-info bg-info/5 border border-info/20 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-info bg-info/5 border border-info/20 rounded-lg px-3.5 py-2.5">
                     <Spinner className="w-3.5 h-3.5" />
                     {running} analysis running — this page refreshes automatically. Each run takes about 3 minutes.
                 </div>
@@ -705,7 +705,7 @@ export function EightDListPage() {
                             type="button"
                             onClick={() => setFilter(key)}
                             className={cn(
-                                'rounded-full border px-3 py-1 text-xs transition-colors',
+                                'rounded-full border px-3 py-1.5 text-sm transition-colors',
                                 active
                                     ? 'border-primary bg-primary text-primary-foreground'
                                     : count === 0
@@ -722,7 +722,7 @@ export function EightDListPage() {
 
             {/* ── Banner giải thích ── */}
             <Card className="p-4 bg-muted/40 border border-border/60">
-                <div className="flex items-start gap-3 text-xs text-muted-foreground">
+                <div className="flex items-start gap-3 text-sm text-muted-foreground">
                     <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <div>
                         <span className="font-semibold text-foreground">Reading this list:</span>{' '}

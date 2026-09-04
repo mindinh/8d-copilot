@@ -1176,17 +1176,17 @@ function numberOrNull(val?: string | null): number | null {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-primary/10 text-primary text-xs font-mono px-2 py-0.5 rounded font-semibold border border-primary/20">
+                                <span className="bg-primary/10 text-primary text-sm font-mono px-2.5 py-0.5 rounded font-semibold border border-primary/20">
                                     SAP UI5 QM Simulation
                                 </span>
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-sm px-2.5 py-0.5">
                                     {isEditing ? 'Fiori Change Defect' : 'Fiori Record Defect'}
                                 </Badge>
                             </div>
                             <DialogTitle className="text-lg font-bold text-foreground">
                                 {isEditing ? `Edit Quality Defect ${defect?.defectId ?? ''}` : 'Record Quality Defect'}
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">
+                            <DialogDescription className="text-sm text-muted-foreground">
                                 {isEditing
                                     ? 'Corrections to the defect record. The defect number and its status do not change here — status follows the 8D, and the number is issued once.'
                                     : 'Simulate creating a SAP QM Quality Notification. The defect is recorded on its own — starting an 8D is a separate, explicit step from the Defects list.'}
@@ -1206,7 +1206,7 @@ function numberOrNull(val?: string | null): number | null {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="gap-1.5 text-xs bg-primary/10 hover:bg-primary/20 border-primary text-primary font-semibold shadow-2xs"
+                                className="gap-1.5 h-9 text-sm bg-primary/10 hover:bg-primary/20 border-primary text-primary font-semibold shadow-2xs"
                             >
                                 <Upload className="w-3.5 h-3.5 text-primary" />
                                 Choose .JSON File
@@ -1219,7 +1219,7 @@ function numberOrNull(val?: string | null): number | null {
                                     setShowJsonImport(!showJsonImport);
                                     if (showJsonPreview) setShowJsonPreview(false);
                                 }}
-                                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                className="gap-1.5 h-9 text-sm text-muted-foreground hover:text-foreground"
                             >
                                 <FileText className="w-3.5 h-3.5 text-muted-foreground" />
                                 {showJsonImport ? 'Hide Paste Box' : 'Paste JSON'}
@@ -1232,7 +1232,7 @@ function numberOrNull(val?: string | null): number | null {
                                     setShowJsonPreview(!showJsonPreview);
                                     if (showJsonImport) setShowJsonImport(false);
                                 }}
-                                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                className="gap-1.5 h-9 text-sm text-muted-foreground hover:text-foreground"
                             >
                                 <Code2 className="w-3.5 h-3.5 text-muted-foreground" />
                                 {showJsonPreview ? 'Hide Live Payload' : 'Inspect Payload'}
@@ -1248,7 +1248,7 @@ function numberOrNull(val?: string | null): number | null {
                     <CardHeader className="py-3 px-4 flex flex-row items-center justify-between border-b border-border/60 bg-muted/30">
                         <div className="flex items-center gap-2">
                             <FileJson className="w-4 h-4 text-primary" />
-                            <span className="text-xs font-semibold text-foreground">
+                            <span className="text-sm font-semibold text-foreground">
                                 Paste JSON Payload (SAP QM Deep Structure or OData Object)
                             </span>
                         </div>
@@ -1258,7 +1258,7 @@ function numberOrNull(val?: string | null): number | null {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="h-7 text-xs gap-1 text-primary border-primary/30"
+                                className="h-8 text-sm gap-1 text-primary border-primary/30"
                             >
                                 <Upload className="w-3 h-3" />
                                 Browse File
@@ -1271,7 +1271,7 @@ function numberOrNull(val?: string | null): number | null {
                                     setImportJsonText('');
                                     setImportError(null);
                                 }}
-                                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                className="h-8 text-sm text-muted-foreground hover:text-foreground"
                             >
                                 Clear
                             </Button>
@@ -1279,13 +1279,13 @@ function numberOrNull(val?: string | null): number | null {
                     </CardHeader>
                     <CardContent className="p-4 space-y-3">
                         <Textarea
-                            className="font-mono text-xs min-h-36 bg-background border-border/70 leading-relaxed"
+                            className="font-mono text-sm min-h-36 bg-background border-border/70 leading-relaxed"
                             placeholder='{\n  "notificationId": "8D-10049001",\n  "symptomShortText": "Operator stopped the line - rough edge felt on flange after milling",\n  "material": { "materialId": "MAT-10247", "description": "Bracket Housing X240" },\n  "workCenter": { "workCenterId": "WC-MILL-07", "description": "CNC Milling Line 7" },\n  "defect": { "defectCode": "DEF-0489", "defectText": "Flange edge burr above limit" },\n  "defectQuantity": 61,\n  "defectQuantityUom": "PC",\n  "inspections": [{ "characteristic": "Burr height at flange edge", "measuredValue": "0.26", "specUpperLimit": 0.10, "specUom": "mm", "valuation": "Rejected" }]\n}'
                             value={importJsonText}
                             onChange={(e) => setImportJsonText(e.target.value)}
                         />
                         {importError && (
-                            <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md p-2">
+                            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md p-2">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 <span>{importError}</span>
                             </div>
@@ -1299,7 +1299,7 @@ function numberOrNull(val?: string | null): number | null {
                                     setShowJsonImport(false);
                                     setImportError(null);
                                 }}
-                                className="h-7 text-xs"
+                                className="h-8 text-sm"
                             >
                                 Cancel
                             </Button>
@@ -1307,7 +1307,7 @@ function numberOrNull(val?: string | null): number | null {
                                 type="button"
                                 size="sm"
                                 onClick={() => applyJsonPayload(importJsonText)}
-                                className="h-7 text-xs font-semibold gap-1.5 px-3"
+                                className="h-8 text-sm font-semibold gap-1.5 px-3"
                                 disabled={!importJsonText.trim()}
                             >
                                 <Sparkles className="w-3.5 h-3.5" />
@@ -1324,7 +1324,7 @@ function numberOrNull(val?: string | null): number | null {
                     <CardHeader className="py-3 px-4 flex flex-row items-center justify-between border-b border-slate-800">
                         <div className="flex items-center gap-2">
                             <Code2 className="w-4 h-4 text-cyan-400" />
-                            <span className="text-xs font-mono font-semibold text-cyan-400">
+                            <span className="text-sm font-mono font-semibold text-cyan-400">
                                 Generated SAP QM OData Payload (JSON)
                             </span>
                         </div>
@@ -1333,14 +1333,14 @@ function numberOrNull(val?: string | null): number | null {
                             variant="ghost"
                             size="sm"
                             onClick={copyJson}
-                            className="h-7 text-xs text-slate-300 hover:text-white hover:bg-slate-800 gap-1"
+                            className="h-8 text-sm text-slate-300 hover:text-white hover:bg-slate-800 gap-1"
                         >
                             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                             {copied ? 'Copied!' : 'Copy Payload'}
                         </Button>
                     </CardHeader>
                     <CardContent className="p-4">
-                        <pre className="text-[11px] font-mono leading-relaxed overflow-x-auto text-cyan-200 max-h-72 p-2 rounded bg-slate-900 border border-slate-800">
+                        <pre className="text-sm font-mono leading-relaxed overflow-x-auto text-cyan-200 max-h-72 p-2 rounded bg-slate-900 border border-slate-800">
                             {payloadJsonString}
                         </pre>
                     </CardContent>
@@ -1349,7 +1349,7 @@ function numberOrNull(val?: string | null): number | null {
 
             {/* Error Display Banner */}
             {error && (
-                <div className="flex items-start gap-2.5 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                <div className="flex items-start gap-2.5 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div className="flex-1 font-medium">{error}</div>
                 </div>
@@ -1365,13 +1365,13 @@ function numberOrNull(val?: string | null): number | null {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <ShieldAlert className="w-4 h-4 text-primary" />
-                                <CardTitle className="text-sm font-bold">1. Notification Header</CardTitle>
+                                <CardTitle className="text-base font-bold">1. Notification Header</CardTitle>
                             </div>
-                            <Badge variant="outline" className="font-mono text-[11px]">
+                            <Badge variant="outline" className="font-mono text-sm px-2.5 py-0.5">
                                 SAP QM Notification
                             </Badge>
                         </div>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             Basic SAP defect header parameters including notification ID, origin type, and symptom summary.
                         </CardDescription>
                     </CardHeader>
@@ -1380,18 +1380,18 @@ function numberOrNull(val?: string | null): number | null {
                         {/* Notification ID — tự động cấp theo dải số, tuyệt đối không cho nhập tay */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-semibold">Notification ID</Label>
-                                <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                <Label className="text-sm font-semibold">Notification ID</Label>
+                                <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 border-primary/30 bg-primary/10 text-primary">
                                     {isEditing ? 'Assigned' : 'System Assigned'}
                                 </Badge>
                             </div>
                             <Input
                                 value={displayedNotificationId}
-                                className="font-mono text-xs font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
+                                className="font-mono h-9 text-sm font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
                                 readOnly
                                 disabled
                             />
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 {isEditing
                                     ? 'Issued once, when the defect was recorded. It cannot change — the 8D and the audit trail refer to it.'
                                     : 'Auto-assigned by system number sequence (SAP QMEL) on save.'}
@@ -1404,9 +1404,9 @@ function numberOrNull(val?: string | null): number | null {
                           nghĩa là một loại case chỉ nhập được bằng file.
                         */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Defect Origin / Type</Label>
+                            <Label className="text-sm font-semibold">Defect Origin / Type</Label>
                             <Select value={origin} onValueChange={changeOrigin}>
-                                <SelectTrigger className="text-xs">
+                                <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Select origin" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1419,25 +1419,25 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Found Date */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Found Date</Label>
+                            <Label className="text-sm font-semibold">Found Date</Label>
                             <Input
                                 type="date"
                                 value={foundDate}
                                 onChange={(e) => setFoundDate(e.target.value)}
-                                className="text-xs"
+                                className="h-9 text-sm"
                             />
                         </div>
 
                         {/* Symptom Short Text */}
                         <div className="md:col-span-2 space-y-1.5">
-                            <Label className="text-xs font-semibold">
+                            <Label className="text-sm font-semibold">
                                 Symptom Short Text / Primary Description <span className="text-destructive">*</span>
                             </Label>
                             <Input
                                 value={symptomShortText}
                                 onChange={(e) => setSymptomShortText(e.target.value)}
                                 placeholder="e.g. Operator stopped the line - rough edge felt on flange after milling"
-                                className="text-xs"
+                                className="h-9 text-sm"
                                 required
                             />
                         </div>
@@ -1449,7 +1449,7 @@ function numberOrNull(val?: string | null): number | null {
                           vì thế. Đơn vị đi qua danh mục UOM đã seed sẵn.
                         */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Quantity Affected</Label>
+                            <Label className="text-sm font-semibold">Quantity Affected</Label>
                             <div className="flex gap-2">
                                 <Input
                                     type="number"
@@ -1458,7 +1458,7 @@ function numberOrNull(val?: string | null): number | null {
                                     value={defectQuantity}
                                     onChange={(e) => setDefectQuantity(e.target.value)}
                                     placeholder="e.g. 61"
-                                    className="text-xs flex-1"
+                                    className="h-9 text-sm flex-1"
                                 />
                                 <div className="w-28">
                                     <ValueHelpInput
@@ -1479,14 +1479,14 @@ function numberOrNull(val?: string | null): number | null {
                           nằm ở phía khách hàng / nhà cung cấp, ta không sở hữu nó.
                         */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Reference Number</Label>
+                            <Label className="text-sm font-semibold">Reference Number</Label>
                             <Input
                                 value={referenceNumber}
                                 onChange={(e) => setReferenceNumber(e.target.value)}
                                 placeholder="e.g. customer complaint or delivery note no."
-                                className="font-mono text-xs"
+                                className="font-mono h-9 text-sm"
                             />
-                            <p className="text-[10.5px] leading-snug text-muted-foreground">
+                            <p className="text-sm leading-snug text-muted-foreground">
                                 External document this defect refers to. Leave empty if there is none.
                             </p>
                         </div>
@@ -1498,8 +1498,8 @@ function numberOrNull(val?: string | null): number | null {
                         */}
                         {!originAllowsLot ? (
                             <div className="md:col-span-2 space-y-1.5">
-                                <Label className="text-xs font-semibold">Discovery</Label>
-                                <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+                                <Label className="text-sm font-semibold">Discovery</Label>
+                                <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm leading-snug text-muted-foreground">
                                     A customer complaint reaches us after delivery, so it has no inspection
                                     lot of ours and no discovery mode. Record the complaint reference below
                                     instead.
@@ -1509,9 +1509,9 @@ function numberOrNull(val?: string | null): number | null {
                         <>
                         {/* Discovery Mode / Entry Mode */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Discovery Mode</Label>
+                            <Label className="text-sm font-semibold">Discovery Mode</Label>
                             <Select value={entryMode} onValueChange={(val: any) => setEntryMode(val)}>
-                                <SelectTrigger className="text-xs">
+                                <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Select mode" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1531,7 +1531,7 @@ function numberOrNull(val?: string | null): number | null {
                         */}
                         {entryMode === 'during-inspection' ? (
                             <div className="md:col-span-2 space-y-1.5">
-                                <Label className="text-xs font-semibold">Inspection Lot ID</Label>
+                                <Label className="text-sm font-semibold">Inspection Lot ID</Label>
                                 <ValueHelpInput
                                     value={inspectionLotId}
                                     onChange={setInspectionLotId}
@@ -1542,7 +1542,7 @@ function numberOrNull(val?: string | null): number | null {
                                     catalogLabel="the inspection lot list"
                                     quiet
                                 />
-                                <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                <p className="text-sm leading-snug text-muted-foreground">
                                     {materialId.trim()
                                         ? `Lots for ${materialId.trim()}. Picking one fills material, plant, work centre and a result row.`
                                         : 'Picking a lot fills material, plant, work centre and a result row. Choose a material below to narrow the list.'}
@@ -1550,11 +1550,11 @@ function numberOrNull(val?: string | null): number | null {
                             </div>
                         ) : (
                             <div className="md:col-span-2 space-y-1.5">
-                                <Label className="text-xs font-semibold">Inspection Lot</Label>
+                                <Label className="text-sm font-semibold">Inspection Lot</Label>
                                 <Input
                                     value="N/A (Found outside scheduled inspection)"
                                     disabled
-                                    className="text-xs bg-muted/60 text-muted-foreground"
+                                    className="h-9 text-sm bg-muted/60 text-muted-foreground"
                                 />
                             </div>
                         )}
@@ -1568,9 +1568,9 @@ function numberOrNull(val?: string | null): number | null {
                     <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
                         <div className="flex items-center gap-2">
                             <Box className="w-4 h-4 text-primary" />
-                            <CardTitle className="text-sm font-bold">2. Material & Production Context</CardTitle>
+                            <CardTitle className="text-base font-bold">2. Material & Production Context</CardTitle>
                         </div>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             Master data links connecting the defect to Material Master, Batch Management, and Work Center.
                         </CardDescription>
                     </CardHeader>
@@ -1578,7 +1578,7 @@ function numberOrNull(val?: string | null): number | null {
                     <CardContent className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
                         {/* Plant */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Plant</Label>
+                            <Label className="text-sm font-semibold">Plant</Label>
                             <ValueHelpInput
                                 value={plant}
                                 onChange={setPlant}
@@ -1593,7 +1593,7 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Material ID */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Material ID</Label>
+                            <Label className="text-sm font-semibold">Material ID</Label>
                             <ValueHelpInput
                                 value={materialId}
                                 onChange={(newMat) => {
@@ -1620,12 +1620,12 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Material Description */}
                         <div className="md:col-span-2 space-y-1.5">
-                            <Label className="text-xs font-semibold">Material Description</Label>
+                            <Label className="text-sm font-semibold">Material Description</Label>
                             <Input
                                 value={materialDesc}
                                 onChange={(e) => setMaterialDesc(e.target.value)}
                                 placeholder="e.g. Bracket Housing X240"
-                                className="text-xs"
+                                className="h-9 text-sm"
                             />
                         </div>
 
@@ -1634,18 +1634,18 @@ function numberOrNull(val?: string | null): number | null {
                             thêm. Nhóm vật tư thì không — nó phải khớp master data,
                             và một nhóm gõ tay lệch mã là một case không lọc được. */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Material Group</Label>
+                            <Label className="text-sm font-semibold">Material Group</Label>
                             <Input
                                 value={materialGroup}
                                 readOnly
                                 placeholder="— from Material ID —"
-                                className="font-mono text-xs bg-muted/60 text-muted-foreground"
+                                className="font-mono h-9 text-sm bg-muted/60 text-muted-foreground"
                             />
                         </div>
 
                         {/* Batch ID — phụ thuộc vào Material ID */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Batch ID</Label>
+                            <Label className="text-sm font-semibold">Batch ID</Label>
                             <ValueHelpInput
                                 value={batchId}
                                 onChange={setBatchId}
@@ -1663,7 +1663,7 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Work Center ID */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Work Center ID</Label>
+                            <Label className="text-sm font-semibold">Work Center ID</Label>
                             <ValueHelpInput
                                 value={workCenterId}
                                 onChange={setWorkCenterId}
@@ -1680,12 +1680,12 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Work Center Description — dẫn xuất, xem ghi chú ở Material Group */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Work Center Description</Label>
+                            <Label className="text-sm font-semibold">Work Center Description</Label>
                             <Input
                                 value={workCenterDesc}
                                 readOnly
                                 placeholder="— from Work Center ID —"
-                                className="text-xs bg-muted/60 text-muted-foreground"
+                                className="h-9 text-sm bg-muted/60 text-muted-foreground"
                             />
                         </div>
                     </CardContent>
@@ -1701,9 +1701,9 @@ function numberOrNull(val?: string | null): number | null {
                     <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
                         <div className="flex items-center gap-2">
                             <Factory className="w-4 h-4 text-primary" />
-                            <CardTitle className="text-sm font-bold">3. Defect Codes & Measurements</CardTitle>
+                            <CardTitle className="text-base font-bold">3. Defect Codes & Measurements</CardTitle>
                         </div>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             Defect catalog codes and quantitative measurement values against tolerance limits.
                         </CardDescription>
                     </CardHeader>
@@ -1714,7 +1714,7 @@ function numberOrNull(val?: string | null): number | null {
                             mã, và mã suy ra mức nghiêm trọng. */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-border/40">
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Defect Code Group</Label>
+                                <Label className="text-sm font-semibold">Defect Code Group</Label>
                                 <ValueHelpInput
                                     value={defectCodeGroup}
                                     onChange={(next) => {
@@ -1724,7 +1724,7 @@ function numberOrNull(val?: string | null): number | null {
                                         // hai ô đều "có trong danh mục". Xoá mã đi để
                                         // người dùng chọn lại trong nhóm mới.
                                         if (defectCode) {
-                                            setDefectCode('');
+                                             setDefectCode('');
                                             setDefectText('');
                                             setDefectClass('');
                                         }
@@ -1738,7 +1738,7 @@ function numberOrNull(val?: string | null): number | null {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Defect Code</Label>
+                                <Label className="text-sm font-semibold">Defect Code</Label>
                                 <ValueHelpInput
                                     value={defectCode}
                                     onChange={setDefectCode}
@@ -1757,21 +1757,21 @@ function numberOrNull(val?: string | null): number | null {
                                 MÃ, không phải ý kiến của người đang ghi nhận: hai
                                 người gặp cùng một lỗi phải ra cùng một mức. */}
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Severity</Label>
+                                <Label className="text-sm font-semibold">Severity</Label>
                                 <Input
                                     value={defectClass}
                                     readOnly
                                     placeholder="— from Defect Code —"
-                                    className="text-xs bg-muted/60 text-muted-foreground"
+                                    className="h-9 text-sm bg-muted/60 text-muted-foreground"
                                 />
                             </div>
                             <div className="md:col-span-3 space-y-1.5">
-                                <Label className="text-xs font-semibold">Defect Catalog Description</Label>
+                                <Label className="text-sm font-semibold">Defect Catalog Description</Label>
                                 <Input
                                     value={defectText}
                                     onChange={(e) => setDefectText(e.target.value)}
                                     placeholder="e.g. Flange edge burr above limit"
-                                    className="text-xs"
+                                    className="h-9 text-sm"
                                 />
                             </div>
                         </div>
@@ -1780,13 +1780,13 @@ function numberOrNull(val?: string | null): number | null {
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
-                                    <Label className="text-xs font-semibold">
+                                    <Label className="text-sm font-semibold">
                                         Inspection Characteristics & Measured Values (D2 Evidence)
                                     </Label>
-                                    <p className="text-[11px] text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground">
                                         Tip: If this material has historical inspection lots across multiple equipments/fixtures, the system will automatically compute the Is / Is-Not comparison in D2.
                                     </p>
-                                    <p className="text-[11px] text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground">
                                         A row counts as evidence only once it can be judged — set the
                                         valuation, or give a limit for the measured value to be checked against.
                                     </p>
@@ -1796,7 +1796,7 @@ function numberOrNull(val?: string | null): number | null {
                                     variant="outline"
                                     size="sm"
                                     onClick={addInspection}
-                                    className="h-7 text-xs gap-1 shrink-0"
+                                    className="h-8 text-sm gap-1 shrink-0"
                                 >
                                     <Plus className="w-3.5 h-3.5" /> Add Characteristic
                                 </Button>
@@ -1812,7 +1812,7 @@ function numberOrNull(val?: string | null): number | null {
                             */}
                             <div className="space-y-2">
                                 {/* Column Headers */}
-                                <div className="flex items-center gap-2 px-1 text-[11.5px] font-semibold text-muted-foreground">
+                                <div className="flex items-center gap-2 px-1 text-sm font-semibold text-muted-foreground">
                                     <div className="flex-[2]">Characteristic Name</div>
                                     <div className="flex-1">Measured Value</div>
                                     <div className="w-[4.5rem] shrink-0">Lower</div>
@@ -1844,7 +1844,7 @@ function numberOrNull(val?: string | null): number | null {
                                             value={insp.measuredValue}
                                             onChange={(e) => updateInspection(idx, 'measuredValue', e.target.value)}
                                             placeholder="e.g. 0.32 mm"
-                                            className="flex-1 font-mono text-xs"
+                                            className="h-9 flex-1 font-mono text-sm"
                                         />
                                         <Input
                                             type="number"
@@ -1852,7 +1852,7 @@ function numberOrNull(val?: string | null): number | null {
                                             value={insp.specLowerLimit}
                                             onChange={(e) => updateInspection(idx, 'specLowerLimit', e.target.value)}
                                             placeholder="min"
-                                            className="w-[4.5rem] shrink-0 font-mono text-xs"
+                                            className="h-9 w-[4.5rem] shrink-0 font-mono text-sm"
                                         />
                                         <Input
                                             type="number"
@@ -1860,13 +1860,13 @@ function numberOrNull(val?: string | null): number | null {
                                             value={insp.specUpperLimit}
                                             onChange={(e) => updateInspection(idx, 'specUpperLimit', e.target.value)}
                                             placeholder="max"
-                                            className="w-[4.5rem] shrink-0 font-mono text-xs"
+                                            className="h-9 w-[4.5rem] shrink-0 font-mono text-sm"
                                         />
                                         <Input
                                             value={insp.specUom}
                                             onChange={(e) => updateInspection(idx, 'specUom', e.target.value)}
                                             placeholder="mm"
-                                            className="w-20 shrink-0 font-mono text-xs"
+                                            className="h-9 w-20 shrink-0 font-mono text-sm"
                                         />
                                         {/*
                                           Bước ③ của SAP. Mặc định là RỖNG chứ không
@@ -1878,7 +1878,7 @@ function numberOrNull(val?: string | null): number | null {
                                             onValueChange={(val) =>
                                                 updateInspection(idx, 'valuation', val === 'none' ? '' : val)}
                                         >
-                                            <SelectTrigger className="w-32 shrink-0 text-xs">
+                                            <SelectTrigger className="h-9 w-32 shrink-0 text-sm">
                                                 <SelectValue placeholder="—" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -1891,7 +1891,7 @@ function numberOrNull(val?: string | null): number | null {
                                             value={insp.equipment}
                                             onChange={(e) => updateInspection(idx, 'equipment', e.target.value)}
                                             placeholder="e.g. WC-MILL-07-F1"
-                                            className="flex-1 font-mono text-xs"
+                                            className="h-9 flex-1 font-mono text-sm"
                                         />
                                         {inspections.length > 1 && (
                                             <Button
@@ -1915,8 +1915,8 @@ function numberOrNull(val?: string | null): number | null {
                                   hành ghi lại một số đo mà chưa có bản vẽ trong tay.
                                 */}
                                 {unjudgedRows.length > 0 && (
-                                    <p className="flex items-start gap-1 pt-1 text-[10.5px] leading-snug text-warning">
-                                        <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
+                                    <p className="flex items-start gap-1 pt-1 text-sm leading-snug text-warning">
+                                        <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
                                         <span>
                                             {unjudgedRows.join(', ')} — no valuation and no limit, so D2 cannot
                                             judge {unjudgedRows.length > 1 ? 'these rows' : 'this row'}.
@@ -1933,9 +1933,9 @@ function numberOrNull(val?: string | null): number | null {
                     <CardHeader className="bg-muted/30 pb-3 border-b border-border/60">
                         <div className="flex items-center gap-2">
                             <UserCheck className="w-4 h-4 text-primary" />
-                            <CardTitle className="text-sm font-bold">4. Responsibility</CardTitle>
+                            <CardTitle className="text-base font-bold">4. Responsibility</CardTitle>
                         </div>
-                        <CardDescription className="text-xs">
+                        <CardDescription className="text-sm">
                             Who found it and who coordinates the notification. The 8D team itself is not decided here — D1 proposes it from the people who solved comparable defects.
                         </CardDescription>
                     </CardHeader>
@@ -1944,15 +1944,15 @@ function numberOrNull(val?: string | null): number | null {
                         {/* Reported By */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-semibold">Reported By</Label>
+                                <Label className="text-sm font-semibold">Reported By</Label>
                                 {(reportedBy === currentUserName || (!reportedBy && currentUserName)) && (
-                                    <span className="text-[10px] font-mono text-muted-foreground font-medium px-1.5 py-0.5 rounded bg-muted">
+                                    <span className="text-xs font-mono text-muted-foreground font-medium px-2 py-0.5 rounded bg-muted">
                                         you
                                     </span>
                                 )}
                             </div>
                             <Select value={reportedBy || currentUserName} onValueChange={setReportedBy}>
-                                <SelectTrigger className="h-8 text-[12.5px] w-full">
+                                <SelectTrigger className="h-9 text-sm w-full">
                                     <SelectValue placeholder="— select reporter —" />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-60">
@@ -1967,7 +1967,7 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Responsible Department */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Responsible Department</Label>
+                            <Label className="text-sm font-semibold">Responsible Department</Label>
                             <ValueHelpInput
                                 value={department}
                                 onChange={setDepartment}
@@ -1984,7 +1984,7 @@ function numberOrNull(val?: string | null): number | null {
 
                         {/* Notification Coordinator */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Notification Coordinator</Label>
+                            <Label className="text-sm font-semibold">Notification Coordinator</Label>
                             <ValueHelpInput
                                 value={coordinator}
                                 onChange={setCoordinator}
@@ -2007,52 +2007,52 @@ function numberOrNull(val?: string | null): number | null {
                         <CardHeader className="bg-destructive/10 pb-3 border-b border-destructive/20">
                             <div className="flex items-center gap-2">
                                 <UserCheck className="w-4 h-4 text-destructive" />
-                                <CardTitle className="text-sm font-bold text-destructive">
+                                <CardTitle className="text-base font-bold text-destructive">
                                     5. Customer Complaint Reference (Q1 Fields)
                                 </CardTitle>
                             </div>
-                            <CardDescription className="text-xs text-destructive/80">
+                            <CardDescription className="text-sm text-destructive/80">
                                 Additional customer-facing complaint metadata required for Q1 external defects.
                             </CardDescription>
                         </CardHeader>
 
                         <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">
+                                <Label className="text-sm font-semibold">
                                     Complaint Reference # <span className="text-destructive">*</span>
                                 </Label>
                                 <Input
                                     value={complaintReference}
                                     onChange={(e) => setComplaintReference(e.target.value)}
                                     placeholder="e.g. CC-2026-1188"
-                                    className="font-mono text-xs bg-card"
+                                    className="font-mono h-9 text-sm bg-card"
                                 />
                                 {/* Ô này từng được lấp bằng 'CC-2026-PENDING' khi trống.
                                     Giờ nó chặn Save — nên phải nói ngay tại ô, chứ không
                                     để người dùng bấm Save rồi mới biết. */}
                                 {!complaintReference.trim() && (
-                                    <p className="text-[10.5px] leading-snug text-destructive">
+                                    <p className="text-sm leading-snug text-destructive">
                                         Required — the customer's own reference number. Leave the case
                                         unsaved rather than inventing one.
                                     </p>
                                 )}
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Customer Contact / Plant</Label>
+                                <Label className="text-sm font-semibold">Customer Contact / Plant</Label>
                                 <Input
                                     value={customerPlantContact}
                                     onChange={(e) => setCustomerPlantContact(e.target.value)}
                                     placeholder="e.g. Vestbeck Motors - Plant 2"
-                                    className="text-xs bg-card"
+                                    className="h-9 text-sm bg-card"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">SLA Response Due Date</Label>
+                                <Label className="text-sm font-semibold">SLA Response Due Date</Label>
                                 <Input
                                     type="date"
                                     value={slaResponseDue.match(/^\d{4}-\d{2}-\d{2}$/) ? slaResponseDue : ''}
                                     onChange={(e) => setSlaResponseDue(e.target.value)}
-                                    className="text-xs bg-card"
+                                    className="h-9 text-sm bg-card"
                                 />
                             </div>
                         </CardContent>
@@ -2066,7 +2066,7 @@ function numberOrNull(val?: string | null): number | null {
                     {saveBlockers.length > 0 && (
                         <div className="space-y-1 sm:mr-auto">
                             {saveBlockers.map((msg) => (
-                                <p key={msg} className="flex items-start gap-1.5 text-[11px] leading-snug text-destructive">
+                                <p key={msg} className="flex items-start gap-1.5 text-sm leading-snug text-destructive">
                                     <AlertCircle className="mt-px w-3.5 h-3.5 shrink-0" />
                                     <span>{msg}</span>
                                 </p>
@@ -2078,13 +2078,14 @@ function numberOrNull(val?: string | null): number | null {
                         variant="outline"
                         disabled={busy}
                         onClick={() => onOpenChange(false)}
+                        className="h-9 text-sm"
                     >
                         Cancel
                     </Button>
                     <Button
                         type="submit"
                         disabled={busy || !symptomShortText.trim() || saveBlockers.length > 0}
-                        className="gap-2 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md"
+                        className="gap-2 h-9 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md text-sm"
                     >
                         {/* Nhãn nói ĐÚNG việc nút làm. Bản trước hứa "Start 8D
                             Process" nên người dùng bấm để mở 8D, và một 8D được

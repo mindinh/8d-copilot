@@ -44,8 +44,8 @@ export function CaseStepper({
     return (
         <div className="min-w-0">
             <div className="px-3 pb-3">
-                <div className="text-xs font-medium text-muted-foreground">Completeness</div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border">
+                <div className="text-base font-semibold text-foreground">Completeness</div>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-border">
                     <div
                         className={cn(
                             'h-full rounded-full transition-all',
@@ -54,7 +54,7 @@ export function CaseStepper({
                         style={{ width: `${pct}%` }}
                     />
                 </div>
-                <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                <div className="mt-1 text-sm tabular-nums text-muted-foreground">
                     {approved}/{total} steps complete
                 </div>
             </div>
@@ -105,7 +105,7 @@ export function CaseStepper({
                         >
                             <span
                                 className={cn(
-                                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
                                     done && 'bg-success text-white',
                                     !done && discipline && reviewStatusOf(discipline) === 'ChangeRequested' && 'bg-warning text-white',
                                     !done && discipline && reviewStatusOf(discipline) === 'Draft' && discipline.workState === 'InProgress' && 'border border-primary text-primary bg-primary/10',
@@ -115,9 +115,9 @@ export function CaseStepper({
                                 )}
                             >
                                 {done ? (
-                                    <Check className="h-3 w-3 text-white" strokeWidth={2.5} />
+                                    <Check className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
                                 ) : isCurrentAnalyzing ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 ) : (
                                     index + 1
                                 )}
@@ -126,7 +126,7 @@ export function CaseStepper({
                             <span className="min-w-0">
                                 <span
                                     className={cn(
-                                        'block truncate text-[13px]',
+                                        'block truncate text-sm',
                                         isActive ? 'font-semibold text-foreground' : 'font-medium',
                                         !discipline && !isCurrentAnalyzing && 'text-muted-foreground/70',
                                     )}
@@ -135,7 +135,7 @@ export function CaseStepper({
                                 </span>
                                 <span
                                     className={cn(
-                                        'block text-[11px]',
+                                        'block text-sm',
                                         done ? 'text-success'
                                             : discipline && reviewStatusOf(discipline) === 'ChangeRequested' ? 'text-warning'
                                                 : discipline && discipline.workState === 'InProgress' ? 'text-primary font-medium'

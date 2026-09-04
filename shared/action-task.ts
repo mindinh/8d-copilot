@@ -52,8 +52,17 @@ export interface ActionTask {
      */
     taskCode: string;
     taskCodeGroup: string;
+    /** Ngày bắt đầu thực hiện, dạng ISO `YYYY-MM-DD`. */
+    startDate?: string;
     /** Hạn dự kiến, dạng ISO `YYYY-MM-DD`. Rỗng nghĩa là chưa ai cam kết ngày nào. */
     plannedEndDate: string;
+
+    /** Bật/tắt yêu cầu bằng chứng (D3/D5/D7). Default: true. */
+    evidenceRequired?: boolean;
+    /** Đã công bố task chưa (sau khi bấm Publish). */
+    published?: boolean;
+    /** Ghi chú thực thi / hoàn thành do người dùng nhập. */
+    note?: string;
 }
 
 /** Hình dạng một hàng hành động do AI sinh (xem `corrective.actions` trong seed). */
@@ -66,14 +75,16 @@ export interface SuggestedAction {
     protection?: string;
 }
 
-export const TASK_STATUSES = ['Planned', 'In Progress', 'Done', 'Verified', 'Blocked'] as const;
+export const TASK_STATUSES = ['Planned', 'Open', 'Done'] as const;
+export const D3_D7_TASK_STATUSES = ['Planned', 'Open', 'Done'] as const;
+export const ACTION_TASK_STATUSES = ['Planned', 'Open', 'Done'] as const;
 
-export function normalizeActionStatus(status?: string): 'Planned' | 'In Progress' | 'Done' | 'Verified' | 'Blocked' {
+export type TaskStatus = typeof TASK_STATUSES[number];
+
+export function normalizeActionStatus(status?: string): 'Planned' | 'Open' | 'Done' {
     const s = String(status ?? '').trim().toLowerCase();
-    if (s.includes('block')) return 'Blocked';
-    if (s.includes('verifi')) return 'Verified';
-    if (s.includes('done') || s.includes('implement') || s.includes('complete')) return 'Done';
-    if (s.includes('progress') || s.includes('process') || s.includes('doing')) return 'In Progress';
+    if (s.includes('done') || s.includes('implement') || s.includes('complete') || s.includes('verifi')) return 'Done';
+    if (s === 'open' || s.includes('open') || s.includes('progress') || s.includes('process') || s.includes('doing')) return 'Open';
     return 'Planned';
 }
 
@@ -140,7 +151,7 @@ export function taskFromAction(action: SuggestedAction, seed: string): ActionTas
         description: text(action.protection),
         assignee: text(action.owner),
         durationDays: 0,
-        status: text(action.status) || 'Not started',
+        status: 'Planned',
         origin: text(action.origin) || 'AI suggestion',
         attachments: [],
         taskCode: coded?.taskCode ?? '',
@@ -148,6 +159,9 @@ export function taskFromAction(action: SuggestedAction, seed: string): ActionTas
         // Hạn là cam kết của một con người, y như người nhận việc. AI không đặt
         // hạn hộ — cùng lý do `assignee` không có giá trị mặc định.
         plannedEndDate: '',
+        evidenceRequired: true,
+        published: false,
+        note: '',
     };
 }
 
@@ -165,19 +179,27 @@ export function normalizeTasks(value: unknown): ActionTask[] {
         // chạy một migration lên JSON nằm trong `resultJson`.
         const stored = text(item.taskCode);
         const coded = stored ? null : classifyTaskCode(name);
+        const itemStatus = text(item.status) || 'Planned';
+        const isPublished = item.published !== undefined
+            ? Boolean(item.published)
+            : Boolean(itemStatus && !['Planned', 'Not started', 'planned'].includes(itemStatus));
         return [{
             id: text(item.id) || `task-${index}`,
             name,
             description: text(item.description),
             assignee: text(item.assignee) || text(item.owner),
             durationDays: Number.isFinite(duration) && duration > 0 ? duration : 0,
-            status: text(item.status) || 'Not started',
+            status: itemStatus,
             origin: text(item.origin) || 'User added',
             taskCode: stored || coded?.taskCode || '',
             // Nhóm suy từ mã chứ không đọc từ dữ liệu lưu: hai ô đó phải khớp
             // nhau, và tra lại từ danh mục thì chúng không thể lệch.
             taskCodeGroup: taskCodeGroupOf(stored) || coded?.taskCodeGroup || '',
+            startDate: isoDate(item.startDate) || undefined,
             plannedEndDate: isoDate(item.plannedEndDate),
+            evidenceRequired: item.evidenceRequired !== undefined ? Boolean(item.evidenceRequired) : true,
+            published: isPublished,
+            note: text(item.note),
             attachments: Array.isArray(item.attachments)
                 ? item.attachments.flatMap((a) => {
                     const att = a as Record<string, unknown>;

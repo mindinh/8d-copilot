@@ -93,7 +93,7 @@ export function DisciplineCard({
 
                         <Badge
                             variant="outline"
-                            className={cn('text-xs tabular-nums', confidenceStyle(discipline.confidence))}
+                            className={cn('text-sm tabular-nums px-2.5 py-0.5', confidenceStyle(discipline.confidence))}
                         >
                             {Math.round(discipline.confidence * 100)}%
                         </Badge>
@@ -101,20 +101,20 @@ export function DisciplineCard({
                         {inferred && (
                             <Badge
                                 variant="outline"
-                                className="text-xs gap-1 bg-warning/10 text-warning border-warning/30"
+                                className="text-sm gap-1 bg-warning/10 text-warning border-warning/30 px-2.5 py-0.5"
                             >
-                                <TriangleAlert className="w-3 h-3" />
+                                <TriangleAlert className="w-3.5 h-3.5" />
                                 No source data
                             </Badge>
                         )}
                     </div>
 
-                    <p className="mt-1.5 max-w-full break-words text-xs font-normal leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 max-w-full break-words text-sm font-normal leading-relaxed text-muted-foreground">
                         {discipline.summary}
                     </p>
 
                     {inferred && (
-                        <p className="mt-1.5 break-words text-xs font-normal text-warning">
+                        <p className="mt-1.5 break-words text-sm font-normal text-warning">
                             Proposed by AI — the dataset holds no evidence for this discipline.
                         </p>
                     )}
@@ -136,7 +136,7 @@ export function DisciplineCard({
 
                     {actionItems.length > 0 && (
                         <div>
-                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                            <h4 className="text-base font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                                 Action items
                             </h4>
                             <ul className="space-y-1.5">
@@ -157,11 +157,11 @@ export function DisciplineCard({
                       tại thật.
                     */}
                     <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        <h4 className="text-base font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                             Sources
                         </h4>
                         {sources.length === 0 ? (
-                            <p className="text-xs text-muted-foreground italic">
+                            <p className="text-sm text-muted-foreground italic">
                                 No source data — this discipline is a proposal.
                             </p>
                         ) : (

@@ -79,13 +79,13 @@ export function PrecedentPanel({ reportID, precedentsJson }: {
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <GitBranch className="h-4 w-4 text-primary" />
-                    <h2 className="font-medium text-sm">Similar past cases</h2>
-                    <Badge variant="secondary" className="text-xs">
+                    <h2 className="font-semibold text-base">Similar past cases</h2>
+                    <Badge variant="secondary" className="text-xs px-2.5 py-0.5 font-semibold">
                         {precedents.length} match{precedents.length === 1 ? '' : 'es'}
                     </Badge>
                 </div>
                 {data.maxScore > 0 && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                         scored out of {data.maxScore}
                     </span>
                 )}
@@ -96,7 +96,7 @@ export function PrecedentPanel({ reportID, precedentsJson }: {
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="space-y-1">
                         <p className="text-sm font-medium">No comparable case found</p>
-                        <p className="text-xs text-muted-foreground">{data.reason}</p>
+                        <p className="text-sm text-muted-foreground">{data.reason}</p>
                     </div>
                 </Card>
             ) : (
@@ -112,20 +112,20 @@ export function PrecedentPanel({ reportID, precedentsJson }: {
                                 className="group relative rounded-xl border border-border/70 bg-card p-4 space-y-2 hover:border-destructive/40 hover:shadow-xs transition-all cursor-pointer"
                             >
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="font-bold text-sm text-foreground group-hover:text-destructive transition-colors">
+                                    <span className="font-bold text-base text-foreground group-hover:text-destructive transition-colors">
                                         {p.notificationId}
                                     </span>
-                                    <span className="font-bold text-sm text-destructive tabular-nums">
+                                    <span className="font-bold text-base text-destructive tabular-nums">
                                         {scoreDisplay}
                                     </span>
                                 </div>
 
-                                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
                                     {summaryText}
                                 </p>
 
                                 <div className="pt-1">
-                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive underline underline-offset-2 hover:opacity-80">
+                                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-destructive underline underline-offset-2 hover:opacity-80">
                                         View root cause &rarr;
                                     </span>
                                 </div>

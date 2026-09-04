@@ -2,6 +2,7 @@ import {
     createTaskEvidence,
     deleteTaskEvidence,
     findTaskInResultJson,
+    markTaskStatusInResultJson,
 } from '../eightDRepository';
 
 // Mock cds database
@@ -99,5 +100,26 @@ describe('createTaskEvidence constraints', () => {
             code: 400,
             message: expect.stringContaining('exceeds 10 MB limit'),
         });
+    });
+});
+
+describe('markTaskStatusInResultJson', () => {
+    it('marks open task in containment.assignedActions as Done', () => {
+        const initial = JSON.stringify({
+            containment: {
+                assignedActions: [
+                    { id: 'task-1', name: 'Sort parts', status: 'Open' },
+                ],
+            },
+        });
+        const updated = markTaskStatusInResultJson(initial, 'task-1', 'Done');
+        expect(updated).not.toBeNull();
+        const parsed = JSON.parse(updated!);
+        expect(parsed.containment.assignedActions[0].status).toBe('Done');
+    });
+
+    it('returns null if taskId not found or invalid json', () => {
+        expect(markTaskStatusInResultJson(null, 't1', 'Done')).toBeNull();
+        expect(markTaskStatusInResultJson('{}', 't1', 'Done')).toBeNull();
     });
 });

@@ -78,10 +78,10 @@ export function StepObjectSchemaEditor({
             <div className="flex min-h-0 flex-1 flex-col">
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3">
                     <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-foreground">
+                        <h3 className="text-base font-bold text-foreground">
                             Similarity Schema — what {stepCode} compares
                         </h3>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
+                        <p className="mt-0.5 text-sm text-muted-foreground">
                             Profile <span className="font-medium text-foreground">{draft.label}</span> decides
                             which past cases {stepLabel} is shown.
                         </p>
@@ -89,24 +89,24 @@ export function StepObjectSchemaEditor({
 
                     <div className="flex items-center gap-2.5">
                         {state.blockingError && (
-                            <div className="flex max-w-md items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+                            <div className="flex max-w-md items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-sm text-destructive">
                                 <AlertTriangle className="h-4 w-4 shrink-0" />
                                 <span>{state.blockingError}</span>
                             </div>
                         )}
                         {state.dirty && (
                             <>
-                                <Badge variant="secondary" className="text-xs text-amber-600 dark:text-amber-400">
+                                <Badge variant="secondary" className="text-sm font-semibold px-2 py-0.5 text-amber-600 dark:text-amber-400">
                                     Unsaved changes
                                 </Badge>
-                                <Button variant="ghost" size="sm" disabled={state.saving} onClick={state.discard}>
+                                <Button variant="ghost" size="sm" disabled={state.saving} onClick={state.discard} className="h-9 text-sm">
                                     <X className="mr-1 h-4 w-4" /> Discard
                                 </Button>
                             </>
                         )}
                         <Button
                             size="sm"
-                            className="gap-1.5 font-medium"
+                            className="h-9 text-sm gap-1.5 font-semibold"
                             disabled={!state.dirty || state.saving || Boolean(state.blockingError)}
                             onClick={() => void state.save()}
                         >
@@ -154,7 +154,7 @@ export function StepObjectSchemaEditor({
 
                     <DragOverlay>
                         {dragging && (
-                            <div className="flex items-center gap-2 rounded-lg border border-primary/50 bg-card p-2 text-xs shadow-xl ring-2 ring-primary/30">
+                            <div className="flex items-center gap-2 rounded-lg border border-primary/50 bg-card p-2 text-sm shadow-xl ring-2 ring-primary/30">
                                 <Plus className="h-4 w-4 text-primary" />
                                 <span className="font-semibold text-foreground">{dragging.label}</span>
                                 <span className="font-mono text-muted-foreground">{dragging.path}</span>

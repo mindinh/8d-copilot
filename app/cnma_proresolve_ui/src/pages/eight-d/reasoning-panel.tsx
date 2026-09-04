@@ -72,12 +72,12 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="font-semibold text-sm">Independent diagnosis</h2>
-                            <Badge variant="outline" className="text-xs font-normal">
+                            <h2 className="font-semibold text-base">Independent diagnosis</h2>
+                            <Badge variant="outline" className="text-sm font-normal px-2.5 py-0.5">
                                 answer withheld from the model
                             </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                             The recorded 5-Why chain, root cause flag, corrective actions and FMEA link were
                             removed before this analysis ran. The conclusion below was reached from the raw
                             measurements and investigation findings alone.
@@ -88,7 +88,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 {/* ── Đối chiếu ── */}
                 <div className="flex items-center gap-3 md:gap-5 mt-4 flex-wrap">
                     <div>
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                             Quality engineer
                         </div>
                         <CategoryChip category={verdict.recordedCategory} />
@@ -96,24 +96,24 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
 
                     <div
                         className={cn(
-                            'flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
+                            'flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full',
                             agrees
                                 ? 'bg-success/10 text-success'
                                 : 'bg-warning/15 text-warning',
                         )}
                     >
-                        {agrees ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                        {agrees ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <X className="w-3.5 h-3.5 stroke-[2.5]" />}
                         {agrees ? 'Same conclusion' : 'Different conclusion'}
                     </div>
 
                     <div>
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                             AI, unaided
                         </div>
                         <CategoryChip category={finding.rootCauseCategory} />
                     </div>
 
-                    <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
                         <span>
                             confidence{' '}
                             <span className="font-semibold text-foreground tabular-nums">
@@ -133,8 +133,8 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 <p className="text-sm mt-3 leading-relaxed">{finding.rootCauseStatement}</p>
 
                 {!agrees && (
-                    <div className="flex items-start gap-2 mt-3 text-xs text-warning bg-warning/10 rounded-lg px-3 py-2">
-                        <Scale className="w-4 h-4 shrink-0 mt-px" />
+                    <div className="flex items-start gap-2 mt-3 text-sm text-warning bg-warning/10 rounded-lg px-3 py-2">
+                        <Scale className="w-4 h-4 shrink-0 mt-0.5" />
                         <span>
                             A disagreement is not proof that either side is wrong. Read the reasoning below and
                             the evidence it cites before deciding which conclusion the data supports.
@@ -147,8 +147,8 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                   mọi kết luận phía trên mất giá trị. Phải nói thẳng, không giấu.
                 */}
                 {leaks?.length > 0 && (
-                    <div className="flex items-start gap-2 mt-3 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-                        <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />
+                    <div className="flex items-start gap-2 mt-3 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                        <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
                         <span>
                             The blind evidence check found {leaks.length} leak
                             {leaks.length === 1 ? '' : 's'}: {leaks.join(' ')} This diagnosis may not be
@@ -160,7 +160,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="mt-3 -ml-2"
+                    className="mt-3 -ml-2 text-sm"
                     onClick={() => setOpen((v) => !v)}
                 >
                     <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} />
@@ -173,7 +173,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                 <div className="px-5 py-5 space-y-5 border-t border-border/60">
 
                     <section>
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                        <h3 className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-3">
                             5-Why chain the AI built itself
                         </h3>
                         <ol className="space-y-3">
@@ -183,9 +183,9 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                                         {step.stepNo}
                                     </span>
                                     <div className="min-w-0">
-                                        <p className="text-sm font-medium">{step.question}</p>
+                                        <p className="text-sm font-semibold">{step.question}</p>
                                         <p className="text-sm text-foreground/80 mt-0.5">{step.answer}</p>
-                                        <p className="text-xs text-muted-foreground mt-1 italic">
+                                        <p className="text-sm text-muted-foreground mt-1 italic">
                                             {step.evidence}
                                         </p>
                                     </div>
@@ -195,7 +195,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
                     </section>
 
                     <section>
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                        <h3 className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-3">
                             Branches ruled out
                         </h3>
                         <div className="space-y-2">
@@ -210,7 +210,7 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
 
                     {finding.runnerUpCategory && (
                         <section>
-                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                            <h3 className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-2">
                                 Next most likely, and what would change the verdict
                             </h3>
                             <div className="flex gap-3 items-start">
@@ -222,8 +222,8 @@ export function ReasoningPanel({ analysis }: { analysis: IndependentAnalysis }) 
 
                     {finding.evidenceGaps.length > 0 && (
                         <section>
-                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
-                                <HelpCircle className="w-3.5 h-3.5" />
+                            <h3 className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                                <HelpCircle className="w-4 h-4" />
                                 Evidence the AI would ask for
                             </h3>
                             <ul className="space-y-1.5">

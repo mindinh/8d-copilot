@@ -174,12 +174,12 @@ export function DefectsTab() {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search Defect ID, symptom, material, defect text..."
-                            className="pl-8 text-xs h-9 bg-background"
+                            className="pl-8 text-sm h-9 bg-background"
                         />
                     </div>
 
                     <Select value={status} onValueChange={(v) => setStatus(v as DefectStatus | 'ALL')}>
-                        <SelectTrigger className="w-36 text-xs h-9">
+                        <SelectTrigger className="w-36 text-sm h-9">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -198,7 +198,7 @@ export function DefectsTab() {
                         size="sm"
                         onClick={() => refetch()}
                         disabled={isFetching}
-                        className="h-9 gap-1.5 text-xs"
+                        className="h-9 gap-1.5 text-sm"
                     >
                         <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
                         Refresh
@@ -206,7 +206,7 @@ export function DefectsTab() {
                     <Button
                         size="sm"
                         onClick={() => setCreateOpen(true)}
-                        className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground font-semibold"
+                        className="h-9 gap-1.5 text-sm bg-primary text-primary-foreground font-semibold"
                     >
                         <Plus className="w-4 h-4" />
                         Record Defect
@@ -231,7 +231,7 @@ export function DefectsTab() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table className="w-full text-left text-sm border-collapse">
                             <thead>
                                 <tr className="border-b border-border/80 bg-muted/50 font-semibold text-muted-foreground">
                                     <th className="py-3 px-4 w-36">Defect ID</th>
@@ -263,7 +263,7 @@ export function DefectsTab() {
                                                 <Badge
                                                     variant="outline"
                                                     className={cn(
-                                                        'text-[10.5px]',
+                                                        'text-sm font-semibold px-2.5 py-0.5',
                                                         DEFECT_STATUS_TONE[effectiveStatus] || DEFECT_STATUS_TONE['Open'],
                                                     )}
                                                 >
@@ -276,7 +276,7 @@ export function DefectsTab() {
                                             <td className="py-3 px-4">
                                                 <div className="text-foreground">{row.materialDesc || row.materialId || '—'}</div>
                                                 {row.materialDesc && row.materialId && (
-                                                    <div className="font-mono text-[10.5px] text-muted-foreground">
+                                                    <div className="font-mono text-sm text-muted-foreground">
                                                         {row.materialId}
                                                     </div>
                                                 )}
@@ -302,21 +302,21 @@ export function DefectsTab() {
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-7 gap-1.5 text-[11px]"
+                                                            className="h-8 gap-1.5 text-sm"
                                                             onClick={() => navigate(`/8d/${reportID}`)}
                                                         >
                                                             <ExternalLink className="w-3.5 h-3.5" />
                                                             Open 8D
                                                         </Button>
                                                     ) : done ? (
-                                                        <span className="text-[11px] text-muted-foreground">
+                                                        <span className="text-sm text-muted-foreground">
                                                             Closed without 8D
                                                         </span>
                                                     ) : (
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className="h-7 gap-1.5 text-[11px]"
+                                                            className="h-8 gap-1.5 text-sm font-semibold"
                                                             disabled={startMutation.isPending}
                                                             onClick={() => startMutation.mutate(row)}
                                                         >
@@ -331,23 +331,23 @@ export function DefectsTab() {
                                                         size="icon"
                                                         aria-label={`Edit defect ${row.defectId}`}
                                                         title="Edit this defect"
-                                                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                         disabled={loadingEdit === row.ID}
                                                         onClick={() => void openEdit(row)}
                                                     >
                                                         {loadingEdit === row.ID
                                                             ? <Spinner className="w-3.5 h-3.5" />
-                                                            : <Pencil className="w-3.5 h-3.5" />}
+                                                            : <Pencil className="w-4 h-4" />}
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
                                                         aria-label={`Delete defect ${row.defectId}`}
                                                         title="Delete this defect"
-                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                                         onClick={() => setDeleteItem(row)}
                                                     >
-                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        <Trash2 className="w-4 h-4" />
                                                     </Button>
                                                 </div>
                                             </td>

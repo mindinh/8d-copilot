@@ -360,34 +360,34 @@ export function ColumnFilterPopover({
       {needsInput && (
         <>
           <hr className="border-border" />
-          <div className="flex flex-col gap-2 p-1 text-xs">
+          <div className="flex flex-col gap-2 p-1 text-sm">
             {colType === 'date' ? (
               isBetweenOp ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">{t('common.from', 'From:')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.from', 'From:')}</span>
                     <DatePicker
                       value={localDate || undefined}
                       onChange={setLocalDate}
-                      className="w-full"
+                      className="w-full h-9 text-sm"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">{t('common.to', 'To:')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.to', 'To:')}</span>
                     <DatePicker
                       value={localDateTo || undefined}
                       onChange={setLocalDateTo}
-                      className="w-full"
+                      className="w-full h-9 text-sm"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  <span className="text-muted-foreground">{t('common.date', 'Date:')}</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t('common.date', 'Date:')}</span>
                   <DatePicker
                     value={localDate || undefined}
                     onChange={setLocalDate}
-                    className="w-full"
+                    className="w-full h-9 text-sm"
                   />
                 </div>
               )
@@ -395,50 +395,50 @@ export function ColumnFilterPopover({
               isBetweenOp ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">{t('common.from', 'From:')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.from', 'From:')}</span>
                     <Input
                       type="text"
                       inputMode="decimal"
                       value={localVal}
                       onChange={(e) => setLocalVal(e.target.value)}
                       placeholder={t('common.filter.startValue', 'Start value')}
-                      className="h-8 text-sm"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">{t('common.to', 'To:')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.to', 'To:')}</span>
                     <Input
                       type="text"
                       inputMode="decimal"
                       value={localValTo}
                       onChange={(e) => setLocalValTo(e.target.value)}
                       placeholder={t('common.filter.endValue', 'End value')}
-                      className="h-8 text-sm"
+                      className="h-9 text-sm"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  <span className="text-muted-foreground">{t('common.value', 'Value:')}</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t('common.value', 'Value:')}</span>
                   <Input
                     type="text"
                     inputMode="decimal"
                     value={localVal}
                     onChange={(e) => setLocalVal(e.target.value)}
                     placeholder={t('common.filter.enterValue', 'Enter value')}
-                    className="h-8 text-sm"
+                    className="h-9 text-sm"
                   />
                 </div>
               )
             ) : (
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">{t('common.value', 'Value:')}</span>
+                <span className="text-sm font-medium text-muted-foreground">{t('common.value', 'Value:')}</span>
                 <Input
                   type="text"
                   value={localVal}
                   onChange={(e) => setLocalVal(e.target.value)}
                   placeholder={t('common.filter.enterFilterText', 'Enter filter text...')}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
               </div>
             )}
@@ -464,7 +464,7 @@ export function ColumnFilterPopover({
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="h-7 text-xs font-normal"
+            className="h-8 text-sm font-medium"
           >
             {t('common.cancel', 'Cancel')}
           </Button>
@@ -472,7 +472,7 @@ export function ColumnFilterPopover({
             variant="default"
             size="sm"
             onClick={handleApply}
-            className="h-7 text-xs px-3"
+            className="h-8 text-sm font-semibold px-3"
           >
             {t('common.ok', 'OK')}
           </Button>

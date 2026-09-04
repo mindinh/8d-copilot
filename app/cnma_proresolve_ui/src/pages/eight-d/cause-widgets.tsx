@@ -45,6 +45,12 @@ import {
 import { AiProvenanceInfo } from './ai-provenance-info';
 import { ComparativeDiagnosisBadge } from './comparative-diagnosis-badge';
 
+const DEFAULT_DURATION_BY_DISCIPLINE: Record<string, number> = {
+    D3: 1,
+    D5: 2,
+    D7: 3,
+};
+
 /**
  * Các widget cho D4 (Root Cause) và các bước hành động (D3, D5, D6, D7).
  *
@@ -156,7 +162,7 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
     return (
         <div className="space-y-3">
             <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[14px] font-bold text-foreground">
+                <span className="text-base font-bold text-foreground">
                     5-Why chain
                 </span>
                 <AiProvenanceInfo
@@ -186,7 +192,7 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                 <div className="flex gap-3 min-w-0 flex-1">
                                     <span
                                         className={cn(
-                                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors',
+                                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors',
                                             isRoot
                                                 ? 'bg-destructive text-destructive-foreground ring-2 ring-destructive/20'
                                                 : 'bg-muted text-muted-foreground group-hover:bg-foreground group-hover:text-background',
@@ -196,7 +202,7 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                     </span>
                                     <div className="min-w-0 flex-1 space-y-1">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="break-words text-[13.5px] font-semibold text-foreground">
+                                            <p className="break-words text-sm font-semibold text-foreground">
                                                 {row.question ?? row.why ?? '—'}
                                             </p>
                                             <AiProvenanceInfo
@@ -204,13 +210,13 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                                 label={`5-Why Step #${index + 1}`}
                                             />
                                             {isRoot && (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive border border-destructive/20">
-                                                    <Star className="h-3 w-3 fill-current" />
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-sm font-bold uppercase tracking-wider text-destructive border border-destructive/20">
+                                                    <Star className="h-3.5 w-3.5 fill-current" />
                                                     Root cause
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="break-words text-[13px] text-muted-foreground leading-relaxed">
+                                        <p className="break-words text-sm text-muted-foreground leading-relaxed">
                                             {row.answer ?? '—'}
                                         </p>
                                     </div>
@@ -222,20 +228,20 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                             <button
                                                 type="button"
                                                 onClick={() => handleSetRoot(index)}
-                                                className="text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md px-2.5 py-1 border border-transparent hover:border-destructive/20 cursor-pointer flex items-center gap-1.5"
+                                                className="text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md px-2.5 py-1 border border-transparent hover:border-destructive/20 cursor-pointer flex items-center gap-1.5"
                                                 title="Mark this step as root cause"
                                             >
-                                                <Star className="h-3 w-3" />
+                                                <Star className="h-3.5 w-3.5" />
                                                 Set root cause
                                             </button>
                                         )}
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveStep(index)}
-                                            className="text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md p-1 border border-transparent hover:border-destructive/20 cursor-pointer"
+                                            className="text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md p-1 border border-transparent hover:border-destructive/20 cursor-pointer"
                                             title="Delete step"
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="h-4 w-4" />
                                         </button>
                                     </div>
                                 )}
@@ -248,9 +254,9 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
             {!readOnly && (
                 isAdding ? (
                     <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-                        <p className="text-xs font-semibold text-foreground">Add 5-Why Step</p>
+                        <p className="text-base font-semibold text-foreground">Add 5-Why Step</p>
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Question <span className="text-destructive">*</span>
                             </Label>
                             <Input
@@ -258,11 +264,11 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                 placeholder="Why did this happen? (e.g. Why did the clamp slip?)"
                                 value={newQuestion}
                                 onChange={(e) => setNewQuestion(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                                className="h-9 text-sm bg-background"
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">
+                            <Label className="text-sm font-semibold text-muted-foreground">
                                 Answer / Finding
                             </Label>
                             <Input
@@ -270,20 +276,20 @@ export function WhyChainWidget({ value, disciplineID, fieldKey, readOnly = false
                                 placeholder="Enter finding or verification result..."
                                 value={newAnswer}
                                 onChange={(e) => setNewAnswer(e.target.value)}
-                                className="h-8 text-xs bg-background"
+                                className="h-9 text-sm bg-background"
                             />
                         </div>
                         <div className="flex items-center gap-2 pt-1">
-                            <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()}>
+                            <Button size="sm" onClick={handleAddStep} disabled={!newQuestion.trim()} className="h-9 text-sm px-3">
                                 Add step
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
+                            <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)} className="h-9 text-sm px-3">
                                 Cancel
                             </Button>
                         </div>
                     </div>
                 ) : (
-                    <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs">
+                    <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="h-9 text-sm px-3">
                         + Add why-step
                     </Button>
                 )
@@ -419,7 +425,7 @@ export function IshikawaGridWidget({
     return (
         <div className="space-y-3">
             <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[14px] font-bold text-foreground">
+                <span className="text-base font-bold text-foreground">
                     Ishikawa
                 </span>
                 <AiProvenanceInfo
@@ -430,7 +436,7 @@ export function IshikawaGridWidget({
             </div>
 
             {usingProposal && (
-                <p className="rounded-md border border-warning/40 bg-warning/[0.07] px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                <p className="rounded-md border border-warning/40 bg-warning/[0.07] px-3 py-2 text-sm text-muted-foreground">
                     <span className="font-semibold text-warning-foreground">Proposed by AI.</span>{' '}
                     This case has no recorded 6M assessment in SAP. The findings below are
                     the AI reading the evidence, not a confirmed assessment — review each
@@ -454,17 +460,17 @@ export function IshikawaGridWidget({
                     <div
                         key={category}
                         className={cn(
-                            'min-w-0 rounded-lg border p-3 flex flex-col justify-between',
+                            'min-w-0 rounded-lg border p-3.5 flex flex-col justify-between',
                             isRoot ? 'border-destructive bg-destructive/[0.05]' : 'border-border bg-card',
                         )}
                     >
                         <div>
                             <div className="flex items-center justify-between gap-1.5">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-bold', meta.bgClass, meta.colorClass)}>
+                                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-bold', meta.bgClass, meta.colorClass)}>
                                         <Icon className="h-3.5 w-3.5" />
                                     </span>
-                                    <h4 className="text-[13px] font-bold uppercase tracking-wider text-foreground/90">{meta.title}</h4>
+                                    <h4 className="text-base font-bold uppercase tracking-wider text-foreground/90">{meta.title}</h4>
                                     <AiProvenanceInfo
                                         fieldKey={`ishikawa.${category}`}
                                         label={`Ishikawa ${meta.title}`}
@@ -486,7 +492,7 @@ export function IshikawaGridWidget({
                                     <button
                                         type="button"
                                         onClick={() => startEditing(category, text || 'Not assessed')}
-                                        className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+                                        className="text-sm text-muted-foreground hover:text-foreground hover:underline"
                                     >
                                         Edit
                                     </button>
@@ -499,21 +505,21 @@ export function IshikawaGridWidget({
                                         value={editValue}
                                         onChange={(e) => setEditValue(e.target.value)}
                                         placeholder="Enter finding for this 6M category..."
-                                        className="w-full min-h-[90px] text-[13px] bg-background p-2.5 rounded-md border leading-relaxed resize-y focus-visible:ring-1 focus-visible:ring-primary"
+                                        className="w-full min-h-[90px] text-sm bg-background p-2.5 rounded-md border leading-relaxed resize-y focus-visible:ring-1 focus-visible:ring-primary"
                                         autoFocus
                                     />
                                     <div className="flex items-center justify-end gap-1.5 pt-0.5">
-                                        <Button size="sm" className="h-6 text-[11px] px-2.5 font-medium" onClick={() => saveEditing(category)}>
+                                        <Button size="sm" className="h-8 text-sm px-3 font-medium" onClick={() => saveEditing(category)}>
                                             Save
                                         </Button>
-                                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 font-medium" onClick={() => setEditingCategory(null)}>
+                                        <Button size="sm" variant="ghost" className="h-8 text-sm px-2.5 font-medium" onClick={() => setEditingCategory(null)}>
                                             Cancel
                                         </Button>
                                     </div>
                                 </div>
                             ) : (
                                 <p className={cn(
-                                    'mt-1.5 break-words text-[13px] leading-relaxed',
+                                    'mt-1.5 break-words text-sm leading-relaxed',
                                     text ? 'text-foreground font-normal' : 'italic text-muted-foreground',
                                 )}>
                                     {text || 'Not assessed'}
@@ -521,7 +527,7 @@ export function IshikawaGridWidget({
                             )}
 
                             {metric && !isEditingThis && (
-                                <span className="mt-2 inline-block rounded-full border bg-muted px-2 py-0.5 text-[11px]">
+                                <span className="mt-2 inline-block rounded-full border bg-muted px-2.5 py-0.5 text-sm font-medium">
                                     {metric}
                                 </span>
                             )}
@@ -529,20 +535,20 @@ export function IshikawaGridWidget({
 
                         <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between">
                             {isRoot ? (
-                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-destructive">
-                                    <Star className="h-3 w-3 fill-current" />
+                                <div className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-destructive">
+                                    <Star className="h-3.5 w-3.5 fill-current" />
                                     Root cause
                                 </div>
                             ) : !readOnly ? (
                                 <button
                                     type="button"
                                     onClick={() => handleSelectRoot(category)}
-                                    className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                                    className="text-sm font-medium text-primary hover:underline cursor-pointer"
                                 >
                                     Set as root cause
                                 </button>
                             ) : (
-                                <span className="text-[11px] text-muted-foreground italic">Non-root factor</span>
+                                <span className="text-sm text-muted-foreground italic">Non-root factor</span>
                             )}
                         </div>
                     </div>
@@ -615,9 +621,27 @@ export function ActionCardsWidget({
     }, [acceptedValue]);
 
     const accept = (rows: ActionRow[]) => {
+        const defaultDuration = DEFAULT_DURATION_BY_DISCIPLINE[disciplineCode] ?? 1;
+
+        // Compute start date = today (local date, ISO format)
+        const today = new Date();
+        const startDate = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+        // Compute planned end date = startDate + defaultDuration days
+        const endDateObj = new Date(today);
+        endDateObj.setDate(endDateObj.getDate() + defaultDuration);
+        const plannedEndDate = endDateObj.toISOString().slice(0, 10);
+
         const incoming = rows
             .filter((row) => actionLabel(row))
-            .map((row, i) => taskFromAction(row, `${Date.now().toString(36)}-${i}`));
+            .map((row, i): ActionTask => ({
+                ...taskFromAction(row, `${Date.now().toString(36)}-${i}`),
+                status: 'Planned',
+                published: false,
+                durationDays: defaultDuration,
+                startDate,
+                plannedEndDate,
+            }));
         const next = mergeTasks(tasks, incoming);
         if (next === tasks) {
             toast.info('Already in the task list.');
@@ -645,7 +669,7 @@ export function ActionCardsWidget({
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                             <Sparkles className="h-3.5 w-3.5" />
                         </span>
-                        <span className="text-[14px] font-bold tracking-tight text-foreground">
+                        <span className="text-base font-bold tracking-tight text-foreground">
                             AI Suggested Actions
                         </span>
                     </div>
@@ -654,7 +678,7 @@ export function ActionCardsWidget({
                             <button
                                 type="button"
                                 onClick={() => accept(pending)}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:shadow active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:shadow active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                             >
                                 <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                 <span>Accept all suggested ({pending.length})</span>
@@ -678,10 +702,10 @@ export function ActionCardsWidget({
                                     <div className="flex items-start gap-2 min-w-0">
                                         <span className="mt-2.5 h-1 w-1 rounded-full bg-foreground/90 shrink-0" />
                                         <div className="space-y-1 min-w-0">
-                                            <p className="break-words text-[13.5px] font-normal text-foreground leading-relaxed">{text}</p>
+                                            <p className="break-words text-sm font-normal text-foreground leading-relaxed">{text}</p>
                                             {row.owner && (
-                                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                    <User className="h-3 w-3 text-primary/70 shrink-0" />
+                                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                                    <User className="h-3.5 w-3.5 text-primary/70 shrink-0" />
                                                     <span className="font-medium text-foreground/85">{row.owner}</span>
                                                 </div>
                                             )}
@@ -689,17 +713,17 @@ export function ActionCardsWidget({
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0 ml-2 pt-0.5">
                                         {isAccepted(row, tasks) ? (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success whitespace-nowrap">
-                                                <Check className="h-3 w-3" />
+                                            <span className="inline-flex items-center gap-1 text-sm font-semibold text-success whitespace-nowrap">
+                                                <Check className="h-3.5 w-3.5" />
                                                 <span>Accepted</span>
                                             </span>
                                         ) : !readOnly ? (
                                             <button
                                                 type="button"
                                                 onClick={() => accept([row])}
-                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer whitespace-nowrap"
+                                                className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer whitespace-nowrap"
                                             >
-                                                <Check className="h-3 w-3" />
+                                                <Check className="h-3.5 w-3.5" />
                                                 <span>Accept</span>
                                             </button>
                                         ) : null}
@@ -813,7 +837,7 @@ export function AiDraftWidget({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-[14px] font-bold text-foreground">
+                    <span className="text-base font-bold text-foreground">
                         {disciplineID ? 'Root cause conclusion' : 'AI Draft'}
                     </span>
                     <AiProvenanceInfo
@@ -826,7 +850,7 @@ export function AiDraftWidget({
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                        className="h-8 px-2.5 text-sm text-muted-foreground hover:text-foreground gap-1.5"
                         onClick={handleStartEdit}
                     >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -842,18 +866,18 @@ export function AiDraftWidget({
                         onChange={(e) => setDraft(e.target.value)}
                         rows={3}
                         placeholder="Enter concise root cause conclusion..."
-                        className="text-[13.5px] leading-relaxed resize-y bg-background font-normal"
+                        className="text-sm leading-relaxed resize-y bg-background font-normal"
                         autoFocus
                     />
                     <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                             {draft.length} characters
                         </span>
                         <div className="flex items-center gap-2">
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 text-xs"
+                                className="h-8 text-sm"
                                 onClick={handleCancel}
                                 disabled={saving}
                             >
@@ -862,7 +886,7 @@ export function AiDraftWidget({
                             <Button
                                 size="sm"
                                 variant="default"
-                                className="h-7 text-xs gap-1.5"
+                                className="h-8 text-sm gap-1.5"
                                 onClick={handleRequestSave}
                                 disabled={saving || !draft.trim()}
                             >
@@ -874,7 +898,7 @@ export function AiDraftWidget({
             ) : (
                 <div className="min-w-0">
                     {text ? (
-                        <p className="break-words text-[13.5px] leading-relaxed text-foreground font-normal">
+                        <p className="break-words text-sm leading-relaxed text-foreground font-normal">
                             {text}
                         </p>
                     ) : (
@@ -895,12 +919,12 @@ export function AiDraftWidget({
                                 Confirm Root Cause Modification
                             </DialogTitle>
                         </div>
-                        <DialogDescription className="text-xs text-muted-foreground leading-relaxed pt-1">
+                        <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-1">
                             Modifying the Root Cause in D4 impacts subsequent action and prevention steps:
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs">
+                    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
                         <div className="font-semibold text-warning-foreground flex items-center gap-1.5">
                             <RefreshCw className="h-3.5 w-3.5" />
                             Downstream dependencies to be updated:
@@ -913,7 +937,7 @@ export function AiDraftWidget({
                         </ul>
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-sm text-muted-foreground">
                         The system will save the new root cause and automatically re-analyze from D5 onward.
                     </div>
 
@@ -923,7 +947,7 @@ export function AiDraftWidget({
                             size="sm"
                             onClick={() => setConfirmOpen(false)}
                             disabled={saving}
-                            className="text-xs"
+                            className="h-8 text-sm"
                         >
                             Cancel
                         </Button>
@@ -932,7 +956,7 @@ export function AiDraftWidget({
                             size="sm"
                             onClick={() => handleSaveAndReanalyze(false)}
                             disabled={saving}
-                            className="text-xs"
+                            className="h-8 text-sm"
                         >
                             Save D4 Only
                         </Button>
@@ -941,7 +965,7 @@ export function AiDraftWidget({
                             size="sm"
                             onClick={() => handleSaveAndReanalyze(true)}
                             disabled={saving}
-                            className="text-xs gap-1.5 bg-primary font-semibold"
+                            className="h-8 text-sm gap-1.5 bg-primary font-semibold"
                         >
                             {saving ? (
                                 <>

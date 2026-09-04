@@ -64,7 +64,7 @@ export function ClosureGateBar({ disciplines }: { disciplines: Discipline8D[] })
                     />
                 </div>
 
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                     {canClose
                         ? 'D1–D7 completed — the case can be closed.'
                         : <>Closure blocked by <strong className="font-medium text-foreground">{blocking.join(', ')}</strong></>}
@@ -79,7 +79,7 @@ export function ClosureGateBar({ disciplines }: { disciplines: Discipline8D[] })
                             key={d.ID}
                             title={`${d.code} — ${STATUS_STYLE[status].label}`}
                             className={cn(
-                                'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium',
+                                'inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-sm font-medium',
                                 status === 'Approved' && 'border-success/30 text-success',
                                 status === 'ChangeRequested' && 'border-warning/40 text-warning',
                                 status === 'Draft' && 'border-border text-muted-foreground',
@@ -146,18 +146,18 @@ export function DisciplineReviewBox({
         if (value === 'Completed') {
             if (discipline.code === 'D6') {
                 const allDiscs = siblings || [];
-                const actionSteps = allDiscs.filter((d) => ['D3', 'D5', 'D7'].includes(d.code));
+                const actionSteps = allDiscs.filter((d) => d.code === 'D5');
 
                 const uncompletedTasks: { step: string; text: string; status: string }[] = [];
 
                 for (const d of actionSteps) {
                     const parsedD = parseJsonSafe(d.resultJson);
-                    const keyPrefix = d.code === 'D3' ? 'containment' : d.code === 'D5' ? 'corrective' : 'preventive';
+                    const keyPrefix = 'corrective';
                     const currentTasks = parsedD?.[keyPrefix]?.assignedActions || parsedD?.assignedActions;
                     if (Array.isArray(currentTasks) && currentTasks.length > 0) {
                         for (const t of currentTasks) {
                             const normStatus = normalizeActionStatus(t?.status);
-                            if (normStatus !== 'Done' && normStatus !== 'Verified') {
+                            if (normStatus !== 'Done') {
                                 uncompletedTasks.push({
                                     step: d.code,
                                     text: t?.name || t?.actionText || t?.action || 'Task',
@@ -169,8 +169,7 @@ export function DisciplineReviewBox({
                 }
 
                 if (uncompletedTasks.length > 0) {
-                    const affectedSteps = Array.from(new Set(uncompletedTasks.map((t) => t.step))).join(', ');
-                    toast.error(`There are tasks in ${affectedSteps} still not complete.`);
+                    toast.error('There are tasks in D5 still not complete.');
                     return;
                 }
             } else if (discipline.code === 'D5') {
@@ -196,14 +195,14 @@ export function DisciplineReviewBox({
             if (value === 'Completed') {
 
                 if (['D3', 'D5', 'D7'].includes(discipline.code)) {
-                    // Khi các bước D3, D5, D7 hoàn thành: chuyển task chưa Verified -> Done
+                    // Khi các bước D3, D5, D7 hoàn thành: chuyển task chưa Done -> Done
                     const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
                     const assignedField = `${keyPrefix}.assignedActions`;
                     const currentTasks = parsed?.[keyPrefix]?.assignedActions || parsed?.assignedActions;
                     if (Array.isArray(currentTasks) && currentTasks.length > 0) {
                         const updatedTasks = currentTasks.map((t: any) => ({
                             ...t,
-                            status: normalizeActionStatus(t.status) === 'Verified' ? 'Verified' : 'Done',
+                            status: 'Done',
                         }));
                         await saveDisciplineField(discipline.ID, assignedField, updatedTasks);
                     }
@@ -216,7 +215,7 @@ export function DisciplineReviewBox({
                 }
                 await setDisciplineWorkState(discipline.ID, value);
 
-                // Tự động đồng bộ task khi bước chuyển InProgress: chuyển Planned -> In Progress
+                // Tự động đồng bộ task khi bước chuyển InProgress: chuyển Planned -> Open
                 if (['D3', 'D5', 'D7'].includes(discipline.code)) {
                     const keyPrefix = discipline.code === 'D3' ? 'containment' : discipline.code === 'D5' ? 'corrective' : 'preventive';
                     const assignedField = `${keyPrefix}.assignedActions`;
@@ -224,7 +223,7 @@ export function DisciplineReviewBox({
                     if (Array.isArray(currentTasks) && currentTasks.length > 0) {
                         const updatedTasks = currentTasks.map((t: any) => ({
                             ...t,
-                            status: normalizeActionStatus(t.status) === 'Planned' ? 'In Progress' : t.status,
+                            status: normalizeActionStatus(t.status) === 'Planned' ? 'Open' : normalizeActionStatus(t.status),
                         }));
                         await saveDisciplineField(discipline.ID, assignedField, updatedTasks);
                     }
@@ -250,22 +249,22 @@ export function DisciplineReviewBox({
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold tracking-tight text-foreground">
+                        <span className="text-base font-semibold tracking-tight text-foreground">
                             {discipline.code} — {discipline.title}
                         </span>
                     </div>
 
                     {discipline.reviewedBy && discipline.reviewedAt && currentStatus === 'Completed' ? (
                         <div className="mt-1 flex flex-col min-w-0">
-                            <span className="text-xs font-medium text-foreground">
+                            <span className="text-sm font-medium text-foreground">
                                 Completed by <strong className="font-semibold text-foreground">{discipline.reviewedBy}</strong>
                             </span>
-                            <span className="text-xs text-muted-foreground tabular-nums">
+                            <span className="text-sm text-muted-foreground tabular-nums">
                                 {new Date(discipline.reviewedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                         </div>
                     ) : (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
+                        <p className="mt-0.5 text-sm text-muted-foreground">
                             {currentStatus === 'InProgress'
                                 ? 'In process — editing and confirmation enabled'
                                 : 'Not started (read-only) — switch status to "In process" to edit'}
@@ -279,7 +278,7 @@ export function DisciplineReviewBox({
                         disabled={busy}
                         onValueChange={(val) => handleStatusChange(val as 'NotStarted' | 'InProgress' | 'Completed')}
                     >
-                        <SelectTrigger className="h-8 w-[130px] px-2.5 text-xs font-semibold bg-background">
+                        <SelectTrigger className="h-9 w-[150px] px-3 text-sm font-medium bg-background">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

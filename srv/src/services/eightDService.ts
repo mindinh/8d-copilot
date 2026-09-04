@@ -43,6 +43,7 @@ import {
     listTaskEvidence,
     markAnalyzing,
     markFailed,
+    markTaskStatusInResultJson,
     reviewDiscipline,
     saveAssignedTeam,
     saveDisciplineFieldValue,
@@ -992,12 +993,26 @@ export function registerEightDHandlers(srv: any): void {
         }
 
         const task = findTaskInResultJson(discipline.resultJson, taskId);
-        if (!task || (task.status !== 'Done' && task.status !== 'Verified')) {
-            return req.error(400, 'Evidence can only be uploaded for tasks with status Done or Verified.');
+        const taskStatus = String(task?.status || '').trim().toLowerCase();
+        const allowedStatuses = isActionStep
+            ? ['open', 'done', 'verified']
+            : ['done', 'verified'];
+
+        if (!task || !allowedStatuses.includes(taskStatus)) {
+            return req.error(400, `Evidence can only be uploaded for tasks with status ${allowedStatuses.join(' or ')}.`);
         }
 
         req.data.uploadedBy = req.user?.id || 'anonymous';
         req.data.uploadedAt = new Date().toISOString();
+
+        if (taskStatus === 'open') {
+            const updatedJson = markTaskStatusInResultJson(discipline.resultJson, taskId, 'Done');
+            if (updatedJson) {
+                await UPDATE('cnma.proresolve.Disciplines')
+                    .set({ resultJson: updatedJson })
+                    .where({ ID: discipline.ID });
+            }
+        }
     });
 
     srv.before('UPDATE', 'TaskEvidences', async (req: any) => {

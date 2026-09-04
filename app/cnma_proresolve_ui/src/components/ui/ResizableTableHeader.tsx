@@ -111,8 +111,8 @@ export function ResizableTableHeader({
             }}
         >
             <div className={`flex items-center gap-1 pr-2 ${isRightAligned ? 'justify-end w-full' : 'justify-between'}`}>
-                <span className="truncate">{children}</span>
-                {hasFilter && <Filter size={12} className="text-primary shrink-0" />}
+                <span className="truncate text-sm font-semibold">{children}</span>
+                {hasFilter && <Filter size={13} className="text-primary shrink-0" />}
             </div>
             {/* Resize handle */}
             <div

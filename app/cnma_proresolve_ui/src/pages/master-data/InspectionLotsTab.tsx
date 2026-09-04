@@ -139,12 +139,12 @@ export function InspectionLotsTab() {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search Lot ID, Material, Characteristic, Equipment..."
-                            className="pl-8 text-xs h-9 bg-background"
+                            className="pl-8 text-sm h-9 bg-background"
                         />
                     </div>
 
                     <Select value={selectedMaterial} onValueChange={setSelectedMaterial}>
-                        <SelectTrigger className="w-36 text-xs h-9">
+                        <SelectTrigger className="w-36 text-sm h-9">
                             <SelectValue placeholder="Material" />
                         </SelectTrigger>
                         <SelectContent>
@@ -158,7 +158,7 @@ export function InspectionLotsTab() {
                     </Select>
 
                     <Select value={selectedConforming} onValueChange={setSelectedConforming}>
-                        <SelectTrigger className="w-32 text-xs h-9">
+                        <SelectTrigger className="w-32 text-sm h-9">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -175,7 +175,7 @@ export function InspectionLotsTab() {
                         size="sm"
                         onClick={() => refetch()}
                         disabled={isFetching}
-                        className="h-9 gap-1.5 text-xs"
+                        className="h-9 gap-1.5 text-sm"
                     >
                         <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
                         Refresh
@@ -184,7 +184,7 @@ export function InspectionLotsTab() {
                         variant="outline"
                         size="sm"
                         onClick={() => setJsonImportOpen(true)}
-                        className="h-9 gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/5 font-medium"
+                        className="h-9 gap-1.5 text-sm text-primary border-primary/30 hover:bg-primary/5 font-medium"
                     >
                         <FileCode className="w-4 h-4" />
                         Import JSON
@@ -192,7 +192,7 @@ export function InspectionLotsTab() {
                     <Button
                         size="sm"
                         onClick={() => setCreateOpen(true)}
-                        className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground font-semibold"
+                        className="h-9 gap-1.5 text-sm bg-primary text-primary-foreground font-semibold"
                     >
                         <Plus className="w-4 h-4" />
                         Add Inspection Lot
@@ -218,7 +218,7 @@ export function InspectionLotsTab() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table className="w-full text-left text-sm border-collapse">
                             <thead>
                                 <tr className="border-b border-border/80 bg-muted/50 font-semibold text-muted-foreground">
                                     <th className="py-3 px-4 w-32">Lot ID</th>
@@ -253,16 +253,16 @@ export function InspectionLotsTab() {
                                             {row.conforming ? (
                                                 <Badge
                                                     variant="outline"
-                                                    className="border-success/30 text-success bg-success/10 text-[10.5px] gap-1"
+                                                    className="border-success/30 text-success bg-success/10 text-sm font-semibold px-2.5 py-0.5 gap-1"
                                                 >
-                                                    <CheckCircle2 className="w-3 h-3" /> Pass
+                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Pass
                                                 </Badge>
                                             ) : (
                                                 <Badge
                                                     variant="outline"
-                                                    className="border-destructive/30 text-destructive bg-destructive/10 text-[10.5px] gap-1"
+                                                    className="border-destructive/30 text-destructive bg-destructive/10 text-sm font-semibold px-2.5 py-0.5 gap-1"
                                                 >
-                                                    <XCircle className="w-3 h-3" /> Fail
+                                                    <XCircle className="w-3.5 h-3.5" /> Fail
                                                 </Badge>
                                             )}
                                         </td>
@@ -274,18 +274,18 @@ export function InspectionLotsTab() {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => setEditItem(row)}
                                                 >
-                                                    <Edit className="w-3.5 h-3.5" />
+                                                    <Edit className="w-4 h-4" />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                                     onClick={() => setDeleteItem(row)}
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </Button>
                                             </div>
                                         </td>
@@ -338,17 +338,18 @@ export function InspectionLotsTab() {
                                 Delete Inspection Lot
                             </DialogTitle>
                         </DialogHeader>
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-sm text-muted-foreground mt-2">
                             Are you sure you want to delete lot <strong className="font-mono text-foreground">{deleteItem.lotId}</strong> ({deleteItem.characteristic})?
                             This will affect historical Is/Is-Not population statistics for material {deleteItem.materialId}.
                         </p>
                         <DialogFooter className="gap-2 mt-4">
-                            <Button variant="outline" size="sm" onClick={() => setDeleteItem(null)}>Cancel</Button>
+                            <Button variant="outline" size="sm" onClick={() => setDeleteItem(null)} className="h-9 text-sm">Cancel</Button>
                             <Button
                                 variant="destructive"
                                 size="sm"
                                 disabled={deleteMutation.isPending}
                                 onClick={() => deleteMutation.mutate(deleteItem.ID)}
+                                className="h-9 text-sm"
                             >
                                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                             </Button>
@@ -472,23 +473,23 @@ function InspectionLotFormDialog({
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <DialogTitle className="text-base font-bold text-foreground tracking-tight">
-                                    {title}
-                                </DialogTitle>
-                                <Badge variant="outline" className="font-mono text-[11px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5 shrink-0">
-                                    SAP QM • QA01/QE51N
-                                </Badge>
+                                     {title}
+                                 </DialogTitle>
+                                 <Badge variant="outline" className="font-mono text-xs border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5 shrink-0 px-2.5 py-0.5">
+                                     SAP QM • QA01/QE51N
+                                 </Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="text-sm text-muted-foreground mt-0.5">
                                 SAP Quality Management — Record Characteristic Inspection Results & Usage Decision
                             </p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                        <Badge variant="secondary" className="font-mono text-xs px-2.5 py-1 whitespace-nowrap">
+                        <Badge variant="secondary" className="font-mono text-sm font-semibold px-3 py-1 whitespace-nowrap">
                             Plant {plant || '1000'}
                         </Badge>
-                        <Badge variant="outline" className="text-xs border-border text-muted-foreground px-2.5 py-1 whitespace-nowrap">
+                        <Badge variant="outline" className="text-sm font-semibold border-border text-muted-foreground px-3 py-1 whitespace-nowrap">
                             Origin: {originCode === '03' ? '03 (In-Process)' : '01 (Goods Receipt)'}
                         </Badge>
                     </div>
@@ -499,20 +500,20 @@ function InspectionLotFormDialog({
                         {/* Section 1: General Header Data (Allgemeine Daten) */}
                         <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
                             <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <span className="text-base font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                     <span className="h-2 w-2 rounded-full bg-blue-600" />
                                     1. Inspection Lot Identification (Prüflos Header)
                                 </span>
-                                <span className="text-[11px] text-muted-foreground font-mono">QALS-PRUEFLOS</span>
+                                <span className="text-xs text-muted-foreground font-mono">QALS-PRUEFLOS</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
                                 <div className="sm:col-span-4 space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-semibold text-foreground">
+                                        <Label className="text-sm font-semibold text-foreground">
                                             Inspection Lot ID (Prüflos)
                                         </Label>
-                                        <Badge variant="outline" className="text-[10px] font-semibold border-primary/30 bg-primary/10 text-primary">
+                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 border-primary/30 bg-primary/10 text-primary">
                                             {isEdit ? 'Assigned' : 'System Assigned'}
                                         </Badge>
                                     </div>
@@ -520,9 +521,9 @@ function InspectionLotFormDialog({
                                         value={displayedLotId}
                                         disabled
                                         readOnly
-                                        className="font-mono text-xs h-9 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
+                                        className="font-mono text-sm h-9 font-semibold bg-muted/60 text-foreground cursor-not-allowed select-all"
                                     />
-                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                    <p className="text-sm leading-snug text-muted-foreground">
                                         {isEdit
                                             ? 'Fixed inspection lot number (SAP QALS). Cannot be modified.'
                                             : 'Auto-assigned by system number sequence (SAP QALS) on save.'}
@@ -530,11 +531,11 @@ function InspectionLotFormDialog({
                                 </div>
 
                                 <div className="sm:col-span-4 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Inspection Origin (Herkunft)
                                     </Label>
                                     <Select value={originCode} onValueChange={setOriginCode}>
-                                        <SelectTrigger className="text-xs h-9 bg-background">
+                                        <SelectTrigger className="text-sm h-9 bg-background">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -547,7 +548,7 @@ function InspectionLotFormDialog({
                                 </div>
 
                                 <div className="sm:col-span-4 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Plant (Werk)
                                     </Label>
                                     <ValueHelpInput
@@ -563,7 +564,7 @@ function InspectionLotFormDialog({
                                 </div>
 
                                 <div className="sm:col-span-6 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Material Number (Material) *
                                     </Label>
                                     <ValueHelpInput
@@ -579,14 +580,14 @@ function InspectionLotFormDialog({
                                 </div>
 
                                 <div className="sm:col-span-6 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Inspection Date (Prüfdatum)
                                     </Label>
                                     <Input
                                         type="date"
                                         value={lotDate}
                                         onChange={(e) => setLotDate(e.target.value)}
-                                        className="text-xs h-9 bg-background"
+                                        className="text-sm h-9 bg-background"
                                     />
                                 </div>
                             </div>
@@ -595,28 +596,28 @@ function InspectionLotFormDialog({
                         {/* Section 2: Work Center & Equipment (Arbeitsplatz & Equipment) */}
                         <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
                             <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <span className="text-base font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                     <span className="h-2 w-2 rounded-full bg-blue-600" />
                                     2. Work Center & Equipment Assignment (Arbeitsplatz & Equipment)
                                 </span>
-                                <span className="text-[11px] text-muted-foreground font-mono">QAMR-EQUIPMENT</span>
+                                <span className="text-xs text-muted-foreground font-mono">QAMR-EQUIPMENT</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Equipment / Fixture (Vorrichtung) *
                                     </Label>
                                     <Input
                                         value={equipment}
                                         onChange={(e) => setEquipment(e.target.value)}
                                         placeholder="e.g. WC-MILL-07-F1"
-                                        className="font-mono text-xs h-9 bg-background font-medium"
+                                        className="font-mono text-sm h-9 bg-background font-medium"
                                     />
                                 </div>
 
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Work Center Reference (Arbeitsplatz)
                                     </Label>
                                     <ValueHelpInput
@@ -632,7 +633,7 @@ function InspectionLotFormDialog({
                                         <button
                                             type="button"
                                             onClick={() => setWorkCenterId(derivedWorkCenter)}
-                                            className="text-[10.5px] leading-snug text-primary underline-offset-2 hover:underline"
+                                            className="text-sm leading-snug text-primary underline-offset-2 hover:underline"
                                         >
                                             Use {derivedWorkCenter} — from the equipment code
                                         </button>
@@ -644,55 +645,55 @@ function InspectionLotFormDialog({
                         {/* Section 3: Characteristic Results Recording & Valuation (Ergebniserfassung - QE51N) */}
                         <div className="rounded-xl border border-border/80 bg-card p-4 space-y-4 shadow-2xs">
                             <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <span className="text-base font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                     <span className="h-2 w-2 rounded-full bg-blue-600" />
                                     3. Characteristic Result Recording & Usage Decision (QE51N)
                                 </span>
-                                <span className="text-[11px] text-muted-foreground font-mono">QAMV / QASR</span>
+                                <span className="text-xs text-muted-foreground font-mono">QAMV / QASR</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
                                 <div className="sm:col-span-6 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Master Inspection Characteristic (Prüfmerkmal) *
                                     </Label>
                                     <Input
                                         value={characteristic}
                                         onChange={(e) => setCharacteristic(e.target.value)}
                                         placeholder="e.g. Flange burr height"
-                                        className="text-xs h-9 bg-background font-medium"
+                                        className="text-sm h-9 bg-background font-medium"
                                         required
                                     />
                                 </div>
 
                                 <div className="sm:col-span-3 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Measured Value (Messwert)
                                     </Label>
                                     <Input
                                         value={measuredValue}
                                         onChange={(e) => setMeasuredValue(e.target.value)}
                                         placeholder="e.g. 0.32"
-                                        className="font-mono text-xs h-9 bg-background font-bold"
+                                        className="font-mono text-sm h-9 bg-background font-bold"
                                     />
                                 </div>
 
                                 <div className="sm:col-span-3 space-y-1">
-                                    <Label className="text-xs font-semibold text-foreground">
+                                    <Label className="text-sm font-semibold text-foreground">
                                         Unit (Einheit)
                                     </Label>
                                     <Input
                                         value={unit}
                                         onChange={(e) => setUnit(e.target.value)}
                                         placeholder="e.g. mm"
-                                        className="text-xs h-9 bg-background"
+                                        className="text-sm h-9 bg-background"
                                     />
                                 </div>
                             </div>
 
                             {/* Characteristic Valuation Decision */}
                             <div className="pt-2">
-                                <Label className="text-xs font-semibold text-foreground block mb-2">
+                                <Label className="text-sm font-semibold text-foreground block mb-2">
                                     Characteristic Valuation (Merkmalsbewertung / VBEWERTUNG)
                                 </Label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -713,11 +714,11 @@ function InspectionLotFormDialog({
                                             <CheckCircle2 className="w-5 h-5" />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
+                                            <div className="font-semibold text-sm text-foreground flex items-center justify-between gap-2">
                                                 <span>Accepted (A) — Conforming</span>
-                                                <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">Pass / In-Spec</span>
+                                                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">Pass / In-Spec</span>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                            <p className="text-sm text-muted-foreground mt-0.5">
                                                 Result conforms with drawing tolerance limits
                                             </p>
                                         </div>
@@ -740,11 +741,11 @@ function InspectionLotFormDialog({
                                             <XCircle className="w-5 h-5" />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="font-semibold text-xs text-foreground flex items-center justify-between gap-2">
+                                            <div className="font-semibold text-sm text-foreground flex items-center justify-between gap-2">
                                                 <span>Rejected (R) — Non-Conforming</span>
-                                                <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 font-medium">Fail / Out-of-Spec</span>
+                                                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 font-medium">Fail / Out-of-Spec</span>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                            <p className="text-sm text-muted-foreground mt-0.5">
                                                 Exceeds specification limit (Lead for Is / Is-Not)
                                             </p>
                                         </div>
@@ -756,15 +757,15 @@ function InspectionLotFormDialog({
 
                     {/* Dialog Footer Actions */}
                     <div className="p-4 sm:px-6 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3 bg-background shrink-0">
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <div className="text-sm text-muted-foreground flex items-center gap-1.5">
                             <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
                             <span>ISO 9001 / IATF 16949 QM Audit Compliant</span>
                         </div>
                         <div className="flex items-center gap-2.5 self-end sm:self-center">
-                            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 px-4 text-xs">
+                            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 px-4 text-sm">
                                 Cancel
                             </Button>
-                            <Button type="submit" size="sm" disabled={isPending || plantOutside} className="h-9 px-5 text-xs bg-primary text-primary-foreground font-semibold">
+                            <Button type="submit" size="sm" disabled={isPending || plantOutside} className="h-9 px-5 text-sm bg-primary text-primary-foreground font-semibold">
                                 {isPending ? <Spinner className="w-4 h-4 mr-1.5" /> : null}
                                 Save Inspection Lot
                             </Button>
@@ -902,14 +903,14 @@ function InspectionLotJsonImportDialog({
                         <FileCode className="w-5 h-5 text-primary" />
                         Import Inspection History from JSON
                     </DialogTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Paste single lot object or array of lot inspection records.
                     </p>
                 </div>
 
                 <div className="p-5 sm:p-6 flex flex-col flex-1 min-h-0 space-y-3 overflow-hidden">
                     <div className="flex items-center justify-between shrink-0">
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                             Paste a single JSON object or an array of inspection lot records:
                         </p>
                         <Button
@@ -917,7 +918,7 @@ function InspectionLotJsonImportDialog({
                             variant="ghost"
                             size="sm"
                             onClick={handleLoadSample}
-                            className="h-7 text-xs text-primary hover:underline cursor-pointer"
+                            className="h-8 text-sm text-primary hover:underline cursor-pointer"
                         >
                             Insert Sample Template
                         </Button>
@@ -928,22 +929,22 @@ function InspectionLotJsonImportDialog({
                             value={jsonText}
                             onChange={(e) => { setJsonText(e.target.value); setParseError(null); }}
                             placeholder={sampleJson}
-                            className="font-mono text-xs h-[360px] max-h-[50vh] sm:max-h-[55vh] w-full bg-background resize-none overflow-y-auto"
+                            className="font-mono text-sm h-[360px] max-h-[50vh] sm:max-h-[55vh] w-full bg-background resize-none overflow-y-auto"
                         />
                     </div>
 
                     {parseError && (
-                        <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 p-2.5 rounded-md shrink-0">
+                        <div className="flex items-center gap-1.5 text-sm text-destructive bg-destructive/10 p-2.5 rounded-md shrink-0">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             <span>{parseError}</span>
                         </div>
                     )}
 
                     <div className="flex flex-row items-center justify-end gap-2.5 pt-3 border-t border-border/80 shrink-0">
-                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing} className="h-9 text-sm">
                             Cancel
                         </Button>
-                        <Button type="button" size="sm" onClick={handleImport} disabled={importing} className="bg-primary font-semibold">
+                        <Button type="button" size="sm" onClick={handleImport} disabled={importing} className="h-9 text-sm bg-primary font-semibold">
                             {importing ? <Spinner className="w-4 h-4 mr-1.5" /> : null}
                             Import Lots
                         </Button>

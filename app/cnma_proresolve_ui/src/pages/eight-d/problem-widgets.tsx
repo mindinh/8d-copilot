@@ -65,13 +65,13 @@ export function ComplaintReferenceWidget({ caseContext }: {
 
     return (
         <div className="rounded-xl border border-info/30 bg-info/[0.03] p-3.5 shadow-xs mb-2">
-            <div className="flex items-center gap-2 mb-2.5 pb-2 border-b border-info/20 text-xs sm:text-[13px] font-bold text-info">
+            <div className="flex items-center gap-2 mb-2.5 pb-2 border-b border-info/20 text-base font-bold text-info">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
                     <FileText className="h-3.5 w-3.5" />
                 </span>
                 <span>Customer Complaint Reference</span>
             </div>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                 {parts.map((p, idx) => (
                     <div key={idx} className="flex items-center gap-1.5">
                         <span className="text-muted-foreground font-medium">{p.label}:</span>
@@ -138,7 +138,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                             <Sparkles className="h-3.5 w-3.5" />
                         </span>
-                        <span className="text-[14px] font-bold tracking-tight text-foreground">
+                        <span className="text-base font-bold tracking-tight text-foreground">
                             {current ? 'Problem Description (Engineer Override)' : 'AI Drafted Problem Description'}
                         </span>
                         <AiProvenanceInfo
@@ -147,7 +147,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                         />
                     </div>
                     {current && (
-                        <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                        <span className="rounded bg-primary/10 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-primary">
                             Manual Edit
                         </span>
                     )}
@@ -155,13 +155,13 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
 
                 {editing && !readOnly ? (
                     <Textarea
-                        className="mt-2 min-h-28 bg-background text-[13px] leading-relaxed font-normal"
+                        className="mt-2 min-h-28 bg-background text-sm leading-relaxed font-normal"
                         value={draft}
                         disabled={saving}
                         onChange={(event) => setDraft(event.target.value)}
                     />
                 ) : (
-                    <p className="text-[13px] leading-relaxed text-foreground/90 font-normal">
+                    <p className="text-sm leading-relaxed text-foreground/90 font-normal">
                         {shown}
                     </p>
                 )}
@@ -174,7 +174,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                                     size="sm"
                                     onClick={() => void commit(draft.trim())}
                                     disabled={saving || !draft.trim() || draft.trim() === shown}
-                                    className="h-7 text-xs font-medium"
+                                    className="h-8 text-sm font-medium"
                                 >
                                     {saving ? 'Saving…' : 'Save description'}
                                 </Button>
@@ -183,7 +183,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                                     variant="ghost"
                                     onClick={() => { setEditing(false); setDraft(shown); setError(null); }}
                                     disabled={saving}
-                                    className="h-7 text-xs font-medium"
+                                    className="h-8 text-sm font-medium"
                                 >
                                     Cancel
                                 </Button>
@@ -194,7 +194,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                                     size="sm"
                                     variant="outline"
                                     onClick={() => { setDraft(shown); setEditing(true); }}
-                                    className="h-7 text-xs font-medium bg-background hover:bg-muted"
+                                    className="h-8 text-sm font-medium bg-background hover:bg-muted"
                                 >
                                     Edit description
                                 </Button>
@@ -204,7 +204,7 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
                                         variant="ghost"
                                         onClick={() => void commit(null)}
                                         disabled={saving}
-                                        className="h-7 text-xs text-muted-foreground"
+                                        className="h-8 text-sm text-muted-foreground"
                                     >
                                         Revert to AI draft
                                     </Button>
@@ -216,9 +216,9 @@ export function ProblemStatementWidget({ statement, override, disciplineID, read
             </div>
 
             {error && (
-                <p className="flex items-start gap-1.5 text-[11px] text-destructive">
-                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
-                    Could not save: {error}
+                <p className="flex items-start gap-1.5 text-sm text-destructive">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{error}</span>
                 </p>
             )}
         </div>
@@ -304,7 +304,7 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
                     <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-bold', meta.bgClass, meta.colorClass)}>
                         <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-[13px] font-semibold uppercase tracking-wider text-foreground/90 truncate">
+                    <span className="text-sm font-bold uppercase tracking-wider text-foreground/90 truncate">
                         {meta.title}
                     </span>
                     <AiProvenanceInfo
@@ -317,7 +317,7 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
                         <button
                             type="button"
                             onClick={() => { setDraft(current); setEditing(true); }}
-                            className="text-[11px] font-medium text-primary hover:underline hover:bg-primary/10 rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer"
+                            className="text-sm font-medium text-primary hover:underline hover:bg-primary/10 rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer"
                         >
                             Edit
                         </button>
@@ -328,7 +328,7 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
             {editing && !readOnly ? (
                 <div className="space-y-2 flex-1 flex flex-col justify-between">
                     <Textarea
-                        className="w-full min-h-[64px] text-[12px] bg-background p-2 rounded-md border leading-relaxed resize-y font-normal"
+                        className="w-full min-h-[64px] text-sm bg-background p-2 rounded-md border leading-relaxed resize-y font-normal"
                         value={draft}
                         disabled={saving}
                         onChange={(e) => setDraft(e.target.value)}
@@ -339,7 +339,7 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
                             size="sm"
                             onClick={() => void commit()}
                             disabled={saving || draft.trim() === current}
-                            className="h-6 px-2.5 text-[11px] font-medium"
+                            className="h-8 px-2.5 text-sm font-medium"
                         >
                             {saving ? 'Saving…' : 'Save'}
                         </Button>
@@ -348,22 +348,22 @@ export function W2hCellWidget({ label, value, disciplineID, fieldKey, readOnly =
                             variant="ghost"
                             onClick={() => { setEditing(false); setDraft(current); setError(null); }}
                             disabled={saving}
-                            className="h-6 px-2 text-[11px] font-medium"
+                            className="h-8 px-2 text-sm font-medium"
                         >
                             Cancel
                         </Button>
                     </div>
                 </div>
             ) : (
-                <div className={cn('text-[12px] leading-relaxed flex-1 font-normal', current ? 'text-foreground/90' : 'italic text-muted-foreground')}>
+                <div className={cn('text-sm leading-relaxed flex-1 font-normal', current ? 'text-foreground/90' : 'italic text-muted-foreground')}>
                     {current || 'Not tracked in current dataset'}
                 </div>
             )}
 
             {error && (
-                <p className="mt-1 flex items-start gap-1 text-[11px] text-destructive">
-                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
-                    {error}
+                <p className="mt-1 flex items-start gap-1 text-sm text-destructive">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{error}</span>
                 </p>
             )}
         </div>
@@ -437,7 +437,7 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                         {isTone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                     </span>
                     <h4 className={cn(
-                        'text-[13px] font-semibold truncate',
+                        'text-base font-semibold truncate',
                         isTone ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground/90',
                     )}>
                         {heading || (isTone ? 'Is' : 'Is Not')} — {isTone ? 'Affected Scope & Condition' : 'Excluded Scope & Condition'}
@@ -453,7 +453,7 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                             type="button"
                             onClick={() => { setDraft(currentLines.join('\n')); setEditing(true); }}
                             className={cn(
-                                'text-[11px] font-medium hover:underline rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer',
+                                'text-sm font-medium hover:underline rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer',
                                 isTone ? 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10' : 'text-primary hover:bg-primary/10',
                             )}
                         >
@@ -466,7 +466,7 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
             {editing && !readOnly ? (
                 <div className="space-y-2 flex-1 flex flex-col justify-between">
                     <Textarea
-                        className="w-full min-h-[96px] text-[12px] bg-background p-2.5 rounded-md border leading-relaxed resize-y font-normal"
+                        className="w-full min-h-[96px] text-sm bg-background p-2.5 rounded-md border leading-relaxed resize-y font-normal"
                         value={draft}
                         placeholder="Enter each item on a new line..."
                         disabled={saving}
@@ -478,7 +478,7 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                             size="sm"
                             onClick={() => void commit()}
                             disabled={saving}
-                            className="h-6 px-2.5 text-[11px] font-medium"
+                            className="h-8 px-2.5 text-sm font-medium"
                         >
                             {saving ? 'Saving…' : 'Save'}
                         </Button>
@@ -487,31 +487,31 @@ function IsIsNotBox({ heading, value, disciplineID, fieldKey, tone, readOnly = f
                             variant="ghost"
                             onClick={() => { setEditing(false); setDraft(currentLines.join('\n')); setError(null); }}
                             disabled={saving}
-                            className="h-6 px-2 text-[11px] font-medium"
+                            className="h-8 px-2 text-sm font-medium"
                         >
                             Cancel
                         </Button>
                     </div>
                 </div>
             ) : currentLines.length ? (
-                <div className="space-y-1.5 text-[12px] leading-relaxed text-foreground/90 flex-1 font-normal">
+                <div className="space-y-1.5 text-sm leading-relaxed text-foreground/90 flex-1 font-normal">
                     {currentLines.map((line, index) => (
                         <div key={index} className="flex items-start gap-2">
                             <span className={cn('mt-2 h-1.5 w-1.5 rounded-full shrink-0', isTone ? 'bg-emerald-500' : 'bg-muted-foreground/60')} />
-                            <div className="flex-1 min-w-0"><Markdown className="text-[12px]">{line}</Markdown></div>
+                            <div className="flex-1 min-w-0"><Markdown className="text-sm">{line}</Markdown></div>
                         </div>
                     ))}
                 </div>
             ) : (
-                <p className="text-[12px] italic text-muted-foreground flex-1 font-normal">
+                <p className="text-sm italic text-muted-foreground flex-1 font-normal">
                     Not analysed for this case
                 </p>
             )}
 
             {error && (
-                <p className="mt-1 flex items-start gap-1 text-[11px] text-destructive">
-                    <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
-                    {error}
+                <p className="mt-1 flex items-start gap-1 text-sm text-destructive">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{error}</span>
                 </p>
             )}
         </div>
@@ -577,7 +577,7 @@ export function IsNotBasisWidget({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400">
                         <FileText className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-[13px] font-semibold text-foreground/90">
+                    <span className="text-base font-semibold text-foreground/90">
                         Is / Is-Not Comparison Basis & Reasoning
                     </span>
                     <AiProvenanceInfo
@@ -590,7 +590,7 @@ export function IsNotBasisWidget({
                         <button
                             type="button"
                             onClick={() => { setDraft(current); setEditing(true); }}
-                            className="text-[11px] font-medium text-primary hover:underline hover:bg-primary/10 rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer"
+                            className="text-sm font-medium text-primary hover:underline hover:bg-primary/10 rounded px-1.5 py-0.5 transition-colors shrink-0 cursor-pointer"
                         >
                             Edit
                         </button>
@@ -601,7 +601,7 @@ export function IsNotBasisWidget({
             {editing && !readOnly ? (
                 <div className="space-y-2 flex-1 flex flex-col justify-between pt-1">
                     <Textarea
-                        className="w-full min-h-[96px] text-[12px] bg-background p-2.5 rounded-md border leading-relaxed resize-y font-normal"
+                        className="w-full min-h-[96px] text-sm bg-background p-2.5 rounded-md border leading-relaxed resize-y font-normal"
                         value={draft}
                         disabled={saving}
                         onChange={(e) => setDraft(e.target.value)}
@@ -610,7 +610,7 @@ export function IsNotBasisWidget({
                     />
                     <div className="flex items-center justify-between gap-2 pt-1">
                         {error ? (
-                            <p className="flex items-center gap-1 text-xs text-destructive">
+                            <p className="flex items-center gap-1 text-sm text-destructive">
                                 <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
                                 <span>{error}</span>
                             </p>
@@ -621,7 +621,7 @@ export function IsNotBasisWidget({
                                 variant="ghost"
                                 onClick={() => { setEditing(false); setDraft(current); setError(null); }}
                                 disabled={saving}
-                                className="h-7 px-2.5 text-xs font-medium"
+                                className="h-8 px-2.5 text-sm font-medium"
                             >
                                 Cancel
                             </Button>
@@ -629,7 +629,7 @@ export function IsNotBasisWidget({
                                 size="sm"
                                 onClick={() => void commit()}
                                 disabled={saving || draft.trim() === current}
-                                className="h-7 px-3 text-xs font-medium"
+                                className="h-8 px-3 text-sm font-medium"
                             >
                                 {saving ? 'Saving…' : 'Save'}
                             </Button>
@@ -637,13 +637,13 @@ export function IsNotBasisWidget({
                     </div>
                 </div>
             ) : (
-                <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-foreground/90 font-normal">
+                <div className="min-w-0 flex-1 text-sm leading-relaxed text-foreground/90 font-normal">
                     {current ? (() => {
                         const parsed = parseStructuredBasis(current);
                         if (parsed.characteristics.length === 0 && !parsed.conclusion) {
                             return (
-                                <div className="rounded-lg bg-purple-500/[0.04] dark:bg-purple-500/[0.08] border border-purple-500/20 p-2.5">
-                                    <Markdown className="text-[12.5px] leading-relaxed">{current}</Markdown>
+                                <div className="rounded-lg bg-purple-500/[0.04] dark:bg-purple-500/[0.08] border border-purple-500/20 p-3">
+                                    <Markdown className="text-sm leading-relaxed">{current}</Markdown>
                                 </div>
                             );
                         }
@@ -652,7 +652,7 @@ export function IsNotBasisWidget({
                                 {/* 1. By Characteristic Cards */}
                                 {parsed.characteristics.length > 0 && (
                                     <div className="space-y-2">
-                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                                             <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                                             <span>Characteristic Contrast Breakdown</span>
                                         </div>
@@ -662,19 +662,19 @@ export function IsNotBasisWidget({
                                                 <div
                                                     key={idx}
                                                     className={cn(
-                                                        'rounded-lg border p-2.5 text-xs transition-all',
+                                                        'rounded-lg border p-3 text-sm transition-all',
                                                         c.isPrimary
                                                             ? 'bg-purple-500/[0.04] dark:bg-purple-500/[0.08] border-purple-500/30'
                                                             : 'bg-muted/40 dark:bg-muted/20 border-border/70'
                                                     )}
                                                 >
                                                     <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-border/40">
-                                                        <div className="flex items-center gap-1.5 font-semibold text-foreground text-[12px]">
+                                                        <div className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
                                                             <span className={cn('h-2 w-2 rounded-full', c.isPrimary ? 'bg-purple-600' : 'bg-amber-500')} />
                                                             <span>{c.name}</span>
                                                         </div>
                                                         <span className={cn(
-                                                            'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                                                            'text-xs px-2.5 py-0.5 rounded-full font-semibold',
                                                             c.isPrimary
                                                                 ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300'
                                                                 : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
@@ -682,8 +682,8 @@ export function IsNotBasisWidget({
                                                             {c.badge}
                                                         </span>
                                                     </div>
-                                                    <div className="text-foreground/90 leading-relaxed text-[12px]">
-                                                        <Markdown className="text-[12px]">{c.details}</Markdown>
+                                                    <div className="text-foreground/90 leading-relaxed text-sm">
+                                                        <Markdown className="text-sm">{c.details}</Markdown>
                                                     </div>
                                                 </div>
                                             ))}
@@ -693,13 +693,13 @@ export function IsNotBasisWidget({
 
                                 {/* 2. Synthesis & Conclusion Card */}
                                 {parsed.conclusion && (
-                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.08] p-2.5 text-xs">
-                                        <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 mb-1 pb-1 border-b border-emerald-500/20 text-[11.5px]">
+                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.08] p-3 text-sm">
+                                        <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 mb-1 pb-1 border-b border-emerald-500/20 text-sm">
                                             <CheckCircle2 className="w-3.5 h-3.5" />
                                             <span>Synthesis & Conclusion (Lead for D4 Root Cause)</span>
                                         </div>
-                                        <div className="text-foreground/90 leading-relaxed text-[12px]">
-                                            <Markdown className="text-[12px]">{parsed.conclusion}</Markdown>
+                                        <div className="text-foreground/90 leading-relaxed text-sm">
+                                            <Markdown className="text-sm">{parsed.conclusion}</Markdown>
                                         </div>
                                     </div>
                                 )}
@@ -867,7 +867,7 @@ export function W2hSectionWidget({
     return (
         <div className="col-span-12 min-w-0 space-y-2.5">
             <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 break-words text-[14px] font-bold text-foreground tracking-tight">
+                <span className="min-w-0 break-words text-base font-bold text-foreground tracking-tight">
                     5W2H Problem Analysis
                 </span>
             </div>
@@ -902,7 +902,7 @@ export function IsIsNotSectionWidget({
     return (
         <div className="col-span-12 min-w-0 space-y-2.5">
             <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 break-words text-[14px] font-bold text-foreground tracking-tight">
+                <span className="min-w-0 break-words text-base font-bold text-foreground tracking-tight">
                     Is / Is-Not Problem Boundaries
                 </span>
             </div>

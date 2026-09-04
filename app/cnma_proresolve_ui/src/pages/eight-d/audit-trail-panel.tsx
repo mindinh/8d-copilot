@@ -43,8 +43,8 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
 
     if (isLoading) {
         return (
-            <div className="flex items-center gap-2 px-3 py-6 text-xs text-muted-foreground">
-                <Spinner className="h-3.5 w-3.5" /> Loading trail…
+            <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" /> Loading trail…
             </div>
         );
     }
@@ -53,7 +53,7 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
         // Nói thẳng thay vì hiện panel rỗng: rỗng nghĩa là "chưa ai duyệt", còn
         // đây là "không đọc được" — hai chuyện hoàn toàn khác nhau.
         return (
-            <p className="px-3 py-6 text-xs text-muted-foreground">
+            <p className="px-3 py-6 text-sm text-muted-foreground">
                 Audit trail unavailable: {(error as Error)?.message ?? 'unknown error'}
             </p>
         );
@@ -63,7 +63,7 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
 
     if (trail.length === 0) {
         return (
-            <p className="px-3 py-6 text-xs text-muted-foreground">
+            <p className="px-3 py-6 text-sm text-muted-foreground">
                 Nothing signed off yet. Approving a discipline records who did it and when.
             </p>
         );
@@ -82,16 +82,16 @@ export function AuditTrailPanel({ reportID }: { reportID: string }) {
                         )}
                     >
                         <div className="flex flex-col min-w-0">
-                            <span className="text-[12.5px] font-semibold text-foreground truncate">
+                            <span className="text-sm font-semibold text-foreground truncate">
                                 {event.actor || 'System'}
                             </span>
-                            <span className="text-[11px] tabular-nums text-muted-foreground">
+                            <span className="text-xs tabular-nums text-muted-foreground">
                                 {formatTime(event.at)}
                             </span>
                         </div>
-                        <div className="mt-1 break-words text-[13px] text-foreground/90 font-medium">{describe(event)}</div>
+                        <div className="mt-1 break-words text-sm text-foreground/90 font-medium">{describe(event)}</div>
                         {event.note && (
-                            <div className="mt-1 break-words rounded bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
+                            <div className="mt-1 break-words rounded bg-muted/60 px-2.5 py-1 text-sm text-muted-foreground">
                                 {event.note}
                             </div>
                         )}

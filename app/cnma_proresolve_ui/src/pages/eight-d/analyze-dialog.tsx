@@ -138,9 +138,9 @@ function daysSince(isoDate: string | null | undefined): number | null {
 function PreviewRow({ label, value }: { label: string; value: string | null | undefined }) {
     if (!value) return null;
     return (
-        <div className="flex min-w-0 gap-2 py-0.5">
-            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{label}</span>
-            <span className="min-w-0 flex-1 break-words text-[11px] font-medium">{value}</span>
+        <div className="flex min-w-0 gap-2 py-1">
+            <span className="w-28 shrink-0 text-sm text-muted-foreground">{label}</span>
+            <span className="min-w-0 flex-1 break-words text-sm font-medium">{value}</span>
         </div>
     );
 }
@@ -171,7 +171,7 @@ function DefectTypeBadge({ origin }: { origin?: string | null }) {
         <span
             title={fullTitle}
             className={cn(
-                'inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0 border font-mono tracking-tight min-w-[28px]',
+                'inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold shrink-0 border font-mono tracking-tight min-w-[30px]',
                 cat === 'Q1' && 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
                 cat === 'Q2' && 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
                 cat === 'Q3' && 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
@@ -475,7 +475,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                 )}
 
                                 {check?.ok && (
-                                    <span className="text-xs text-success ml-auto">
+                                    <span className="text-sm text-success ml-auto font-medium">
                                         Case {check.caseId} · {(text.length / 1024).toFixed(0)} KB
                                     </span>
                                 )}
@@ -483,27 +483,27 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
 
                             {samples.length > 0 && (
                                 <div className="min-w-0 rounded-lg border border-dashed p-3">
-                                    <p className="text-xs font-medium">Or start from an incoming issue</p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                    <p className="text-sm font-semibold">Or start from an incoming issue</p>
+                                    <p className="mt-0.5 text-sm text-muted-foreground">
                                         Freshly logged cases — symptom and context only, no root cause, no
                                         actions, no team. That is what the Copilot is for.
                                     </p>
                                     <div className="mt-2 space-y-1">
                                         {samples.map((s) => (
-                                            <Button
+                                             <Button
                                                 key={s.file}
                                                 type="button"
                                                 variant="ghost"
                                                 disabled={busy}
                                                 onClick={() => void loadSample(s)}
-                                                className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                                                className="flex h-auto min-w-0 w-full items-start justify-start gap-2 whitespace-normal rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted disabled:opacity-50"
                                             >
-                                                <span className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                                <span className="mt-0.5 font-mono text-sm text-muted-foreground">
                                                     {s.notificationId}
                                                 </span>
                                                 <span className="min-w-0 flex-1 text-left">
-                                                    <span className="block break-words text-xs font-normal text-foreground">{s.symptom}</span>
-                                                    <span className="block break-words text-xs font-normal text-muted-foreground">
+                                                    <span className="block break-words text-sm font-medium text-foreground">{s.symptom}</span>
+                                                    <span className="block break-words text-sm font-normal text-muted-foreground">
                                                         {s.origin.startsWith('Q1') ? 'Customer complaint' : 'Internal defect'}
                                                         {s.workCenter && ` · ${s.workCenter}`}
                                                         {s.material && ` · ${s.material}`}
@@ -520,10 +520,10 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                 onChange={(e) => { setText(e.target.value); setError(null); }}
                                 disabled={busy}
                                 placeholder='{ "notificationId": "8D-10048412", "symptomShortText": "…", "inspections": [ … ] }'
-                                className="h-56 w-full min-w-0 max-w-full resize-none font-mono text-xs"
+                                className="h-56 w-full min-w-0 max-w-full resize-none font-mono text-sm"
                             />
 
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 Sample datasets live in <code className="font-mono">mock-data/</code> in the repository.
                             </p>
                         </>
@@ -534,13 +534,13 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                         <div className="min-w-0 space-y-2.5">
                             {/* Search Input */}
                             <div className="relative w-full">
-                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     disabled={busy || defects === null}
                                     placeholder="Search defect ID or description..."
-                                    className="h-8 pl-8 pr-8 text-xs w-full"
+                                    className="h-9 pl-9 pr-8 text-sm w-full"
                                 />
                                 {search && (
                                     <button
@@ -549,7 +549,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                                         title="Clear search"
                                     >
-                                        <X className="h-3.5 w-3.5" />
+                                        <X className="h-4 w-4" />
                                     </button>
                                 )}
                             </div>
@@ -560,71 +560,71 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                     type="button"
                                     onClick={() => setFilterType('ALL')}
                                     className={cn(
-                                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors cursor-pointer',
                                         filterType === 'ALL'
                                             ? 'border-primary bg-primary text-primary-foreground'
                                             : 'border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     <span>All</span>
-                                    <span className="text-[11px] opacity-75">({typeCounts.ALL})</span>
+                                    <span className="text-xs opacity-75">({typeCounts.ALL})</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setFilterType('Q1')}
                                     className={cn(
-                                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors cursor-pointer',
                                         filterType === 'Q1'
                                             ? 'border-rose-600 bg-rose-600 text-white'
                                             : 'border-rose-200 text-rose-700 bg-rose-50/60 hover:bg-rose-100/70 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950/40',
                                     )}
                                 >
                                     <span>Q1 Customer</span>
-                                    <span className="text-[11px] opacity-75">({typeCounts.Q1})</span>
+                                    <span className="text-xs opacity-75">({typeCounts.Q1})</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setFilterType('Q2')}
                                     className={cn(
-                                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors cursor-pointer',
                                         filterType === 'Q2'
                                             ? 'border-amber-600 bg-amber-600 text-white'
                                             : 'border-amber-200 text-amber-700 bg-amber-50/60 hover:bg-amber-100/70 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/40',
                                     )}
                                 >
                                     <span>Q2 Supplier</span>
-                                    <span className="text-[11px] opacity-75">({typeCounts.Q2})</span>
+                                    <span className="text-xs opacity-75">({typeCounts.Q2})</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setFilterType('Q3')}
                                     className={cn(
-                                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors cursor-pointer',
                                         filterType === 'Q3'
                                             ? 'border-blue-600 bg-blue-600 text-white'
                                             : 'border-blue-200 text-blue-700 bg-blue-50/60 hover:bg-blue-100/70 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-950/40',
                                     )}
                                 >
                                     <span>Q3 Internal</span>
-                                    <span className="text-[11px] opacity-75">({typeCounts.Q3})</span>
+                                    <span className="text-xs opacity-75">({typeCounts.Q3})</span>
                                 </button>
                             </div>
 
                             {defects === null && (
-                                <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
-                                    <Spinner className="w-3.5 h-3.5" />
+                                <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                                    <Spinner className="w-4 h-4" />
                                     Loading defects…
                                 </div>
                             )}
 
                             {defects?.length === 0 && (
-                                <p className="py-6 text-xs text-muted-foreground">
+                                <p className="py-6 text-sm text-muted-foreground">
                                     No open defect is waiting for an 8D. Record one from the Defects screen first.
                                 </p>
                             )}
 
                             {visibleDefects?.length === 0 && defects && defects.length > 0 && (
-                                <p className="py-6 text-xs text-muted-foreground text-center">
+                                <p className="py-6 text-sm text-muted-foreground text-center">
                                     No defect matches {filterType !== 'ALL' ? `filter "${filterType}"` : ''}{search.trim() ? ` and search "${search.trim()}"` : ''}.
                                 </p>
                             )}
@@ -644,13 +644,13 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                             <DefectTypeBadge origin={d.origin} />
 
                                             {/* 2. ID */}
-                                            <span className="font-mono text-xs font-semibold text-foreground/80 shrink-0">
+                                            <span className="font-mono text-sm font-semibold text-foreground/80 shrink-0">
                                                 {d.defectId}
                                             </span>
 
                                             {/* 3. Description */}
                                             <span
-                                                className="min-w-0 flex-1 text-[13px] font-normal text-foreground break-words truncate"
+                                                className="min-w-0 flex-1 text-sm font-normal text-foreground break-words truncate"
                                                 title={d.symptomShortText || d.defectText || ''}
                                             >
                                                 {d.symptomShortText || d.defectText || (
@@ -674,7 +674,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                     size="sm"
                                     disabled={busy}
                                     onClick={() => { setSelected(null); setDetail(null); setError(null); }}
-                                    className="h-7 shrink-0 px-2 text-xs"
+                                    className="h-8 shrink-0 px-2.5 text-sm"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />
                                     Change
@@ -682,9 +682,9 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                         <DefectTypeBadge origin={preview.origin} />
-                                        <p className="font-mono text-xs text-muted-foreground">{preview.defectId}</p>
+                                        <p className="font-mono text-sm text-muted-foreground">{preview.defectId}</p>
                                     </div>
-                                    <p className="break-words text-sm font-semibold mt-0.5">
+                                    <p className="break-words text-base font-semibold mt-0.5">
                                         {preview.symptomShortText || '(no symptom recorded)'}
                                     </p>
                                 </div>
@@ -695,12 +695,12 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                               * lỗi và một payload 8D nói hai điều khác nhau — sửa
                               * lỗi là việc của màn hình Defects.
                               */}
-                            <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <div className="min-w-0 rounded-lg border bg-muted/30 p-3.5">
+                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/50">
+                                    <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                                         What this 8D will analyse
                                     </p>
-                                    {detailLoading && <Spinner className="h-3 w-3" />}
+                                    {detailLoading && <Spinner className="h-3.5 w-3.5" />}
                                 </div>
 
                                 <div className="mt-2 min-w-0 divide-y divide-border/60">
@@ -747,18 +747,18 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                       * trông giống hệt nhau nếu im lặng.
                                       */}
                                     {!detailLoading && (
-                                        <div className="pt-1">
-                                            <p className="py-0.5 text-[11px] text-muted-foreground">
+                                        <div className="pt-1.5">
+                                            <p className="py-1 text-sm font-medium text-muted-foreground">
                                                 {detail?.characteristics?.length
                                                     ? `Inspection results (${detail.characteristics.length})`
                                                     : 'No inspection results recorded.'}
                                             </p>
                                             {detail?.characteristics?.map((c, i) => (
-                                                <div key={c.ID ?? i} className="flex min-w-0 gap-2 py-0.5">
-                                                    <span className="w-28 shrink-0 truncate text-[11px] text-muted-foreground">
+                                                <div key={c.ID ?? i} className="flex min-w-0 gap-2 py-1">
+                                                    <span className="w-28 shrink-0 truncate text-sm text-muted-foreground">
                                                         {c.characteristic}
                                                     </span>
-                                                    <span className="min-w-0 flex-1 break-words text-[11px] font-medium">
+                                                    <span className="min-w-0 flex-1 break-words text-sm font-medium">
                                                         {c.measuredValue || '—'}
                                                         {c.specUom ? ` ${c.specUom}` : ''}
                                                         {(c.specLowerLimit != null || c.specUpperLimit != null)
@@ -780,7 +780,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                               */}
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="min-w-0 space-y-1.5">
-                                    <Label htmlFor="ad-due" className="text-xs font-semibold">
+                                    <Label htmlFor="ad-due" className="text-sm font-semibold">
                                         Required completion date
                                     </Label>
                                     <Input
@@ -789,9 +789,9 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                         value={dueDate}
                                         disabled={busy}
                                         onChange={(e) => setDueDate(e.target.value)}
-                                        className="h-8 text-xs"
+                                        className="h-9 text-sm"
                                     />
-                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                    <p className="text-sm leading-relaxed text-muted-foreground">
                                         {preview.origin === ORIGIN_CUSTOMER
                                             ? 'Defaults to the customer SLA on this complaint.'
                                             : 'Optional. Internal defects carry no SLA, so nothing is filled in — set a date only if the team commits to one.'}
@@ -799,7 +799,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                 </div>
 
                                 <div className="min-w-0 space-y-1.5">
-                                    <Label htmlFor="ad-coord" className="text-xs font-semibold">
+                                    <Label htmlFor="ad-coord" className="text-sm font-semibold">
                                         Coordinator
                                     </Label>
                                     <ValueHelpInput
@@ -823,7 +823,7 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                                         placeholder="e.g. Minh Dinh"
                                         className={cn(busy && 'pointer-events-none opacity-50')}
                                     />
-                                    <p className="text-[10.5px] leading-snug text-muted-foreground">
+                                    <p className="text-sm leading-relaxed text-muted-foreground">
                                         Defaults to the coordinator on the defect. Both fields stay editable
                                         after the 8D is created.
                                     </p>
@@ -833,8 +833,8 @@ export function AnalyzeDialog({ open, onOpenChange, onScheduled }: Props) {
                     )}
 
                     {errorText && (
-                        <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
-                            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+                        <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                             <span className="break-words">{errorText}</span>
                         </div>
                     )}

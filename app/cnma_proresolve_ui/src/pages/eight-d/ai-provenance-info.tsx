@@ -350,24 +350,24 @@ export function AiProvenanceInfo({
                     <TooltipContent
                         side={side}
                         sideOffset={6}
-                        className="z-50 max-w-sm sm:max-w-md p-3.5 bg-card text-card-foreground border border-border shadow-2xl rounded-xl text-xs space-y-2.5 text-left animate-in fade-in-0 zoom-in-95 pointer-events-auto ring-1 ring-black/5 dark:ring-white/10"
+                        className="z-50 max-w-sm sm:max-w-md p-4 bg-card text-card-foreground border border-border shadow-2xl rounded-xl text-sm space-y-2.5 text-left animate-in fade-in-0 zoom-in-95 pointer-events-auto ring-1 ring-black/5 dark:ring-white/10"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between gap-2 border-b border-border/70 pb-2">
                             <div className="flex items-center gap-1.5 font-semibold text-foreground">
                                 {isVector ? (
-                                    <GitBranch className="w-3.5 h-3.5 text-info" />
+                                    <GitBranch className="w-4 h-4 text-info" />
                                 ) : isAi ? (
-                                    <Sparkles className="w-3.5 h-3.5 text-warning" />
+                                    <Sparkles className="w-4 h-4 text-warning" />
                                 ) : (
-                                    <Database className="w-3.5 h-3.5 text-primary" />
+                                    <Database className="w-4 h-4 text-primary" />
                                 )}
-                                <span>AI Rationale & Provenance</span>
+                                <span className="text-sm font-semibold">AI Rationale & Provenance</span>
                             </div>
                             <Badge
                                 variant="outline"
                                 className={cn(
-                                    'text-[10px] px-1.5 py-0 font-normal border',
+                                    'text-xs px-2 py-0.5 font-medium border',
                                     isVector && 'bg-info/10 text-info border-info/30',
                                     isAi && 'bg-warning/10 text-warning border-warning/30',
                                     !isVector && !isAi && 'bg-primary/10 text-primary border-primary/30',
@@ -378,13 +378,13 @@ export function AiProvenanceInfo({
                         </div>
 
                         {label && (
-                            <div className="text-[11px] font-medium text-muted-foreground">
+                            <div className="text-sm font-medium text-muted-foreground">
                                 Field: <strong className="text-foreground">{label}</strong>
                             </div>
                         )}
 
                         {/* Bullet Points */}
-                        <ul className="space-y-1.5 text-foreground/90 leading-relaxed text-[11px]">
+                        <ul className="space-y-1.5 text-foreground/90 leading-relaxed text-sm">
                             {provenance.bullets.map((bullet, idx) => (
                                 <li key={idx} className="flex items-start gap-1.5">
                                     <span className="text-primary font-bold shrink-0 mt-0.5">•</span>
@@ -396,8 +396,8 @@ export function AiProvenanceInfo({
                         {/* Interactive Citations */}
                         {provenance.citations.length > 0 && (
                             <div className="pt-2 border-t border-border/70">
-                                <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
-                                    <LinkIcon className="w-3 h-3 text-primary" />
+                                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                                    <LinkIcon className="w-3.5 h-3.5 text-primary" />
                                     <span>Cited Evidence & Records (Click to inspect source fact):</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
@@ -410,9 +410,9 @@ export function AiProvenanceInfo({
                                                 setEvidencePath(cite);
                                             }}
                                             title={`Inspect source record for ${cite}`}
-                                            className="group inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/80 hover:bg-primary/15 text-foreground/80 hover:text-primary font-mono text-[10.5px] transition-colors border border-border/80 cursor-pointer"
+                                            className="group inline-flex items-center gap-1 px-2.5 py-1 rounded bg-muted/80 hover:bg-primary/15 text-foreground/80 hover:text-primary font-mono text-xs transition-colors border border-border/80 cursor-pointer"
                                         >
-                                            <Search className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+                                            <Search className="w-3 h-3 opacity-60 group-hover:opacity-100" />
                                             <span>{cite}</span>
                                         </button>
                                     ))}
@@ -431,16 +431,16 @@ export function AiProvenanceInfo({
                                             handleOpenPrecedent(provenance.precedent.notificationId);
                                         }
                                     }}
-                                    className="w-full flex items-center justify-between gap-2 p-1.5 rounded-lg bg-info/10 hover:bg-info/20 text-info border border-info/25 text-[11px] font-medium transition-colors cursor-pointer"
+                                    className="w-full flex items-center justify-between gap-2 p-2 rounded-lg bg-info/10 hover:bg-info/20 text-info border border-info/25 text-sm font-medium transition-colors cursor-pointer"
                                     title={`Navigate to precedent report ${provenance.precedent.notificationId}`}
                                 >
                                     <span className="flex items-center gap-1.5 truncate">
-                                        <GitBranch className="w-3 h-3 shrink-0" />
+                                        <GitBranch className="w-3.5 h-3.5 shrink-0" />
                                         <span className="truncate">
                                             Referenced Precedent Case: <strong>{provenance.precedent.notificationId}</strong>
                                         </span>
                                     </span>
-                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                                 </button>
                             </div>
                         )}

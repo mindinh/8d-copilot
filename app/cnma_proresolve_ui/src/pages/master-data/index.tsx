@@ -45,7 +45,7 @@ export function MasterDataPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-foreground">Master Data Management</h1>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-sm text-muted-foreground mt-0.5">
                             Maintain the inspection history behind Is/Is-Not comparison, the defect records an 8D can be opened from, and the closed case library the AI retrieves precedents from
                         </p>
                     </div>
@@ -58,58 +58,58 @@ export function MasterDataPage() {
                 onValueChange={(v) => setActiveTab(v as MasterDataTab)}
                 className="w-full space-y-4"
             >
-                <TabsList className="grid w-full grid-cols-4 max-w-3xl bg-muted/60 p-1 rounded-xl border border-border/80 h-10 shadow-xs">
+                <TabsList className="grid w-full grid-cols-4 max-w-3xl bg-muted/60 p-1 rounded-xl border border-border/80 h-11 shadow-xs">
                     <TabsTrigger
                         value="inspection-lots"
                         className={cn(
-                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
+                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all h-9 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
                             'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
                             'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
                             activeTab === 'inspection-lots' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <Layers className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'inspection-lots' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
+                        <Layers className={cn('h-4 w-4 transition-colors', activeTab === 'inspection-lots' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Inspection History</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="defects"
                         className={cn(
-                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
+                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all h-9 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
                             'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
                             'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
                             activeTab === 'defects' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <ClipboardList className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'defects' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
+                        <ClipboardList className={cn('h-4 w-4 transition-colors', activeTab === 'defects' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Defect Records</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="historical-cases"
                         className={cn(
-                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
+                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all h-9 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
                             'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
                             'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
                             activeTab === 'historical-cases' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <FolderKanban className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'historical-cases' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
+                        <FolderKanban className={cn('h-4 w-4 transition-colors', activeTab === 'historical-cases' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Closed Case Library</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="code-catalogues"
                         className={cn(
-                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all h-8 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
+                            'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all h-9 cursor-pointer border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0',
                             'hover:text-foreground text-muted-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
                             'data-[state=active]:bg-black/[0.05] dark:data-[state=active]:bg-white/[0.08] data-[state=active]:!shadow-none data-[state=active]:!text-black dark:data-[state=active]:!text-white data-[state=active]:border-transparent',
                             activeTab === 'code-catalogues' && '!text-black dark:!text-white !bg-black/[0.05] dark:!bg-white/[0.08] !shadow-none',
                         )}
                     >
-                        <Tags className={cn('h-3.5 w-3.5 transition-colors', activeTab === 'code-catalogues' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
+                        <Tags className={cn('h-4 w-4 transition-colors', activeTab === 'code-catalogues' ? 'text-black dark:text-white' : 'text-muted-foreground')} />
                         <span>Value Help</span>
                     </TabsTrigger>
                 </TabsList>
 
-                <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed">
+                <p className="text-sm text-muted-foreground max-w-3xl leading-relaxed">
                     {TAB_CAPTIONS[activeTab]}
                 </p>
 

@@ -21,7 +21,7 @@ export function AccessDenied({ className }: AccessDeniedProps) {
                 <ShieldX className="w-14 h-14 text-destructive" />
             </div>
             <h2 className="text-2xl font-bold text-foreground">{t('auth.accessDenied')}</h2>
-            <p className="text-muted-foreground max-w-md leading-relaxed">
+            <p className="text-base text-muted-foreground max-w-md leading-relaxed">
                 {t('auth.accessDeniedMessage')}
             </p>
         </div>

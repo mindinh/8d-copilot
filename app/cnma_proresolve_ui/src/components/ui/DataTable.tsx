@@ -171,7 +171,7 @@ function DefaultCellRenderer<T>({
 
             return (
                 <div className="flex items-center justify-start gap-2">
-                    <span className={`px-1 py-1 text-sm font-medium rounded-full ${badgeClasses}`}>
+                    <span className={`px-2.5 py-0.5 text-sm font-semibold rounded-full ${badgeClasses}`}>
                         {value || '-'}
                     </span>
                 </div>

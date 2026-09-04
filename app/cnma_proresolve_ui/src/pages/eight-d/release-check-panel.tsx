@@ -90,7 +90,7 @@ export function ReleaseCheckPanel({
         return (
             <div className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
                 <ShieldCheck className="mt-px h-4 w-4 shrink-0 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">No consistency check on this report.</span>{' '}
                     It was generated before the constraint layer existed. Re-analyze to run the rules.
                 </p>
@@ -102,7 +102,7 @@ export function ReleaseCheckPanel({
         return (
             <div className="flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/[0.04] px-4 py-3">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                <p className="text-xs">
+                <p className="text-sm">
                     <span className="font-semibold text-success">Consistency check passed.</span>{' '}
                     <span className="text-muted-foreground">
                         Every rule configured for D1–D8 is satisfied.
@@ -121,18 +121,18 @@ export function ReleaseCheckPanel({
                 {errorCount > 0
                     ? <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
                     : <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />}
-                <span className="text-sm font-semibold">
+                <span className="text-base font-semibold">
                     Consistency check — {errorCount} error{errorCount === 1 ? '' : 's'},{' '}
                     {warningCount} warning{warningCount === 1 ? '' : 's'}
                 </span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                     Rules configured per discipline in the Training Center. These do not block closure —
                     approving a step is a human decision.
                 </span>
             </div>
 
             {signedWithErrors.length > 0 && (
-                <p className="mt-2 rounded border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-[11px] text-destructive">
+                <p className="mt-2 rounded border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-sm text-destructive">
                     <strong className="font-semibold">
                         {signedWithErrors.map((f) => f.code).join(', ')} approved with unresolved errors.
                     </strong>{' '}
@@ -140,38 +140,38 @@ export function ReleaseCheckPanel({
                 </p>
             )}
 
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-2.5 space-y-2.5">
                 {withFindings.map((step) => (
                     <li key={step.code}>
                         <button
                             type="button"
                             onClick={() => onSelectStep?.(step.code)}
-                            className="group flex w-full items-baseline gap-2 text-left"
+                            className="group flex w-full items-baseline gap-2 text-left cursor-pointer"
                         >
-                            <span className="font-mono text-[11px] font-semibold text-foreground group-hover:underline">
+                            <span className="font-mono text-sm font-semibold text-foreground group-hover:underline">
                                 {step.code}
                             </span>
-                            <span className="truncate text-[11px] text-muted-foreground">{step.title}</span>
+                            <span className="truncate text-sm text-muted-foreground">{step.title}</span>
                             {step.approved && (
-                                <span className="shrink-0 text-[10px] text-success">approved</span>
+                                <span className="shrink-0 text-xs font-semibold text-success">approved</span>
                             )}
                         </button>
-                        <ul className="mt-0.5 space-y-0.5 pl-6">
+                        <ul className="mt-1 space-y-1 pl-6">
                             {[...step.errors, ...step.warnings].map((v) => (
                                 <li
                                     key={`${step.code}-${v.ruleId}-${v.path}`}
                                     className={cn(
-                                        'flex items-start gap-1.5 text-[11px] leading-snug',
+                                        'flex items-start gap-1.5 text-sm leading-snug',
                                         v.severity === 'error' ? 'text-destructive' : 'text-warning',
                                     )}
                                 >
                                     {v.severity === 'error'
-                                        ? <AlertCircle className="mt-px h-3 w-3 shrink-0" />
-                                        : <AlertTriangle className="mt-px h-3 w-3 shrink-0" />}
+                                        ? <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
                                     <span>
                                         {v.message}
                                         {v.path && v.path !== 'content' && (
-                                            <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                                            <span className="ml-1 font-mono text-xs text-muted-foreground">
                                                 {v.path}
                                             </span>
                                         )}

@@ -76,7 +76,7 @@ export function CaseCommitments({
             <>
                 <div>
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                             Due date
                         </span>
                         <Button
@@ -88,18 +88,18 @@ export function CaseCommitments({
                             onClick={() => setEditing(true)}
                             className="h-5 w-5 text-muted-foreground hover:text-foreground"
                         >
-                            <Pencil className="h-3 w-3" />
+                            <Pencil className="h-3.5 w-3.5" />
                         </Button>
                     </div>
-                    <div className="mt-0.5 text-sm">{report.slaResponseDue ?? '—'}</div>
-                    <div className="text-[11px] leading-snug text-muted-foreground">{dueHint}</div>
+                    <div className="mt-0.5 text-sm font-medium">{report.slaResponseDue ?? '—'}</div>
+                    <div className="text-sm leading-relaxed text-muted-foreground">{dueHint}</div>
                 </div>
 
                 <div>
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                         Coordinator
                     </div>
-                    <div className="mt-0.5 text-sm">{report.coordinator ?? '—'}</div>
+                    <div className="mt-0.5 text-sm font-medium">{report.coordinator ?? '—'}</div>
                 </div>
             </>
         );
@@ -108,24 +108,24 @@ export function CaseCommitments({
     return (
         <>
             <div className="min-w-0">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Due date</div>
+                <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Due date</div>
                 <Input
                     type="date"
                     value={dueDate}
                     disabled={save.isPending}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="mt-0.5 h-8 text-xs"
+                    className="mt-1 h-9 text-sm"
                 />
                 {/* Ô trống ở đây nghĩa là XOÁ hạn, không phải "giữ nguyên" — nói ra
                     vì hai nghĩa đó khác nhau và người dùng không đoán được. */}
-                <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                <div className="mt-1 text-sm leading-relaxed text-muted-foreground">
                     Clear the field to remove the date.
                 </div>
             </div>
 
             <div className="min-w-0">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Coordinator</div>
-                <div className="mt-0.5">
+                <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Coordinator</div>
+                <div className="mt-1">
                     <ValueHelpInput
                         value={coordinator}
                         onChange={setCoordinator}
@@ -138,15 +138,15 @@ export function CaseCommitments({
                         placeholder="e.g. Minh Dinh"
                     />
                 </div>
-                <div className="mt-1.5 flex items-center gap-1.5">
+                <div className="mt-2 flex items-center gap-1.5">
                     <Button
                         type="button"
                         size="sm"
                         disabled={save.isPending}
                         onClick={() => save.mutate()}
-                        className="h-7 px-2 text-xs"
+                        className="h-8 px-2.5 text-sm font-medium"
                     >
-                        {save.isPending ? <Spinner className="h-3 w-3" /> : <Check className="h-3.5 w-3.5" />}
+                        {save.isPending ? <Spinner className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
                         Save
                     </Button>
                     <Button
@@ -159,7 +159,7 @@ export function CaseCommitments({
                             setCoordinator(report.coordinator ?? '');
                             setEditing(false);
                         }}
-                        className="h-7 px-2 text-xs"
+                        className="h-8 px-2.5 text-sm font-medium"
                     >
                         <X className="h-3.5 w-3.5" />
                         Cancel

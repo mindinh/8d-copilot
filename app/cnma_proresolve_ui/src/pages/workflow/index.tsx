@@ -64,8 +64,8 @@ export function WorkflowPage() {
               * những gì bên dưới. Không phải. Phần lớn lỗi dừng ở bước ②.
               */}
             <div className="rounded-xl border border-border/80 bg-muted/30 p-4 space-y-2">
-                <h2 className="text-sm font-semibold tracking-tight">Where AI enters the chain</h2>
-                <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs">
+                <h2 className="text-base font-semibold tracking-tight">Where AI enters the chain</h2>
+                <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
                     {[
                         { n: '1', label: 'Inspection result', hint: 'Recorded in Master Data', ai: false },
                         { n: '2', label: 'Defect recorded', hint: 'Master Data → Defect Records. No AI.', ai: false },
@@ -83,14 +83,14 @@ export function WorkflowPage() {
                                         : 'border-border bg-background text-muted-foreground'
                                 }`}
                             >
-                                <span className="font-mono text-[10px] opacity-70">{s.n}</span>
+                                <span className="font-mono text-xs opacity-70">{s.n}</span>
                                 {s.label}
                             </span>
                             {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
                         </li>
                     ))}
                 </ol>
-                <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-4xl">
                     <strong className="font-semibold text-foreground">Steps ② and ③ are two separate acts.</strong>{' '}
                     Recording a defect does not open an 8D — most defects are closed without one. An 8D is
                     opened explicitly from <Link to="/master-data" className="underline underline-offset-2">Defect Records</Link>,
@@ -106,9 +106,9 @@ export function WorkflowPage() {
                     variant={activeTab === 'global' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveTab('global')}
-                    className="text-xs rounded-lg font-medium"
+                    className="h-9 text-sm rounded-lg font-medium"
                 >
-                    <Cpu className="h-3.5 w-3.5 mr-1.5" />
+                    <Cpu className="h-4 w-4 mr-1.5" />
                     Global AI & Retrieval Engine
                 </Button>
 
@@ -117,9 +117,9 @@ export function WorkflowPage() {
                     variant={activeTab === 'disciplines' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveTab('disciplines')}
-                    className="text-xs rounded-lg font-medium"
+                    className="h-9 text-sm rounded-lg font-medium"
                 >
-                    <FileText className="h-3.5 w-3.5 mr-1.5" />
+                    <FileText className="h-4 w-4 mr-1.5" />
                     8D Disciplines Configuration (D1 – D8)
                 </Button>
 
@@ -128,9 +128,9 @@ export function WorkflowPage() {
                     variant={activeTab === 'models' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveTab('models')}
-                    className="text-xs rounded-lg font-medium"
+                    className="h-9 text-sm rounded-lg font-medium"
                 >
-                    <Boxes className="h-3.5 w-3.5 mr-1.5" />
+                    <Boxes className="h-4 w-4 mr-1.5" />
                     Model Registry
                 </Button>
             </div>
@@ -144,7 +144,7 @@ export function WorkflowPage() {
                     <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
                         <div>
                             <h2 className="text-lg font-semibold tracking-tight">Global AI Activity Bindings</h2>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 Configure which AI models handle data parsing, defect analysis, and quality reviews across all 8D steps.
                             </p>
                         </div>
@@ -159,7 +159,7 @@ export function WorkflowPage() {
                 <div className="space-y-6">
                     <div>
                         <h2 className="text-lg font-semibold tracking-tight">8D Discipline Rules & Prompts</h2>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                             Select a discipline below to inspect its input schema, prompt guidance, form fields, and safety constraints.
                         </p>
                     </div>
@@ -180,7 +180,7 @@ export function WorkflowPage() {
                                     }`}
                                 >
                                     <span className="font-mono text-sm font-bold">{d.code}</span>
-                                    <span className="text-[11px] font-medium leading-tight line-clamp-1 mt-0.5">{d.title}</span>
+                                    <span className="text-xs font-semibold leading-tight line-clamp-1 mt-0.5">{d.title}</span>
                                 </button>
                             );
                         })}
@@ -205,7 +205,7 @@ export function WorkflowPage() {
                 <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
                     <div>
                         <h2 className="text-lg font-semibold tracking-tight">AI Core Model Registry</h2>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                             Synchronize deployed LLMs from SAP AI Core, manage availability, and set rate limits.
                         </p>
                     </div>

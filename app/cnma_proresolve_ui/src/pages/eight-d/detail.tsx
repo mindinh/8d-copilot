@@ -19,7 +19,7 @@ import {
 } from '@cnma/react-ui';
 
 import {
-    AlertCircle, ArrowLeft, Braces, Cpu, History, RefreshCw, TriangleAlert,
+    AlertCircle, ArrowLeft, Braces, Cpu, History, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -28,7 +28,7 @@ import {
     type Report8D,
 } from '@/services/eightd-service';
 import { DisciplineCard } from './discipline-card';
-import { SchemaDisciplineCard } from './schema-discipline-card';
+import { SchemaDisciplineCard, resolveD4RootCause } from './schema-discipline-card';
 import { useStepPrompts } from '@/hooks/use-step-prompts';
 import { ReportStatusBadge } from './status-badge';
 import { PrecedentPanel } from './precedent-panel';
@@ -61,7 +61,7 @@ const POLL_INTERVAL_MS = 3_000;
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+            <div className="text-sm font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
             <div className="text-sm mt-0.5">{children ?? '—'}</div>
         </div>
     );
@@ -145,7 +145,7 @@ export function EightDDetailPage() {
             <div className="flex flex-col items-center gap-3 py-24 px-6 text-center">
                 <AlertCircle className="w-8 h-8 text-destructive" />
                 <p className="text-sm font-medium">Could not load this report</p>
-                <p className="text-xs text-muted-foreground max-w-md">
+                <p className="text-sm text-muted-foreground max-w-md">
                     {(error as Error)?.message ?? 'It may have been deleted.'}
                 </p>
                 <Button variant="outline" size="sm" onClick={() => navigate('/8d')}>
@@ -157,7 +157,6 @@ export function EightDDetailPage() {
 
     const disciplines = [...(report.disciplines ?? [])].sort((a, b) => a.sequence - b.sequence);
     const customerFacing = isCustomerComplaint(report.origin);
-    const inferredCount = disciplines.filter((d) => !d.dataBacked).length;
     const running = report.status === 'Analyzing';
     const caseActions = parseCaseActions(report.caseContext);
 
@@ -187,7 +186,7 @@ export function EightDDetailPage() {
                       * này vào bằng đường nhập JSON, nên đừng đi tìm một số lỗi
                       * không tồn tại.
                       */}
-                    <p className="text-xs text-muted-foreground mt-1.5">
+                    <p className="text-sm text-muted-foreground mt-1.5">
                         {report.sourceDefectId ? (
                             <>
                                 Opened from defect{' '}
@@ -240,7 +239,7 @@ export function EightDDetailPage() {
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                         <p className="font-medium">Analysis failed</p>
-                        <p className="text-xs mt-1 text-muted-foreground">
+                        <p className="text-sm mt-1 text-muted-foreground">
                             An error occurred during AI analysis execution. Please retry running the analysis or inspect the browser console for details.
                         </p>
                     </div>
@@ -267,13 +266,6 @@ export function EightDDetailPage() {
 
                         {/* ── Cot giua: buoc dang mo ── */}
                         <section className="min-w-0 space-y-4">
-                            {inferredCount > 0 && (
-                                <p className="flex items-center gap-1.5 text-xs text-warning">
-                                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                                    {inferredCount} of {disciplines.length} disciplines have no source data in the dataset
-                                </p>
-                            )}
-
                             {(() => {
                                 const selected = disciplines.find((d) => d.code === activeDiscipline);
                                 if (selected) {
@@ -285,13 +277,25 @@ export function EightDDetailPage() {
                                                 liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null}
                                             />
 
-                                            {selected.code === 'D6' ? (
-                                                <ActionChecklist actions={caseActions} disciplines={disciplines} />
-                                            ) : (
+                                            {selected.code !== 'D6' && (
                                                 (selected.formSchemaJson || stepPrompts.byCode[selected.code]?.formSchemaJson)
                                                     ? <SchemaDisciplineCard discipline={selected} caseContext={report.caseContext} precedentsJson={report.precedentsJson} liveFormSchemaJson={stepPrompts.byCode[selected.code]?.formSchemaJson ?? null} siblings={disciplines} reportID={id} />
                                                     : <DisciplineCard discipline={selected} caseContext={report.caseContext} precedentsJson={report.precedentsJson} />
                                             )}
+
+                                            {selected.code === 'D6' && (() => {
+                                                const d4 = disciplines.find((d) => d.code === 'D4');
+                                                const d4RootCause = resolveD4RootCause(d4, report.caseContext);
+                                                return (
+                                                    <ActionChecklist
+                                                        actions={caseActions}
+                                                        disciplines={disciplines}
+                                                        caseContext={report.caseContext}
+                                                        reportID={id}
+                                                        rootCause={d4RootCause !== '—' ? d4RootCause : (report.rootCauseCategory ?? '')}
+                                                    />
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 }
@@ -300,8 +304,8 @@ export function EightDDetailPage() {
                                         <Card className="p-12 flex flex-col items-center justify-center text-center space-y-3 bg-muted/20 border-dashed">
                                             <Spinner className="w-6 h-6 text-primary" />
                                             <div>
-                                                <h3 className="font-semibold text-sm">AI is drafting {activeDiscipline}...</h3>
-                                                <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                                                <h3 className="font-semibold text-base">AI is drafting {activeDiscipline}...</h3>
+                                                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
                                                     Extracting facts and running analysis for {activeDiscipline}. This page updates automatically in real-time.
                                                 </p>
                                             </div>
@@ -336,13 +340,13 @@ export function EightDDetailPage() {
                             </Field>
 
                             <Field label="Material">
-                                <span className="font-mono text-xs">{report.materialId}</span>
-                                <div className="text-xs text-muted-foreground">{report.materialDesc}</div>
+                                <span className="font-mono text-sm">{report.materialId}</span>
+                                <div className="text-sm text-muted-foreground">{report.materialDesc}</div>
                                 {report.plant && (
-                                    <div className="text-[11px] text-muted-foreground">Plant {report.plant}</div>
+                                    <div className="text-sm text-muted-foreground">Plant {report.plant}</div>
                                 )}
                             </Field>
-                            <Field label="Batch"><span className="font-mono text-xs">{report.batchId}</span></Field>
+                            <Field label="Batch"><span className="font-mono text-sm">{report.batchId}</span></Field>
                             {/*
                               Nhóm mã đứng TRƯỚC mã, ngăn cách bằng "/": mã lỗi chỉ
                               duy nhất trong nhóm của nó, nên hiện mã một mình là
@@ -350,19 +354,19 @@ export function EightDDetailPage() {
                               hiện mã — không bịa nhóm vào.
                             */}
                             <Field label="Defect">
-                                <span className="font-mono text-xs">
+                                <span className="font-mono text-sm">
                                     {report.defectCodeGroup ? `${report.defectCodeGroup} / ` : ''}{report.defectCode}
                                 </span>
-                                <div className="text-xs text-muted-foreground">{report.defectText}</div>
+                                <div className="text-sm text-muted-foreground">{report.defectText}</div>
                                 {report.defectClass && (
-                                    <div className="text-[11px] text-muted-foreground">
+                                    <div className="text-sm text-muted-foreground">
                                         Severity: {report.defectClass}
                                     </div>
                                 )}
                             </Field>
                             <Field label="Work center">
-                                <span className="font-mono text-xs">{report.workCenterId}</span>
-                                <div className="text-xs text-muted-foreground">{report.workCenterDesc}</div>
+                                <span className="font-mono text-sm">{report.workCenterId}</span>
+                                <div className="text-sm text-muted-foreground">{report.workCenterDesc}</div>
                             </Field>
 
                             <Field label="Root cause">{report.rootCauseCategory ?? '—'}</Field>
@@ -370,7 +374,7 @@ export function EightDDetailPage() {
                             <Field label="FMEA">{report.fmeaId ?? '—'}</Field>
                             <Field label="Team size">{report.teamSize ?? '—'}</Field>
                             <Field label="Reference no.">
-                                <span className="font-mono text-xs">{report.referenceNumber || '—'}</span>
+                                <span className="font-mono text-sm">{report.referenceNumber || '—'}</span>
                             </Field>
                             {/*
                               Hai ô CUỐI vì chúng là hai ô duy nhất sửa được, và
@@ -401,7 +405,7 @@ export function EightDDetailPage() {
                                 <TabsContent value="customer" className="mt-3">
                                     <Card className="p-5 text-sm leading-relaxed">
                                         {report.customerSummary ?? '—'}
-                                        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                                        <p className="text-sm text-muted-foreground mt-3 pt-3 border-t">
                                             Written for the customer — no employee names, equipment IDs or cost figures.
                                         </p>
                                     </Card>
@@ -416,27 +420,27 @@ export function EightDDetailPage() {
                     {/* ── Vết chạy & Model AI ── */}
                     {report.analyzedAt && (
                         <Card className="p-4 bg-muted/30 border border-border/60">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-foreground flex items-center gap-1.5">
-                                        <Cpu className="w-3.5 h-3.5 text-primary" />
+                                        <Cpu className="w-4 h-4 text-primary" />
                                         AI Models Used:
                                     </span>
                                     {report.aiModelParse && (
-                                        <Badge variant="secondary" className="font-mono text-xs gap-1">
-                                            <span className="text-xs text-muted-foreground font-sans">Parse:</span>
+                                        <Badge variant="secondary" className="font-mono text-sm gap-1.5 px-2.5 py-0.5">
+                                            <span className="text-sm text-muted-foreground font-sans">Parse:</span>
                                             {report.aiModelParse}
                                         </Badge>
                                     )}
                                     {report.aiModelAnalyze && (
-                                        <Badge variant="secondary" className="font-mono text-xs gap-1">
-                                            <span className="text-xs text-muted-foreground font-sans">Analyze:</span>
+                                        <Badge variant="secondary" className="font-mono text-sm gap-1.5 px-2.5 py-0.5">
+                                            <span className="text-sm text-muted-foreground font-sans">Analyze:</span>
                                             {report.aiModelAnalyze}
                                         </Badge>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-3 shrink-0 text-xs">
+                                <div className="flex items-center gap-3 shrink-0 text-sm">
                                     <span>Generated: <strong className="font-normal text-foreground">{new Date(report.analyzedAt).toLocaleString('en-GB')}</strong></span>
                                     <span>·</span>
                                     <span>Tokens: <strong className="font-normal text-foreground">{report.tokensUsed?.toLocaleString()}</strong></span>
@@ -514,7 +518,7 @@ function PayloadViewer({ reportID }: { reportID: string }) {
     }
 
     return (
-        <pre className="text-xs font-mono bg-muted rounded-lg p-4 overflow-auto max-h-[65vh]">
+        <pre className="text-sm font-mono bg-muted rounded-lg p-4 overflow-auto max-h-[65vh]">
             {pretty}
         </pre>
     );

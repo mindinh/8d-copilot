@@ -39,7 +39,7 @@ export function FmeaLinkWidget({ value }: { value: unknown }) {
         return (
             <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/[0.06] p-3">
                 <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <div className="min-w-0 text-[13px]">
+                <div className="min-w-0 text-sm">
                     <div className="flex items-center gap-1.5">
                         <p className="font-semibold text-warning">No FMEA entry linked</p>
                         <AiProvenanceInfo fieldKey="preventive.fmea" label="FMEA Entry" />
@@ -59,30 +59,30 @@ export function FmeaLinkWidget({ value }: { value: unknown }) {
                 <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                             FMEA
                         </div>
                         <AiProvenanceInfo fieldKey="preventive.fmea" label={`FMEA: ${id}`} />
                     </div>
-                    <p className="break-words font-mono text-[13px] font-semibold">{id}</p>
+                    <p className="break-words font-mono text-sm font-semibold">{id}</p>
                     {row?.description && (
-                        <p className="mt-0.5 break-words text-[13px]">{row.description}</p>
+                        <p className="mt-0.5 break-words text-sm">{row.description}</p>
                     )}
                     {row?.change && (
-                        <p className="mt-1 break-words text-xs text-muted-foreground">{row.change}</p>
+                        <p className="mt-1 break-words text-sm text-muted-foreground">{row.change}</p>
                     )}
                 </div>
             </div>
 
             {(row?.currentRating != null || row?.proposedRating != null) && (
-                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t pt-2.5 text-xs">
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t pt-2.5 text-sm">
                     {row.currentRating != null && (
-                        <span className="rounded border bg-muted px-2 py-0.5">
+                        <span className="rounded border bg-muted px-2.5 py-0.5 font-medium">
                             Current: {String(row.currentRating)}
                         </span>
                     )}
                     {row.proposedRating != null && (
-                        <span className="rounded border border-success/30 bg-success/10 px-2 py-0.5 text-success">
+                        <span className="rounded border border-success/30 bg-success/10 px-2.5 py-0.5 text-success font-medium">
                             Proposed: {String(row.proposedRating)}
                         </span>
                     )}
@@ -121,7 +121,7 @@ export function ClosureGateWidget({ siblings }: { siblings: Discipline8D[] }) {
                 {canClose
                     ? <LockOpen className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                     : <Lock className="mt-0.5 h-4 w-4 shrink-0 text-warning" />}
-                <div className="min-w-0 text-[13px]">
+                <div className="min-w-0 text-sm">
                     {canClose ? (
                         <>
                             <p className="font-semibold text-success">Ready to close</p>

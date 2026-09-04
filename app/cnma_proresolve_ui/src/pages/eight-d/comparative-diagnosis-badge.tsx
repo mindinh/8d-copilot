@@ -93,7 +93,7 @@ export function ComparativeDiagnosisBadge({
                         <Badge
                             variant="outline"
                             className={cn(
-                                'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1.5 py-0.5 px-2.5 font-medium text-[11px] shadow-xs cursor-help hover:bg-amber-500/20 transition-colors',
+                                'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1.5 py-1 px-3 font-semibold text-sm shadow-xs cursor-help hover:bg-amber-500/20 transition-colors',
                                 className
                             )}
                         >
@@ -101,20 +101,20 @@ export function ComparativeDiagnosisBadge({
                             <span>Disagrees with Record (Independent Finding)</span>
                         </Badge>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="max-w-sm p-3.5 text-xs bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
+                    <TooltipContent side="top" align="center" className="max-w-md p-4 text-sm bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
                         <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/50">
                             <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
                                 <GitFork className="w-4 h-4" />
                                 <span>Blind Diagnosis: Disagrees with Record</span>
                             </div>
-                            <span className="text-[10.5px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full">
                                 Divergence
                             </span>
                         </div>
-                        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
                             AI blind diagnosis identified <strong className="text-foreground">[{aiCategory}]</strong> from QM measurements, challenging the initial human recorded cause <span className="line-through opacity-70">[{effectiveOpposingCategory}]</span>. Telemetry isolates equipment/process drift rather than manual operator error.
                         </p>
-                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/50 bg-muted/30 p-2 rounded-lg text-[11px]">
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/50 bg-muted/30 p-2 rounded-lg text-sm">
                             <div className="flex items-center gap-1">
                                 <span className="text-muted-foreground">Recorded:</span>
                                 <span className="font-mono line-through opacity-75">[{effectiveOpposingCategory}]</span>
@@ -140,35 +140,35 @@ export function ComparativeDiagnosisBadge({
                         <Badge
                             variant="outline"
                             className={cn(
-                                'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1.5 py-0.5 px-2.5 font-medium text-[11px] shadow-xs cursor-help hover:bg-emerald-500/20 transition-colors',
+                                'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1.5 py-1 px-3 font-semibold text-sm shadow-xs cursor-help hover:bg-emerald-500/20 transition-colors',
                                 className
                             )}
                         >
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                             <span>Matches Historical Record</span>
-                            <span className="text-[10px] opacity-75 font-mono">({confidencePct}%)</span>
+                            <span className="text-xs opacity-75 font-mono">({confidencePct}%)</span>
                         </Badge>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="max-w-sm p-3.5 text-xs bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
+                    <TooltipContent side="top" align="center" className="max-w-md p-4 text-sm bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
                         <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/50">
                             <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
                                 <ShieldCheck className="w-4 h-4" />
                                 <span>Blind Diagnosis: Matches Record</span>
                             </div>
-                            <span className="text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
                                 {confidencePct}% Confidence
                             </span>
                         </div>
-                        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
                             AI blind diagnosis independently identified <strong className="text-foreground">[{aiCategory}]</strong> from physical inspection telemetry, perfectly corroborating the pre-existing SAP historical case record without prior exposure.
                         </p>
-                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/50 text-[11px]">
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/50 text-sm">
                             <span className="text-muted-foreground">AI Finding: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">[{aiCategory}]</strong></span>
                             <span className="text-emerald-500 font-bold">=</span>
                             <span className="text-muted-foreground">SAP Record: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">[{recordedCategory || aiCategory}]</strong></span>
                         </div>
                         {topPrecedent && (
-                            <div className="text-[10.5px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                                 Benchmark case: <strong className="font-mono text-foreground">{topPrecedent.notificationId}</strong> ({topScore}% similarity).
                             </div>
                         )}
@@ -188,29 +188,29 @@ export function ComparativeDiagnosisBadge({
                         <Badge
                             variant="outline"
                             className={cn(
-                                'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 gap-1.5 py-0.5 px-2.5 font-medium text-[11px] shadow-xs cursor-help hover:bg-sky-500/20 transition-colors',
+                                'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 gap-1.5 py-1 px-3 font-semibold text-sm shadow-xs cursor-help hover:bg-sky-500/20 transition-colors',
                                 className
                             )}
                         >
                             <Search className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                             <span>Benchmarked: {topPrecedent.notificationId}</span>
-                            <span className="text-[10px] opacity-75 font-mono">({topScore}%)</span>
+                            <span className="text-xs opacity-75 font-mono">({topScore}%)</span>
                         </Badge>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="max-w-sm p-3.5 text-xs bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
+                    <TooltipContent side="top" align="center" className="max-w-md p-4 text-sm bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
                         <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/50">
                             <div className="flex items-center gap-1.5 font-bold text-sky-600 dark:text-sky-400">
                                 <Sparkles className="w-4 h-4" />
                                 <span>Benchmarked with Precedent</span>
                             </div>
-                            <span className="text-[10.5px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full">
                                 {topScore}% Similarity
                             </span>
                         </div>
-                        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
                             Case had no pre-existing SAP 6M assessment. AI blind diagnosis deduced <strong className="text-foreground">[{aiCategory}]</strong> from first principles, consistent with benchmark historical case <strong className="font-mono text-foreground">{topPrecedent.notificationId}</strong>.
                         </p>
-                        <div className="text-[10.5px] text-muted-foreground pt-1 border-t border-border/50">
+                        <div className="text-xs text-muted-foreground pt-1 border-t border-border/50">
                             Precedent symptom: "{topPrecedent.defectText || topPrecedent.symptomShortText || 'Similar machining defect'}"
                         </div>
                     </TooltipContent>
@@ -227,7 +227,7 @@ export function ComparativeDiagnosisBadge({
                     <Badge
                         variant="outline"
                         className={cn(
-                            'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 gap-1.5 py-0.5 px-2.5 font-medium text-[11px] shadow-xs cursor-help hover:bg-slate-500/20 transition-colors',
+                            'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 gap-1.5 py-1 px-3 font-semibold text-sm shadow-xs cursor-help hover:bg-slate-500/20 transition-colors',
                             className
                         )}
                     >
@@ -235,17 +235,17 @@ export function ComparativeDiagnosisBadge({
                         <span>First-Principles Blind Diagnosis</span>
                     </Badge>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="max-w-sm p-3.5 text-xs bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
+                <TooltipContent side="top" align="center" className="max-w-md p-4 text-sm bg-popover text-popover-foreground border border-border/80 shadow-xl rounded-xl space-y-2">
                     <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/50">
                         <div className="flex items-center gap-1.5 font-bold text-foreground">
                             <Cpu className="w-4 h-4 text-primary" />
                             <span>First-Principles Derivation</span>
                         </div>
-                        <span className="text-[10.5px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
                             Fresh Case
                         </span>
                     </div>
-                    <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                         No matching historical precedent exists in the dataset. Root cause <strong className="text-foreground">[{aiCategory}]</strong> was derived purely from first-principles QM inspection measurements.
                     </p>
                 </TooltipContent>

@@ -270,7 +270,7 @@ export function CodeCataloguesTab() {
                                     setGroup(ALL_GROUPS);
                                 }}
                                 className={cn(
-                                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer',
+                                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all cursor-pointer',
                                     isSelected
                                         ? 'bg-background text-foreground shadow-xs'
                                         : 'text-muted-foreground hover:text-foreground',
@@ -280,7 +280,7 @@ export function CodeCataloguesTab() {
                                 <Badge
                                     variant="outline"
                                     className={cn(
-                                        'text-[9px] px-1 py-0 h-4 border-border/60',
+                                        'text-xs px-1.5 py-0 h-4 border-border/60 font-semibold',
                                         item.category === 'QM Codes' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
                                         item.category === 'Production & Traceability' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
                                         item.category === 'Organization & Personnel' && 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
@@ -302,12 +302,12 @@ export function CodeCataloguesTab() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder={`Search ${active.label.toLowerCase()}...`}
-                                className="pl-8 text-xs h-9 bg-background"
+                                className="pl-8 text-sm h-9 bg-background"
                             />
                         </div>
                         {active.groupId && (
                             <Select value={group} onValueChange={setGroup}>
-                                <SelectTrigger className="w-52 text-xs h-9">
+                                <SelectTrigger className="w-52 text-sm h-9">
                                     <SelectValue placeholder="Code group" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -321,13 +321,13 @@ export function CodeCataloguesTab() {
                             </Select>
                         )}
                     </div>
-                    <div className="text-xs text-muted-foreground font-medium">
+                    <div className="text-sm text-muted-foreground font-medium">
                         Total entries: <span className="font-mono text-foreground font-bold">{rows.length}</span>
                     </div>
                 </div>
             </div>
 
-            <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-3xl leading-relaxed">
                 {active.caption}
             </p>
 
@@ -345,7 +345,7 @@ export function CodeCataloguesTab() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table className="w-full text-left text-sm border-collapse">
                             <thead>
                                 <tr className="border-b border-border/80 bg-muted/50 font-semibold text-muted-foreground">
                                     {catalogue === 'characteristic' ? (
@@ -430,7 +430,7 @@ export function CodeCataloguesTab() {
                                                         <div>
                                                             <span className="font-mono font-medium text-foreground">{String(entry.materialId)}</span>
                                                             {Boolean(entry.materialDesc) && (
-                                                                <span className="text-[11px] text-muted-foreground block">{String(entry.materialDesc)}</span>
+                                                                <span className="text-sm text-muted-foreground block">{String(entry.materialDesc)}</span>
                                                             )}
                                                         </div>
                                                     ) : (
@@ -440,12 +440,12 @@ export function CodeCataloguesTab() {
                                                 <td className="py-3 px-4 font-mono text-right text-foreground">{String(entry.specLowerLimit ?? '—')}</td>
                                                 <td className="py-3 px-4 font-mono text-right text-foreground">{String(entry.specUpperLimit ?? '—')}</td>
                                                 <td className="py-3 px-4 font-mono text-muted-foreground">{String(entry.specUom ?? '—')}</td>
-                                                <td className="py-3 px-4 font-mono text-xs text-foreground">{String(entry.defaultEquipment ?? '—')}</td>
+                                                <td className="py-3 px-4 font-mono text-sm text-foreground">{String(entry.defaultEquipment ?? '—')}</td>
                                                 <td className="py-3 px-4">
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            'text-[10px] font-semibold',
+                                                            'text-xs font-semibold px-2 py-0.5',
                                                             entry.charType === 'Qualitative'
                                                                 ? 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400'
                                                                 : 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -468,7 +468,7 @@ export function CodeCataloguesTab() {
                                                         <div>
                                                             <span className="font-mono font-medium text-foreground">{String(entry.materialId)}</span>
                                                             {Boolean(entry.materialDesc) && (
-                                                                <span className="text-[11px] text-muted-foreground block">{String(entry.materialDesc)}</span>
+                                                                <span className="text-sm text-muted-foreground block">{String(entry.materialDesc)}</span>
                                                             )}
                                                         </div>
                                                     ) : (
@@ -480,7 +480,7 @@ export function CodeCataloguesTab() {
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            'text-[10px] font-semibold',
+                                                            'text-xs font-semibold px-2 py-0.5',
                                                             entry.status === 'Quarantined'
                                                                 ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                                                                 : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -494,7 +494,7 @@ export function CodeCataloguesTab() {
                                                     {usage.isLoading ? (
                                                         <span className="text-muted-foreground">…</span>
                                                     ) : used > 0 ? (
-                                                        <Badge variant="outline" className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary">
+                                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary">
                                                             {used}
                                                         </Badge>
                                                     ) : (
@@ -512,7 +512,7 @@ export function CodeCataloguesTab() {
                                                 <td className="py-3 px-4 font-semibold text-foreground">{String(entry.text ?? '')}</td>
                                                 <td className="py-3 px-4 text-foreground">{String(entry.department ?? '—')}</td>
                                                 <td className="py-3 px-4 text-muted-foreground">{String(entry.functionTitle ?? '—')}</td>
-                                                <td className="py-3 px-4 text-[11px]">
+                                                <td className="py-3 px-4 text-sm">
                                                     <div className="text-foreground">{String(entry.email ?? '—')}</div>
                                                     <div className="text-muted-foreground font-mono">{String(entry.phone ?? '')}</div>
                                                 </td>
@@ -520,7 +520,7 @@ export function CodeCataloguesTab() {
                                                     {usage.isLoading ? (
                                                         <span className="text-muted-foreground">…</span>
                                                     ) : used > 0 ? (
-                                                        <Badge variant="outline" className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary">
+                                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary">
                                                             {used}
                                                         </Badge>
                                                     ) : (
@@ -542,7 +542,7 @@ export function CodeCataloguesTab() {
                                                     {usage.isLoading ? (
                                                         <span className="text-muted-foreground">…</span>
                                                     ) : used > 0 ? (
-                                                        <Badge variant="outline" className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary">
+                                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary">
                                                             {used}
                                                         </Badge>
                                                     ) : (
@@ -563,7 +563,7 @@ export function CodeCataloguesTab() {
                                                     {usage.isLoading ? (
                                                         <span className="text-muted-foreground">…</span>
                                                     ) : used > 0 ? (
-                                                        <Badge variant="outline" className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary">
+                                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary">
                                                             {used}
                                                         </Badge>
                                                     ) : (
@@ -583,7 +583,7 @@ export function CodeCataloguesTab() {
                                                     {usage.isLoading ? (
                                                         <span className="text-muted-foreground">…</span>
                                                     ) : used > 0 ? (
-                                                        <Badge variant="outline" className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary">
+                                                        <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary">
                                                             {used}
                                                         </Badge>
                                                     ) : (
@@ -614,7 +614,7 @@ export function CodeCataloguesTab() {
                                                     <>
                                                         <div className="font-mono text-foreground">{codeGroup}</div>
                                                         {groupText.get(codeGroup) && (
-                                                            <div className="text-[10.5px] text-muted-foreground">
+                                                            <div className="text-sm text-muted-foreground">
                                                                 {groupText.get(codeGroup)}
                                                             </div>
                                                         )}
@@ -634,7 +634,7 @@ export function CodeCataloguesTab() {
                                                 ) : used > 0 ? (
                                                     <Badge
                                                         variant="outline"
-                                                        className="text-[10.5px] tabular-nums border-primary/30 bg-primary/5 text-primary"
+                                                        className="text-xs font-semibold px-2 py-0.5 tabular-nums border-primary/30 bg-primary/5 text-primary"
                                                     >
                                                         {used}
                                                     </Badge>
@@ -651,7 +651,7 @@ export function CodeCataloguesTab() {
                 )}
             </Card>
 
-            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground max-w-3xl">
+            <p className="flex items-start gap-1.5 text-sm leading-relaxed text-muted-foreground max-w-3xl">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                     {active.catalogType}. Read-only: These catalogues are master data maintained according to SAP ERP/QM

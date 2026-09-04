@@ -36,23 +36,23 @@ function EvidenceValue({ value }: { value: unknown }) {
         return (
             <div className="space-y-2">
                 <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                         Record List ({value.length} items)
                     </span>
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                        className="h-8 text-sm px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
                         onClick={handleCopy}
                     >
-                        {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                        {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                         {copied ? 'Copied' : 'Copy JSON'}
                     </Button>
                 </div>
                 <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                     {value.map((item, idx) => (
-                        <div key={idx} className="rounded-lg border bg-muted/25 p-3 text-xs space-y-1">
-                            <span className="inline-block rounded bg-primary/10 px-1.5 py-0.5 font-mono font-bold text-primary text-[10px] mb-1">
+                        <div key={idx} className="rounded-lg border bg-muted/25 p-3 text-sm space-y-1">
+                            <span className="inline-block rounded bg-primary/10 px-2 py-0.5 font-mono font-semibold text-primary text-xs mb-1">
                                 #{idx + 1}
                             </span>
                             {item && typeof item === 'object' ? (
@@ -83,24 +83,24 @@ function EvidenceValue({ value }: { value: unknown }) {
         return (
             <div className="space-y-2">
                 <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                         Record Attributes
                     </span>
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                        className="h-8 text-sm px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
                         onClick={handleCopy}
                     >
-                        {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                        {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                         {copied ? 'Copied' : 'Copy JSON'}
                     </Button>
                 </div>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 py-1">
                     {Object.entries(record).map(([k, v]) => (
                         <div key={k} className="contents">
-                            <dt className="font-mono text-xs font-medium text-muted-foreground">{k}</dt>
-                            <dd className="break-words font-mono text-xs text-foreground">
+                            <dt className="font-mono text-sm font-medium text-muted-foreground">{k}</dt>
+                            <dd className="break-words font-mono text-sm text-foreground">
                                 {v === null || v === '' ? <span className="italic text-muted-foreground">empty</span> : String(v)}
                             </dd>
                         </div>
@@ -116,14 +116,14 @@ function EvidenceValue({ value }: { value: unknown }) {
                 <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                    className="h-8 text-sm px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
                     onClick={handleCopy}
                 >
-                    {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                    {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                     {copied ? 'Copied' : 'Copy JSON'}
                 </Button>
             </div>
-            <pre className="max-h-80 overflow-auto rounded bg-muted/60 p-3 font-mono text-xs leading-relaxed">
+            <pre className="max-h-80 overflow-auto rounded bg-muted/60 p-3 font-mono text-sm leading-relaxed">
                 {JSON.stringify(value, null, 2)}
             </pre>
         </div>
@@ -159,25 +159,25 @@ export function EvidenceDrawer({
                         <Database className="w-4 h-4 text-primary shrink-0" />
                         <DialogTitle className="font-mono text-sm sm:text-base break-all">{path}</DialogTitle>
                         {resolved?.found && (
-                            <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30">
+                            <Badge variant="outline" className="text-xs px-2.5 py-0.5 font-semibold bg-success/10 text-success border-success/30">
                                 Verified Fact
                             </Badge>
                         )}
                     </div>
-                    <DialogDescription className="text-xs">
+                    <DialogDescription className="text-sm">
                         Raw evidence record extracted directly from SAP QM at case analysis time.
                     </DialogDescription>
                 </DialogHeader>
 
                 {parseError && (
-                    <p className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    <p className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                         <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
                         Case context could not be read: {parseError}
                     </p>
                 )}
 
                 {resolved && !resolved.found && (
-                    <p className="flex items-start gap-2 rounded border border-warning/40 bg-warning/[0.06] px-3 py-2 text-xs">
+                    <p className="flex items-start gap-2 rounded border border-warning/40 bg-warning/[0.06] px-3 py-2 text-sm">
                         <TriangleAlert className="mt-px h-4 w-4 shrink-0 text-warning" />
                         <span>
                             <strong className="font-semibold">Path cannot be resolved in snapshot:</strong> {resolved.reason}
@@ -218,9 +218,9 @@ export function SourceChips({
                         type="button"
                         onClick={() => setOpen(source)}
                         title="Show the record behind this source"
-                        className="group inline-flex max-w-full items-center gap-1 break-all rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer"
+                        className="group inline-flex max-w-full items-center gap-1 break-all rounded bg-muted px-2.5 py-1 font-mono text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer"
                     >
-                        <Search className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <Search className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
                         {source}
                     </button>
                 ))}
